@@ -22,26 +22,165 @@ CKRasterizerContext* CKDX9RasterizerDriver::CreateContext()
 	return nullptr;
 }
 
+
+struct DisplayModeWithTexture {
+	UINT Width;
+	UINT Height;
+	CKDX9TextureDesc Desc;
+};
+
+UINT CKDX9RasterizerDriver::BytesPerPixel(D3DFORMAT Format)
+{
+	switch (DWORD(Format))
+	{
+	case D3DFMT_DXT1:
+		// Size is negative to indicate DXT; and indicates
+		// the size of the block
+		return (CKDWORD)(-8);
+	case D3DFMT_DXT2:
+	case D3DFMT_DXT3:
+	case D3DFMT_DXT4:
+	case D3DFMT_DXT5:
+		// Size is negative to indicate DXT; and indicates
+		// the size of the block
+		return (CKDWORD)(-16);
+
+
+	case D3DFMT_A32B32G32R32F:
+		return 16;
+
+	case D3DFMT_A16B16G16R16:
+	case D3DFMT_Q16W16V16U16:
+	case D3DFMT_A16B16G16R16F:
+	case D3DFMT_G32R32F:
+	case D3DFMT_MULTI2_ARGB8:
+		return 8;
+
+	case D3DFMT_A8R8G8B8:
+	case D3DFMT_X8R8G8B8:
+	case D3DFMT_D32:
+	case D3DFMT_D24S8:
+	case D3DFMT_X8L8V8U8:
+	case D3DFMT_D24X4S4:
+	case D3DFMT_Q8W8V8U8:
+	case D3DFMT_V16U16:
+	case D3DFMT_A2W10V10U10:
+	case D3DFMT_A2B10G10R10:
+	case D3DFMT_A8B8G8R8:
+	case D3DFMT_X8B8G8R8:
+	case D3DFMT_G16R16:
+	case D3DFMT_D24X8:
+	case D3DFMT_A2R10G10B10:
+	case D3DFMT_G16R16F:
+	case D3DFMT_R32F:
+	case D3DFMT_D32F_LOCKABLE:
+	case D3DFMT_D24FS8:
+	case D3DFMT_D32_LOCKABLE:
+		return 4;
+
+	case D3DFMT_R8G8B8:
+		return 3;
+
+	case D3DFMT_R5G6B5:
+	case D3DFMT_X1R5G5B5:
+	case D3DFMT_A1R5G5B5:
+	case D3DFMT_A4R4G4B4:
+	case D3DFMT_A8L8:
+	case D3DFMT_V8U8:
+	case D3DFMT_L6V5U5:
+	case D3DFMT_D16:
+	case D3DFMT_D16_LOCKABLE:
+	case D3DFMT_D15S1:
+	case D3DFMT_A8P8:
+	case D3DFMT_A8R3G3B2:
+	case D3DFMT_UYVY:
+	case D3DFMT_YUY2:
+	case D3DFMT_X4R4G4B4:
+	case D3DFMT_CxV8U8:
+	case D3DFMT_L16:
+	case D3DFMT_R16F:
+	case D3DFMT_R8G8_B8G8:
+	case D3DFMT_G8R8_G8B8:
+		return 2;
+
+	case D3DFMT_P8:
+	case D3DFMT_L8:
+	case D3DFMT_R3G3B2:
+	case D3DFMT_A4L4:
+	case D3DFMT_A8:
+	case D3DFMT_A1:
+	case D3DFMT_S8_LOCKABLE:
+		return 1;
+
+	default:
+		return 0;
+	};
+}; // BytesPerPixel
+
+#include <fstream>
 BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 {
+	std::ofstream stream("dx9.log");
 	m_AdapterIndex = AdapterIndex;
 	m_Inited = TRUE;
 	LPDIRECT3D9 pD3D = static_cast<CKDX9Rasterizer*>(m_Owner)->m_D3D9;
 	pD3D->GetAdapterIdentifier(AdapterIndex, D3DENUM_WHQL_LEVEL, &m_D3DIdentifier);
 	D3DDISPLAYMODE DisplayMode;
 	pD3D->GetAdapterDisplayMode(AdapterIndex, &DisplayMode);
+
 	for (D3DFORMAT Format : AdapterFormats) {
+		m_RenderFormats.PushBack(Format);
 		UINT AdapterModeCount = pD3D->GetAdapterModeCount(AdapterIndex, Format);
-		for (UINT Mode = 0; Mode < AdapterModeCount; ++Mode)
+		if (AdapterModeCount > 0) {
+			m_RenderFormats.PushBack(Format);
+			CKTextureDesc desc;
+			D3DFormatToTextureDesc(Format, &desc);
+			m_TextureFormats.PushBack(desc);
+		}
+		for (UINT i = 0; i < AdapterModeCount; ++i)
 		{
-			pD3D->EnumAdapterModes(AdapterIndex, Format, Mode, &DisplayMode);
+			pD3D->EnumAdapterModes(AdapterIndex, Format, i, &DisplayMode);
+			int width = DisplayMode.Width;
+			int height = DisplayMode.Height;
 			if (DisplayMode.Width >= 640 && DisplayMode.Height >= 400) {
 				// TODO: ???
 				// persumably: populate m_RenderFormats, m_DisplayModes, m_TextureFormats
+				bool mode_exists = false;
+				for (int i = 0; i < m_DisplayModes.Size(); ++i) {
+					if (m_DisplayModes[i].Width == width && m_DisplayModes[i].Width == height) {
+						mode_exists = true;
+						break;
+					}
+				}
+
+				// If the mode doesn't exist, add it to the array
+				if (!mode_exists) {
+					CKDX9TextureDesc mode;
+					mode.Format.Width = width;
+					mode.Format.Height = height;
+					//{
+					//	0,                              // Flags
+					//	{ width, height, 0, 0, 0, 0, 0 }, // Format
+					//	0,                              // MipMapCount
+					//	NULL,                           // DxTexture
+					//	NULL,                           // DxRenderTexture
+					//	NULL,                           // DxLockedSurface
+					//	0                               // LockedFlags
+					//};
+					m_TextureFormats.PushBack(mode);
+					m_DisplayModes.PushBack({
+						width, height,
+						(int)BytesPerPixel(DisplayMode.Format) * 8,
+						(int)DisplayMode.RefreshRate });
+					stream << width << " " << height << " " << (int)BytesPerPixel(DisplayMode.Format) * 8 << " " <<
+						(int)DisplayMode.RefreshRate << std::endl;
+				}
 			}
 		}
 	}
 	pD3D->GetDeviceCaps(AdapterIndex, D3DDEVTYPE_HAL, &m_D3DCaps);
+
+
 
 	m_Hardware = 1;
 	m_3DCaps.StencilCaps = m_D3DCaps.StencilCaps;
@@ -100,11 +239,11 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 
 	if ((m_D3DCaps.DevCaps & D3DDEVCAPS_HWTRANSFORMANDLIGHT) != 0) {
 		m_IsHTL = TRUE;
-		m_Desc << "(T&L DX9)";
+		m_Desc << " (T&L DX9)";
 		m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_HARDWARETL;
 	} else {
 		m_IsHTL = FALSE;
-		m_Desc << "(Hardware DX9)";
+		m_Desc << " (Hardware DX9)";
 		m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_HARDWARE;
 	}
 	m_CapsUpToDate = TRUE;

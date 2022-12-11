@@ -1,5 +1,41 @@
 #include "CKDX9Rasterizer.h"
 
+CKRasterizer* CKDX9RasterizerStart(WIN_HANDLE AppWnd) {
+	HMODULE handle = LoadLibraryA("d3d9.dll");
+	if (handle) {
+		CKRasterizer* rasterizer = new CKDX9Rasterizer;
+		if (!rasterizer)
+			return NULL;
+		if (!rasterizer->Start(AppWnd)) {
+			delete rasterizer;
+			FreeLibrary(handle);
+			return nullptr;
+		}
+		return rasterizer;
+	}
+	return nullptr;
+}
+
+void CKDX9RasterizerClose(CKRasterizer* rst)
+{
+	if (rst)
+	{
+		rst->Close();
+		delete rst;
+	}
+}
+
+PLUGIN_EXPORT void CKRasterizerGetInfo(CKRasterizerInfo* info)
+{
+	info->StartFct = CKDX9RasterizerStart;
+	info->CloseFct = CKDX9RasterizerClose;
+	info->Desc = "DirectX 9 Rasterizer";
+}
+
+CKDX9Rasterizer::CKDX9Rasterizer(void): m_D3D9(NULL), m_Init(FALSE) {
+
+}
+
 CKDX9Rasterizer::~CKDX9Rasterizer(void)
 {
 }
@@ -35,6 +71,16 @@ XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
 
 void CKDX9Rasterizer::Close(void)
 {
+	if (!m_Init)
+		return;
+	if (m_D3D9)
+		m_D3D9->Release();
+	while (m_Drivers.Size() != 0) {
+		CKRasterizerDriver* driver = m_Drivers.PopBack();
+		delete driver;
+	}
+	m_D3D9 = NULL;
+	m_Init = FALSE;
 }
 
 void CKDX9Rasterizer::InitBlendStages()
@@ -66,5 +112,4 @@ void CKDX9Rasterizer::InitBlendStages()
 	b->Aarg2 = 1;
 	this->m_BlendStages[1] = b; // 34?
 }
-
 

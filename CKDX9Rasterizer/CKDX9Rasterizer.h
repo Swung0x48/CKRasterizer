@@ -360,6 +360,8 @@ public:
 	//--- Contexts
 	virtual CKRasterizerContext* CreateContext();
 
+	UINT BytesPerPixel(D3DFORMAT Format);
+
 	BOOL InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType);
 	BOOL IsTextureFormatOk(D3DFORMAT TextureFormat, D3DFORMAT AdapterFormat, DWORD Usage = 0);
 
