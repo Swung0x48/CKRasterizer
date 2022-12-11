@@ -145,36 +145,12 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 			if (DisplayMode.Width >= 640 && DisplayMode.Height >= 400) {
 				// TODO: ???
 				// persumably: populate m_RenderFormats, m_DisplayModes, m_TextureFormats
-				bool mode_exists = false;
-				for (int i = 0; i < m_DisplayModes.Size(); ++i) {
-					if (m_DisplayModes[i].Width == width && m_DisplayModes[i].Width == height) {
-						mode_exists = true;
-						break;
-					}
-				}
-
-				// If the mode doesn't exist, add it to the array
-				if (!mode_exists) {
-					CKDX9TextureDesc mode;
-					mode.Format.Width = width;
-					mode.Format.Height = height;
-					//{
-					//	0,                              // Flags
-					//	{ width, height, 0, 0, 0, 0, 0 }, // Format
-					//	0,                              // MipMapCount
-					//	NULL,                           // DxTexture
-					//	NULL,                           // DxRenderTexture
-					//	NULL,                           // DxLockedSurface
-					//	0                               // LockedFlags
-					//};
-					m_TextureFormats.PushBack(mode);
-					m_DisplayModes.PushBack({
-						width, height,
-						(int)BytesPerPixel(DisplayMode.Format) * 8,
-						(int)DisplayMode.RefreshRate });
-					stream << width << " " << height << " " << (int)BytesPerPixel(DisplayMode.Format) * 8 << " " <<
-						(int)DisplayMode.RefreshRate << std::endl;
-				}
+				m_DisplayModes.PushBack({
+					width, height,
+					(int)BytesPerPixel(DisplayMode.Format) * 8,
+					(int)DisplayMode.RefreshRate });
+				stream << width << " " << height << " " << (int)BytesPerPixel(DisplayMode.Format) * 8 << " " <<
+					(int)DisplayMode.RefreshRate << std::endl;
 			}
 		}
 	}
