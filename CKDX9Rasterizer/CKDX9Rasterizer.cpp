@@ -11,14 +11,13 @@ XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
 	this->m_Init = TRUE;
 
 	IDirect3D9Ex* pD3D = NULL;
-	IDirect3DDevice9Ex* pDevice = NULL;
 	HRESULT result = E_FAIL;
 
 	// Create the D3D object, which is needed to create the D3DDevice.
 	if (FAILED(result = Direct3DCreate9Ex(D3D_SDK_VERSION, &pD3D)))
 	{
 		m_D3D9 = NULL;
-		return result;
+		return FALSE;
 	}
 	m_D3D9 = pD3D;
 	if (pD3D) {

@@ -366,6 +366,8 @@ public:
 	D3DFORMAT FindNearestTextureFormat(CKTextureDesc* desc);
 	D3DFORMAT FindNearestRenderTargetFormat(int Bpp, BOOL Windowed);
 	D3DFORMAT FindNearestDepthFormat(D3DFORMAT pf, int ZBpp, int StencilBpp);
+private:
+	BOOL CheckDeviceFormat(D3DFORMAT AdapterForamt, D3DFORMAT CheckFormat);
 
 
 public:
@@ -393,7 +395,7 @@ public:
 
 public:
 	BOOL							m_Init;
-	LPDIRECT3D9						m_D3D9;
+	IDirect3D9Ex*					m_D3D9;
 
 	// Stage Blends
 	void InitBlendStages();

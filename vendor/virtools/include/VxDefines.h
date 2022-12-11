@@ -994,7 +994,7 @@ typedef enum CKRST_SPECIFICCAPS
     CKRST_SPECIFICCAPS_DX5                = 0x00000100UL,   // DX 5 implementation (if Family ==  CKRST_DIRECTX)
     CKRST_SPECIFICCAPS_DX7                = 0x00000200UL,   // DX 7 implementation (if Family ==  CKRST_DIRECTX)
     CKRST_SPECIFICCAPS_DX8                = 0x00000400UL,   // DX 8.1 implementation (if Family ==  CKRST_DIRECTX)
-  
+    CKRST_SPECIFICCAPS_DX9                = 0x00000800UL,   // DX 9 implementation (if Family ==  CKRST_DIRECTX)
     CKRST_SPECIFICCAPS_CANDOINDEXBUFFER   = 0x00010000UL    // Index buffers can be lock to be read or write
 } CKRST_SPECIFICCAPS;
 
