@@ -19,7 +19,9 @@ CKDX9RasterizerDriver::~CKDX9RasterizerDriver()
 
 CKRasterizerContext* CKDX9RasterizerDriver::CreateContext()
 {
-	return nullptr;
+	CKDX9RasterizerContext* context = new CKDX9RasterizerContext(this);
+	m_Contexts.PushBack(context);
+	return context;
 }
 
 
@@ -117,10 +119,8 @@ UINT CKDX9RasterizerDriver::BytesPerPixel(D3DFORMAT Format)
 	};
 }; // BytesPerPixel
 
-#include <fstream>
 BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 {
-	std::ofstream stream("dx9.log");
 	m_AdapterIndex = AdapterIndex;
 	m_Inited = TRUE;
 	LPDIRECT3D9 pD3D = static_cast<CKDX9Rasterizer*>(m_Owner)->m_D3D9;
@@ -149,14 +149,12 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 					width, height,
 					(int)BytesPerPixel(DisplayMode.Format) * 8,
 					(int)DisplayMode.RefreshRate });
-				stream << width << " " << height << " " << (int)BytesPerPixel(DisplayMode.Format) * 8 << " " <<
-					(int)DisplayMode.RefreshRate << std::endl;
 			}
 		}
 	}
 	pD3D->GetDeviceCaps(AdapterIndex, D3DDEVTYPE_HAL, &m_D3DCaps);
 
-
+	// TODO: Populate 2D/3D capabilities
 
 	m_Hardware = 1;
 	m_3DCaps.StencilCaps = m_D3DCaps.StencilCaps;

@@ -175,7 +175,7 @@ public:
 	//--- 
 	virtual BOOL Resize(int PosX = 0, int PosY = 0, int Width = 0, int Height = 0, CKDWORD Flags = 0);
 	virtual BOOL Clear(CKDWORD Flags = CKRST_CTXCLEAR_ALL, CKDWORD Ccol = 0, float Z = 1.0f, CKDWORD Stencil = 0, int RectCount = 0, CKRECT* rects = NULL);
-	virtual BOOL BackToFront();
+	virtual BOOL BackToFront(CKBOOL vsync);
 
 	//--- Scene 
 	virtual BOOL BeginScene();
@@ -214,7 +214,7 @@ public:
 
 
 	//--- Creation of Textures, Sprites and Vertex Buffer
-	virtual BOOL CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void* DesiredFormat);
+	BOOL CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void* DesiredFormat) override;
 
 	//--- Vertex Buffers	
 	virtual void* LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount, CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
@@ -346,6 +346,9 @@ public:
 	// TempZbuffers array and are attached when doing 
 	// texture rendering 
 	LPDIRECT3DSURFACE9	m_TempZBuffers[NBTEMPZBUFFER];
+private:
+	CKDX9RasterizerDriver* m_Driver;
+	CKDX9Rasterizer* m_Owner;
 };
 
 /*****************************************************************

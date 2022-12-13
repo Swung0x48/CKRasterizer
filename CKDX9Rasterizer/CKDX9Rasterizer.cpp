@@ -112,4 +112,3 @@ void CKDX9Rasterizer::InitBlendStages()
 	b->Aarg2 = 1;
 	this->m_BlendStages[1] = b; // 34?
 }
-
