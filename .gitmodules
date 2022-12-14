@@ -1,0 +1,3 @@
+[submodule "vendor/CKRasterizerLib"]
+	path = vendor/CKRasterizerLib
+	url = https://github.com/doyaGu/CKRasterizerLib.git
