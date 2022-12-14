@@ -305,7 +305,7 @@ protected:
 	LPDIRECT3DSURFACE9 GetTempZBuffer(int Width, int Height);
 
 public:
-	LPDIRECT3DDEVICE9		m_Device;
+    IDirect3DDevice9Ex*     m_Device;
 	D3DPRESENT_PARAMETERS	m_PresentParams;
 	VxDirectXData			m_DirectXData;
 	BOOL					m_SoftwareVertexProcessing;
@@ -372,8 +372,8 @@ public:
 	D3DFORMAT FindNearestRenderTargetFormat(int Bpp, BOOL Windowed);
 	D3DFORMAT FindNearestDepthFormat(D3DFORMAT pf, int ZBpp, int StencilBpp);
 private:
-	BOOL CheckDeviceFormat(D3DFORMAT AdapterForamt, D3DFORMAT CheckFormat);
-
+	BOOL CheckDeviceFormat(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
+	BOOL CheckDepthStencilMatch(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
 
 public:
 	BOOL					 m_Inited;

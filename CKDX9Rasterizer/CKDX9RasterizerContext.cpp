@@ -25,13 +25,45 @@ CKDX9RasterizerContext::~CKDX9RasterizerContext()
 {
 }
 
+int DepthBitPerPixelFromFormat(D3DFORMAT Format, CKDWORD *StencilSize)
+{
+    int result;
+    switch (Format)
+    {
+    case D3DFMT_D16_LOCKABLE:
+    case D3DFMT_D16:
+        result = 16;
+        *StencilSize = 0;
+        break;
+    
+    case D3DFMT_D15S1:
+        *StencilSize = 1;
+        result = 16;
+        break;
+    case D3DFMT_D24S8:
+        result = 24;
+        *StencilSize = 8;
+        break;
+    case D3DFMT_D24X8:
+        result = 24;
+        *StencilSize = 0;
+        break;
+    case D3DFMT_D32:
+        *StencilSize = 0;
+    default:
+        result = 32;
+        break;
+    }
+    return result;
+}
+
 BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
 	BOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
 	m_InCreateDestroy = TRUE;
+    CKRECT Rect;
 	if (Window)
 	{
-		CKRECT Rect;
 		VxGetWindowRect(Window, &Rect);
 		WIN_HANDLE Parent = VxGetParent(Window);
 		VxScreenToClient(Parent, reinterpret_cast<CKPOINT*>(&Rect));
@@ -57,6 +89,116 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
 		m_PresentParams.BackBufferFormat,
 		Zbpp, StencilBpp);
 
+	D3DDISPLAYMODEEX DisplayMode = {
+        sizeof(D3DDISPLAYMODEEX),
+	    (UINT)Width,
+	    (UINT)Height,
+	    (UINT)RefreshRate,
+	    m_PresentParams.BackBufferFormat,
+        D3DSCANLINEORDERING_PROGRESSIVE
+	};
+	DWORD BehaviorFlag = D3DCREATE_MULTITHREADED;
+    if (m_Antialias == D3DMULTISAMPLE_NONE)
+    {
+        m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
+    } else
+    {
+        for (int type = m_Antialias; type > D3DMULTISAMPLE_NONMASKABLE; type--)
+        {
+            if (SUCCEEDED(m_Owner->m_D3D9->CheckDeviceMultiSampleType(
+				m_Driver->m_AdapterIndex,
+				D3DDEVTYPE_HAL,
+				m_PresentParams.BackBufferFormat,
+				m_PresentParams.Windowed,
+				m_PresentParams.MultiSampleType, NULL)))
+				break;
+        }
+    }
+    assert(m_PresentParams.MultiSampleType != D3DMULTISAMPLE_NONMASKABLE);
+
+    if (!m_Driver->m_IsHTL ||
+        m_Driver->m_D3DCaps.VertexShaderVersion < D3DVS_VERSION(1, 0) && this->m_EnsureVertexShader)
+    {
+        m_SoftwareVertexProcessing = TRUE;
+        BehaviorFlag |= D3DCREATE_SOFTWARE_VERTEXPROCESSING;
+    }
+    else
+    {
+        BehaviorFlag |= D3DCREATE_HARDWARE_VERTEXPROCESSING;
+        if ((m_Driver->m_D3DCaps.DevCaps & D3DDEVCAPS_PUREDEVICE) != 0)
+            BehaviorFlag |= D3DCREATE_PUREDEVICE;
+        m_SoftwareVertexProcessing = FALSE;
+    }
+    // screendump?
+    HRESULT result =
+        m_Owner->m_D3D9->CreateDeviceEx(m_Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
+                                        BehaviorFlag, &m_PresentParams, &DisplayMode, &m_Device);
+    if (FAILED(result) && m_PresentParams.MultiSampleType)
+    {
+        m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
+        result = m_Owner->m_D3D9->CreateDeviceEx(m_Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
+                                                 BehaviorFlag, &m_PresentParams, &DisplayMode, &m_Device);
+    }
+
+    if (Fullscreen)
+    {
+        LONG PrevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
+        SetWindowLongA((HWND)Window, -16, PrevStyle | WS_CHILDWINDOW);
+    }
+    else if (Window && !Fullscreen)
+    {
+        VxMoveWindow(Window, Rect.left, Rect.top, Rect.right - Rect.left, Rect.bottom - Rect.top, FALSE);
+    }
+
+	if (SUCCEEDED(result))
+	{
+        m_Window = (HWND)Window;
+        m_PosX = PosX;
+        m_PosY = PosY;
+	    m_Fullscreen = Fullscreen;
+        IDirect3DSurface9 *pBackBuffer = NULL;
+        if (SUCCEEDED(m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer)))
+        {
+            VxImageDescEx desc;
+            D3DSURFACE_DESC pDesc;
+            pBackBuffer->GetDesc(&pDesc);
+            pBackBuffer->Release();
+            pBackBuffer = NULL;
+            m_PixelFormat = D3DFormatToVxPixelFormat(pDesc.Format);
+            VxPixelFormat2ImageDesc(m_PixelFormat, desc);
+            m_Bpp = desc.BitsPerPixel;
+            m_Width = desc.Width;
+            m_Height = desc.Height;
+        }
+        IDirect3DSurface9 *pStencilSurface = NULL;
+        if (SUCCEEDED(m_Device->GetDepthStencilSurface(&pStencilSurface)))
+        {
+            D3DSURFACE_DESC pDesc;
+            pStencilSurface->GetDesc(&pDesc);
+            pStencilSurface->Release();
+            pStencilSurface = NULL;
+            m_ZBpp = DepthBitPerPixelFromFormat(pDesc.Format, &m_StencilBpp);
+        }
+        SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, 1);
+        SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
+        SetRenderState(VXRENDERSTATE_COLORVERTEX, 0);
+        UpdateDirectXData();
+		// this->FlushCaches();
+        UpdateObjectArrays(m_Driver->m_Owner);
+        m_CurrentVertexBufferCache = NULL;
+		m_CurrentVertexSizeCache = 0;
+		m_CurrentVertexFormatCache = 0;
+        m_CurrentVertexShaderCache = 0;
+        if (m_Fullscreen)
+            m_Driver->m_Owner->m_FullscreenContext = this;
+        m_InCreateDestroy = FALSE;
+        return 1;
+    }
+    else
+    {
+        m_InCreateDestroy = FALSE;
+        return 0;
+    }
 }
 
 BOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height, CKDWORD Flags)
