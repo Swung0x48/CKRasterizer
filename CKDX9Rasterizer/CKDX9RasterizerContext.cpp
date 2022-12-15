@@ -271,22 +271,76 @@ BOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height, C
 
 BOOL CKDX9RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD Stencil, int RectCount, CKRECT* rects)
 {
-	return CKRasterizerContext::Clear(Flags, Ccol, Z, Stencil, RectCount, rects);
+    if (m_InCreateDestroy)
+        return 0;
+    BOOL result = 0;
+    if (m_Device)
+    {
+        if (!m_TransparentMode && (Flags & CKRST_CTXCLEAR_COLOR) != 0 && m_Bpp)
+            result = 1;
+        if ((Flags & CKRST_CTXCLEAR_STENCIL) != 0 && m_StencilBpp)
+            result |= 4;
+        if ((Flags & CKRST_CTXCLEAR_DEPTH) != 0 && m_ZBpp)
+            result |= 2;
+        return SUCCEEDED(m_Device->Clear(RectCount, (D3DRECT*)rects, result, Ccol, Z, Stencil));
+    }
+    return result == 0;
 }
 
 BOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
 {
-	return CKRasterizerContext::BackToFront(vsync);
+    if (m_InCreateDestroy || !m_Device)
+        return 0;
+    if (m_SceneBegined)
+        EndScene();
+    // dword_24cff074 = vsync;
+    if (!m_SoftwareShader && vsync && !m_Fullscreen)
+    {
+        D3DRASTER_STATUS RasterStatus;
+        HRESULT hr = m_Device->GetRasterStatus(0, &RasterStatus);
+        while (SUCCEEDED(hr) && RasterStatus.InVBlank)
+        {
+            hr = m_Device->GetRasterStatus(0, &RasterStatus);
+        }
+    }
+
+    HRESULT hr = S_OK;
+    if (m_Driver->m_Owner->m_FullscreenContext == this)
+        hr = m_Device->Present(NULL, NULL, NULL, NULL);
+    else
+    {
+        if (!m_TransparentMode)
+        {
+            RECT SourceRect { 0, 0, (LONG)m_Width, (LONG)m_Height };
+            RECT DestRect{(LONG)m_PosX, (LONG)m_PosY, (LONG)(m_PosX + m_Width), (LONG)(m_PosY + m_Height) };
+            hr = m_Device->Present(&SourceRect, &DestRect, NULL, NULL);
+        }
+    }
+    if (hr == D3DERR_DEVICELOST)
+    {
+        hr = m_Device->TestCooperativeLevel();
+        if (hr == D3DERR_DEVICENOTRESET)
+            Resize(m_PosX, m_PosY, m_Width, m_Height, 0);
+    }
+    return SUCCEEDED(hr);
 }
 
 BOOL CKDX9RasterizerContext::BeginScene()
 {
-	return CKRasterizerContext::BeginScene();
+    if (m_SceneBegined)
+        return 1;
+    HRESULT hr = m_Device->BeginScene();
+    m_SceneBegined = 1;
+    return SUCCEEDED(hr);
 }
 
 BOOL CKDX9RasterizerContext::EndScene()
 {
-	return CKRasterizerContext::EndScene();
+    if (!m_SceneBegined)
+        return 1;
+    HRESULT hr = m_Device->EndScene();
+    m_SceneBegined = 0;
+    return SUCCEEDED(hr);
 }
 
 BOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData* data)
