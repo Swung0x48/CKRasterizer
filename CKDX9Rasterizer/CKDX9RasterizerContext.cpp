@@ -188,7 +188,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
     SetRenderState(VXRENDERSTATE_COLORVERTEX, 0);
     UpdateDirectXData();
 	// this->FlushCaches();
-    //UpdateObjectArrays(m_Driver->m_Owner);
+    UpdateObjectArrays(m_Driver->m_Owner);
     ClearStreamCache();
     if (m_Fullscreen)
         m_Driver->m_Owner->m_FullscreenContext = this;
