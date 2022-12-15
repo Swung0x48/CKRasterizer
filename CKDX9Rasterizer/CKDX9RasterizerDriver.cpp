@@ -123,7 +123,7 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 {
 	m_AdapterIndex = AdapterIndex;
 	m_Inited = TRUE;
-	LPDIRECT3D9 pD3D = static_cast<CKDX9Rasterizer*>(m_Owner)->m_D3D9;
+    IDirect3D9Ex* pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
 	pD3D->GetAdapterIdentifier(AdapterIndex, D3DENUM_WHQL_LEVEL, &m_D3DIdentifier);
 	D3DDISPLAYMODE DisplayMode;
 	pD3D->GetAdapterDisplayMode(AdapterIndex, &DisplayMode);
@@ -205,8 +205,20 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 
 	DWORD Caps2 = m_D3DCaps.Caps2;
 	if ((Caps2 & 0x80000) != 0 && !AdapterIndex) // TODO: Unknown enum
-		this->m_2DCaps.Caps = (CKRST_2DCAPS_WINDOWED | CKRST_2DCAPS_3D | CKRST_2DCAPS_GDI);
-	m_Desc = m_D3DIdentifier.Description;
+		m_2DCaps.Caps = (CKRST_2DCAPS_WINDOWED | CKRST_2DCAPS_3D | CKRST_2DCAPS_GDI);
+    HMONITOR hMonitor = pD3D->GetAdapterMonitor(AdapterIndex);
+    MONITORINFOEXA Info;
+    Info.cbSize = sizeof(MONITORINFOEXA);
+    if (GetMonitorInfoA(hMonitor, &Info))
+    {
+        m_Desc = &Info.szDevice[4];
+        m_Desc << " (" << (int)(Info.rcMonitor.right - Info.rcMonitor.left) << "x"
+               << (int)(Info.rcMonitor.bottom - Info.rcMonitor.top) << ")";
+        m_Desc << " @ " << m_D3DIdentifier.Description;
+    } else
+    {
+        m_Desc = m_D3DIdentifier.Description;
+    }
 	XWORD pos = m_Desc.Find('\\');
 	if (pos != XString::NOTFOUND)
 		m_Desc = m_Desc.Crop(0, pos);
