@@ -152,7 +152,7 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 			}
 		}
 	}
-	pD3D->GetDeviceCaps(AdapterIndex, D3DDEVTYPE_HAL, &m_D3DCaps);
+	assert(SUCCEEDED(pD3D->GetDeviceCaps(AdapterIndex, D3DDEVTYPE_HAL, &m_D3DCaps)));
 
 	// TODO: Populate 2D/3D capabilities
 
@@ -241,7 +241,21 @@ D3DFORMAT CKDX9RasterizerDriver::FindNearestTextureFormat(CKTextureDesc* desc)
 
 D3DFORMAT CKDX9RasterizerDriver::FindNearestRenderTargetFormat(int Bpp, BOOL Windowed)
 {
-	return D3DFORMAT();
+    D3DDISPLAYMODEEX DisplayMode;
+    DisplayMode.Size = sizeof(D3DDISPLAYMODEEX);
+    IDirect3D9Ex* pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
+
+    HRESULT result = pD3D->GetAdapterDisplayModeEx(m_AdapterIndex, &DisplayMode, NULL);
+    if (FAILED(result))
+        return D3DFMT_UNKNOWN;
+
+    if (SUCCEEDED(pD3D->CheckDeviceType(m_AdapterIndex, D3DDEVTYPE_HAL, DisplayMode.Format, D3DFMT_X8R8G8B8, Windowed)))
+        return D3DFMT_X8R8G8B8;
+    if (SUCCEEDED(pD3D->CheckDeviceType(m_AdapterIndex, D3DDEVTYPE_HAL, DisplayMode.Format, D3DFMT_X1R5G5B5, Windowed)))
+        return D3DFMT_X1R5G5B5;
+	if (SUCCEEDED(pD3D->CheckDeviceType(m_AdapterIndex, D3DDEVTYPE_HAL, DisplayMode.Format, D3DFMT_R5G6B5, Windowed)))
+        return D3DFMT_R5G6B5;
+	return D3DFMT_UNKNOWN;
 }
 
 D3DFORMAT CKDX9RasterizerDriver::FindNearestDepthFormat(D3DFORMAT pf, int ZBpp, int StencilBpp)
