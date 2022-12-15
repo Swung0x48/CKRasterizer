@@ -238,33 +238,44 @@ BOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height, C
         if (m_PresentParams.MultiSampleType < D3DMULTISAMPLE_2_SAMPLES || m_Antialias == D3DMULTISAMPLE_NONE)
             m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
         HRESULT hr = m_Device->Reset(&m_PresentParams);
-        if (SUCCEEDED(hr))
+        HRESULT hr_1 = hr;
+        HRESULT hr2;
+        if (hr == D3DERR_DEVICELOST)
         {
-            m_Width = Width;
-            m_Height = Height;
-            UpdateDirectXData();
-            // FlushCaches();
-            return FAILED(hr);
-        } else if (hr == D3DERR_DEVICELOST) {
-            hr = m_Device->TestCooperativeLevel();
-            if (hr != D3DERR_DEVICENOTRESET)
-            {
-                m_Width = m_Height;
-                m_PresentParams.BackBufferWidth = m_Width;
-                m_Device = m_Device;
-                this->m_PresentParams.BackBufferHeight = m_Width;
-                m_Device->Reset(&m_PresentParams);
-                UpdateDirectXData();
-                // FlushCaches();
-                return FAILED(hr);
-            }
-        } else
-        {
-            if (m_PresentParams.MultiSampleType == D3DMULTISAMPLE_NONE)
-            {
-
-            }
+            hr_1 = this->m_Device->TestCooperativeLevel();
+            if (hr_1 != D3DERR_DEVICENOTRESET)
+                goto LABEL_27;
+            hr2 = this->m_Device->Reset(&this->m_PresentParams);
         }
+        else
+        {
+            if (hr >= 0)
+                goto LABEL_29;
+            if (this->m_PresentParams.MultiSampleType == D3DMULTISAMPLE_NONE)
+            {
+            LABEL_27:
+                if (hr_1 < 0)
+                {
+                    m_Width = this->m_Height;
+                    this->m_PresentParams.BackBufferWidth = this->m_Width;
+                    m_Device = this->m_Device;
+                    this->m_PresentParams.BackBufferHeight = m_Width;
+                    m_Device->Reset(&this->m_PresentParams);
+                LABEL_30:
+                    UpdateDirectXData();
+                    //FlushCaches();
+                    return hr_1 >= 0;
+                }
+            LABEL_29:
+                this->m_Width = Width;
+                this->m_Height = Height;
+                goto LABEL_30;
+            }
+            this->m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
+            hr2 = m_Device->Reset(&this->m_PresentParams);
+        }
+        hr_1 = hr2;
+        goto LABEL_27;
     }
     return 1;
 }
