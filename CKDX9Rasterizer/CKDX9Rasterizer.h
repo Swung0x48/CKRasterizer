@@ -347,7 +347,6 @@ public:
 	// texture rendering 
 	LPDIRECT3DSURFACE9	m_TempZBuffers[NBTEMPZBUFFER];
 private:
-	CKDX9RasterizerDriver* m_Driver;
 	CKDX9Rasterizer* m_Owner;
 };
 

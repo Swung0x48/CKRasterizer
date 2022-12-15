@@ -16,9 +16,9 @@ CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver* Driver) :
 	m_CurrentVertexSizeCache(0),
 	m_TranslatedRenderStates{},
 	m_TempZBuffers{},
-	m_Driver(Driver),
 	m_Owner(static_cast<CKDX9Rasterizer*>(Driver->m_Owner))
 {
+    m_Driver = Driver;
 }
 
 CKDX9RasterizerContext::~CKDX9RasterizerContext()
@@ -74,6 +74,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
 		LONG PrevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
 		SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle & ~WS_CHILDWINDOW);
 	}
+    CKDX9RasterizerDriver *Driver = static_cast<CKDX9RasterizerDriver *>(m_Driver);
 	memset(&m_PresentParams, 0, sizeof(m_PresentParams));
 	m_PresentParams.hDeviceWindow = (HWND) Window;
 	m_PresentParams.BackBufferWidth = Width;
@@ -84,8 +85,9 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
 	m_PresentParams.EnableAutoDepthStencil = TRUE;
 	m_PresentParams.FullScreen_RefreshRateInHz = Fullscreen ? RefreshRate : 0;
 	m_PresentParams.PresentationInterval = Fullscreen ? D3DPRESENT_INTERVAL_IMMEDIATE : D3DPRESENT_INTERVAL_DEFAULT;
-    m_PresentParams.BackBufferFormat = m_Driver->FindNearestRenderTargetFormat(Bpp, !Fullscreen);
-	m_PresentParams.AutoDepthStencilFormat = m_Driver->FindNearestDepthFormat(
+    m_PresentParams.BackBufferFormat = Driver->FindNearestRenderTargetFormat(Bpp, !Fullscreen);
+    m_PresentParams.AutoDepthStencilFormat =
+        Driver->FindNearestDepthFormat(
 		m_PresentParams.BackBufferFormat,
 		Zbpp, StencilBpp);
 
@@ -106,7 +108,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
         for (int type = m_Antialias; type > D3DMULTISAMPLE_NONMASKABLE; type--)
         {
             if (SUCCEEDED(m_Owner->m_D3D9->CheckDeviceMultiSampleType(
-				m_Driver->m_AdapterIndex,
+                Driver->m_AdapterIndex,
 				D3DDEVTYPE_HAL,
 				m_PresentParams.BackBufferFormat,
 				m_PresentParams.Windowed,
@@ -116,8 +118,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
     }
     assert(m_PresentParams.MultiSampleType != D3DMULTISAMPLE_NONMASKABLE);
 
-    if (!m_Driver->m_IsHTL ||
-        m_Driver->m_D3DCaps.VertexShaderVersion < D3DVS_VERSION(1, 0) && this->m_EnsureVertexShader)
+    if (!Driver->m_IsHTL || Driver->m_D3DCaps.VertexShaderVersion < D3DVS_VERSION(1, 0) && this->m_EnsureVertexShader)
     {
         m_SoftwareVertexProcessing = TRUE;
         BehaviorFlag |= D3DCREATE_SOFTWARE_VERTEXPROCESSING;
@@ -125,18 +126,18 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
     else
     {
         BehaviorFlag |= D3DCREATE_HARDWARE_VERTEXPROCESSING;
-        if ((m_Driver->m_D3DCaps.DevCaps & D3DDEVCAPS_PUREDEVICE) != 0)
+        if ((Driver->m_D3DCaps.DevCaps & D3DDEVCAPS_PUREDEVICE) != 0)
             BehaviorFlag |= D3DCREATE_PUREDEVICE;
         m_SoftwareVertexProcessing = FALSE;
     }
     // screendump?
     HRESULT result =
-        m_Owner->m_D3D9->CreateDeviceEx(m_Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
+        m_Owner->m_D3D9->CreateDeviceEx(Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
                                         BehaviorFlag, &m_PresentParams, Fullscreen ? &DisplayMode : NULL, &m_Device);
     if (FAILED(result) && m_PresentParams.MultiSampleType)
     {
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
-        result = m_Owner->m_D3D9->CreateDeviceEx(m_Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
+        result = m_Owner->m_D3D9->CreateDeviceEx(Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
                                                  BehaviorFlag, &m_PresentParams, Fullscreen ? &DisplayMode : NULL,
                                                  &m_Device);
     }
@@ -228,7 +229,7 @@ BOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height, C
             for (int type = m_PresentParams.MultiSampleType; type >= D3DMULTISAMPLE_2_SAMPLES; --type)
             {
                 if (SUCCEEDED(m_Owner->m_D3D9->CheckDeviceMultiSampleType(
-                        m_Driver->m_AdapterIndex, D3DDEVTYPE_HAL, m_PresentParams.BackBufferFormat,
+                    static_cast<CKDX9RasterizerDriver*>(m_Driver)->m_AdapterIndex, D3DDEVTYPE_HAL, m_PresentParams.BackBufferFormat,
                         m_PresentParams.Windowed, m_PresentParams.MultiSampleType, NULL)))
                     break;
                 m_PresentParams.MultiSampleType = (D3DMULTISAMPLE_TYPE)type;
