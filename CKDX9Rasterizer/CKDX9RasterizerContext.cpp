@@ -760,9 +760,7 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
     void *ppbData = NULL;
     HRESULT hr = D3DERR_INVALIDCALL;
     CKDWORD startIndex = 0;
-
-    if (!CreateVertexBuffer(index, vertexBufferDesc))
-        return 0;
+    
     if (currentVCount + data->VertexCount <= vertexBufferDesc->m_MaxVertexCount)
     {
         hr = vertexBufferDesc->DxBuffer->Lock(vertexSize * currentVCount, vertexSize * data->VertexCount, &ppbData,
@@ -802,7 +800,37 @@ BOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB
 
 BOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void* DesiredFormat)
 {
-	return CKRasterizerContext::CreateObject(ObjIndex, Type, DesiredFormat);
+    int result; // eax
+
+    if (ObjIndex >= m_Textures.Size())
+        return 0;
+    switch (Type)
+    {
+        case CKRST_OBJ_TEXTURE:
+            result = CreateTexture(ObjIndex, static_cast<CKTextureDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_SPRITE:
+            return 0;
+            result = CreateSprite(ObjIndex, static_cast<CKSpriteDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_VERTEXBUFFER:
+            result = CreateVertexBuffer(ObjIndex, static_cast<CKVertexBufferDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_INDEXBUFFER:
+            result = CreateIndexBuffer(ObjIndex, static_cast<CKIndexBufferDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_VERTEXSHADER:
+            result =
+                CreateVertexShader(ObjIndex, static_cast<CKVertexShaderDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_PIXELSHADER:
+            result =
+                CreatePixelShader(ObjIndex, static_cast<CKPixelShaderDesc *>(DesiredFormat));
+            break;
+        default:
+            return 0;
+    }
+    return result;
 }
 
 void* CKDX9RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
@@ -925,9 +953,12 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
 
             DWORD usage = (D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY |
                            (m_SoftwareVertexProcessing ? D3DUSAGE_SOFTWAREPROCESSING : 0));
-            if (FAILED(m_Device->CreateIndexBuffer(2 * length, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT, &desc->DxBuffer, NULL)))
-                // TODO: Log
-                return 0;
+            assert(SUCCEEDED(m_Device->CreateIndexBuffer(
+                2 * length, usage,
+                D3DFMT_INDEX16,
+                D3DPOOL_DEFAULT,
+                &desc->DxBuffer,
+                NULL)));
             desc->m_MaxIndexCount = length;
             m_IndexBuffer[Clip] = desc;
         }
@@ -977,25 +1008,11 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
     if (FAILED(m_Device->GetIndices(&m_IndexBuffer[Clip]->DxBuffer)))
         return 0;
     // baseVertexIndex == 0?
-    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, 0, VertexCount, startIndex, primCount));
+    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, 0, 0, VertexCount, StartIndex, primCount));
 }
 
 void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize)
 {
-    if (m_CurrentVertexShaderCache)
-    {
-        int index = index = ((int)(VFormat & 0x14 | ((int)VFormat >> 3) & 0x1F8) >> 2) + 1;
-        CKDX9VertexShaderDesc *shaderDesc =
-            static_cast<CKDX9VertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShaderCache]);
-        if (shaderDesc)
-        {
-            if (!shaderDesc->DxShader)
-            {
-               // D3DXDeclaratorFromFVF()
-                
-            }
-        }
-    }
 }
 
 BOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc* DesiredFormat)
@@ -1009,6 +1026,12 @@ BOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderD
     if (VShader >= m_VertexShaders.Size() || !DesiredFormat)
         return 0;
     CKVertexShaderDesc *shader = m_VertexShaders[VShader];
+    if (DesiredFormat == shader)
+    {
+        CKDX9VertexShaderDesc *desc = static_cast<CKDX9VertexShaderDesc *>(DesiredFormat);
+        return desc->Create(this, DesiredFormat);
+    }
+
     if (shader)
         delete shader;
     m_VertexShaders[VShader] = NULL;
@@ -1031,6 +1054,11 @@ BOOL CKDX9RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDes
 {
     if (PShader >= m_PixelShaders.Size() || !DesiredFormat)
         return 0;
+    if (DesiredFormat == m_PixelShaders[PShader])
+    {
+        CKDX9PixelShaderDesc *desc = static_cast<CKDX9PixelShaderDesc *>(DesiredFormat);
+        return desc->Create(this, DesiredFormat->m_Function);
+    }
     if (m_PixelShaders[PShader])
         delete m_PixelShaders[PShader];
     CKDX9PixelShaderDesc *desc = new CKDX9PixelShaderDesc;
@@ -1091,6 +1119,13 @@ BOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc* De
     if (FAILED(m_Device->CreateIndexBuffer(2 * DesiredFormat->m_MaxIndexCount, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT,
                                            &buffer, NULL)))
         return 0;
+    if (DesiredFormat == m_IndexBuffer[IB])
+    {
+        CKDX9IndexBufferDesc *desc = static_cast<CKDX9IndexBufferDesc *>(DesiredFormat);
+        desc->DxBuffer = buffer;
+        desc->m_Flags |= 1;
+        return 1;
+    }
     if (m_IndexBuffer[IB])
         delete m_IndexBuffer[IB];
     CKDX9IndexBufferDesc *desc = new CKDX9IndexBufferDesc;
