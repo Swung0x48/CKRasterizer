@@ -163,9 +163,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CKDX9PixelFormatUtils.cpp" />
+    <ClCompile Include="CKDX9PixelShaderDesc.cpp" />
     <ClCompile Include="CKDX9Rasterizer.cpp" />
     <ClCompile Include="CKDX9RasterizerContext.cpp" />
     <ClCompile Include="CKDX9RasterizerDriver.cpp" />
+    <ClCompile Include="CKDX9VertexShaderDesc.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />

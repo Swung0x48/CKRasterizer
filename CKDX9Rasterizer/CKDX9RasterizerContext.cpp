@@ -304,7 +304,7 @@ BOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
         }
     }
 
-    HRESULT hr = S_OK;
+    HRESULT hr = D3DERR_INVALIDCALL;
     if (m_Driver->m_Owner->m_FullscreenContext == this)
         hr = m_Device->Present(NULL, NULL, NULL, NULL);
     else
@@ -345,7 +345,19 @@ BOOL CKDX9RasterizerContext::EndScene()
 
 BOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData* data)
 {
-	return CKRasterizerContext::SetLight(Light, data);
+    if (data && Light < 0x80)
+        m_CurrentLightData[Light] = *data;
+    CKLightData lightData = *data;
+    if (data->Type != VX_LIGHTPARA)
+        lightData.Type = VX_LIGHTPOINT;
+    else if (data->Type == VX_LIGHTSPOT)
+    {
+        lightData.InnerSpotCone = 3.14;
+        if (lightData.OuterSpotCone < lightData.InnerSpotCone)
+            lightData.OuterSpotCone = lightData.InnerSpotCone;
+    }
+    ConvertAttenuationModelFromDX5(lightData.Attenuation0, lightData.Attenuation1, lightData.Attenuation2, data->Range);
+    return SUCCEEDED(m_Device->SetLight(Light, (D3DLIGHT9*) &lightData));
 }
 
 BOOL CKDX9RasterizerContext::EnableLight(CKDWORD Light, BOOL Enable)
@@ -355,7 +367,9 @@ BOOL CKDX9RasterizerContext::EnableLight(CKDWORD Light, BOOL Enable)
 
 BOOL CKDX9RasterizerContext::SetMaterial(CKMaterialData* mat)
 {
-	return CKRasterizerContext::SetMaterial(mat);
+    if (mat)
+        m_CurrentMaterialData = *mat;
+    return SUCCEEDED(m_Device->SetMaterial((D3DMATERIAL9*)mat));
 }
 
 BOOL CKDX9RasterizerContext::SetViewport(CKViewportData* data)
@@ -425,12 +439,269 @@ BOOL CKDX9RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD* Va
 
 BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 {
-	return CKRasterizerContext::SetTexture(Texture, Stage);
+    if (Texture >= m_Textures.Size())
+        return 0;
+    HRESULT hr = D3DERR_INVALIDCALL;
+    CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc*>(m_Textures[Texture]);
+    if (desc && desc->DxTexture)
+    {
+        hr = m_Device->SetTexture(Stage, desc->DxTexture);
+        if (Stage == 0)
+        {
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLOROP, 4)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, 2)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG2, 1)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, 4)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, 2)));
+        }
+    } else
+    {
+        hr = m_Device->SetTexture(Stage, NULL);
+        if (Stage == 0)
+        {
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLOROP, 2)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, 0)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, 2)));
+        }
+    }
+    
+    return SUCCEEDED(hr);
 }
 
 BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
-	return CKRasterizerContext::SetTextureStageState(Stage, Tss, Value);
+    int v4; // ebx
+    int v6; // edi
+    CKDWORD v7; // ebp
+    CKDWORD v8; // edx
+    BOOL result; // eax
+    int v10; // edi
+    CKDWORD v11; // ebp
+    DWORD v12; // ecx
+    int v13; // edi
+    CKDWORD v14; // ebp
+    CKDWORD m_PresentInterval; // eax
+    int v16; // edi
+    int v18; // edi
+    DWORD v19; // edi
+    int v20; // ebp
+    HRESULT v21; // ebx
+    int v22; // [esp+4Ch] [ebp-10h]
+
+    v4 = -1;
+    switch (Tss)
+    {
+        case CKRST_TSS_ADDRESS:
+            v19 = Value;
+            v20 = Stage;
+            v21 = this->m_Device->SetSamplerState(Stage, D3DSAMP_ADDRESSU, Value);
+            this->m_Device->SetSamplerState(v20, D3DSAMP_ADDRESSV, v19);
+            this->m_Device->SetSamplerState(v20, D3DSAMP_ADDRESSW, v19);
+            result = v21 >= 0;
+            break;
+        case CKRST_TSS_MAGFILTER:
+            if (this->m_PresentInterval)
+            {
+                this->m_Device->SetSamplerState(Stage, D3DSAMP_MAGFILTER, 1);
+                result = 0;
+            }
+            else
+            {
+                v10 = Stage;
+                v11 = Value;
+                v12 = this->m_TextureMagFilterStateBlocks[Value][Stage];
+                if (v12)
+                {
+                    /*v4 = this->m_Device->ApplyStateBlock(v12);
+                    if (v4 >= 0)*/
+                        goto LABEL_45;
+                }
+                switch (v11)
+                {
+                    case 1u:
+                    case 3u:
+                        this->m_Device->SetSamplerState(v10, D3DSAMP_MAGFILTER, 1);
+                        result = v4 >= 0;
+                        break;
+                    case 2u:
+                    case 4u:
+                    case 5u:
+                    case 6u:
+                        this->m_Device->SetSamplerState(v10, D3DSAMP_MAGFILTER, 2);
+                        result = v4 >= 0;
+                        break;
+                    case 7u:
+                        this->m_Device->SetSamplerState(v10, D3DSAMP_MAXANISOTROPY, 2);
+                        this->m_Device->SetSamplerState(v10, D3DSAMP_MAGFILTER, 3);
+                        result = v4 >= 0;
+                        break;
+                    default:
+                        goto LABEL_45;
+                }
+            }
+            break;
+        case CKRST_TSS_MINFILTER:
+            v13 = Stage;
+            v14 = Value;
+            /*if (this->m_TextureMinFilterStateBlocks[Value][Stage] && !this->m_PresentInterval &&
+                !this->m_CurrentPresentInterval)
+            {
+                v4 = this->m_Device->ApplyStateBlock(this->m_TextureMinFilterStateBlocks[Value][Stage]);
+            }*/
+            m_PresentInterval = this->m_PresentInterval;
+            if (!m_PresentInterval && !this->m_CurrentPresentInterval && v4 >= 0)
+                goto LABEL_45;
+            switch (v14)
+            {
+                case 1u:
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER, 1);
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER, 0);
+                    result = v4 >= 0;
+                    break;
+                case 2u:
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER,
+                                                         2 - (m_PresentInterval != 0));
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER, 0);
+                    result = v4 >= 0;
+                    break;
+                case 3u:
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER, 1);
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER,
+                                                         this->m_CurrentPresentInterval == 0);
+                    result = v4 >= 0;
+                    break;
+                case 4u:
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER,
+                                                         2 - (m_PresentInterval != 0));
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER,
+                                                         this->m_CurrentPresentInterval == 0);
+                    result = v4 >= 0;
+                    break;
+                case 5u:
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER, 1);
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER,
+                                                         this->m_CurrentPresentInterval != 0 ? 0 : 2);
+                    result = v4 >= 0;
+                    break;
+                case 6u:
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER,
+                                                         2 - (m_PresentInterval != 0));
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER,
+                                                         this->m_CurrentPresentInterval != 0 ? 0 : 2);
+                    result = v4 >= 0;
+                    break;
+                case 7u:
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER,
+                                                         2 * (m_PresentInterval == 0) + 1);
+                    this->m_Device->SetSamplerState(v13, D3DSAMP_MAXANISOTROPY, 2);
+                    result = v4 >= 0;
+                    break;
+                default:
+                    goto LABEL_45;
+            }
+            break;
+        case CKRST_TSS_TEXTUREMAPBLEND:
+            v6 = Stage;
+            v7 = Value;
+            v8 = Stage + 8 * Value;
+            if (this->m_TextureMapBlendStateBlocks[v8])
+            {/*
+                v4 = this->m_Device->ApplyStateBlock(this->m_TextureMapBlendStateBlocks[v8]);
+                if (v4 >= 0)*/
+                    goto LABEL_45;
+            }
+            switch (v7)
+            {
+                case 1u:
+                case 7u:
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLOROP, 2);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG1, 2);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAOP, 2);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAARG1, 2);
+                    return 1;
+                case 2u:
+                case 4u:
+                case 6u:
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLOROP, 4);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG1, 2);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG2, 1);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAOP, 4);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAARG1, 2);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAARG2, 1);
+                    return 1;
+                case 3u:
+                case 5u:
+                    m_Device->SetTextureStageState(v6, D3DTSS_COLOROP, 13);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG1, 2);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG2, 1);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAOP, 2);
+                    goto LABEL_10;
+                case 8u:
+                    m_Device->SetTextureStageState(v6, D3DTSS_COLOROP, 7);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG1, 2);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG2, 1);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAOP, 2);
+                    goto LABEL_10;
+                case 9u:
+                    m_Device->SetTextureStageState(v6, D3DTSS_COLORARG1, 2);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLOROP, 24);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG2, 3);
+                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAOP, 2);
+                LABEL_10:
+                    //m_Device->SetTextureStageState(v6, D3DTSS_ALPHAARG1, v22);
+                    break;
+                default:
+                    break;
+            }
+            result = 1;
+            break;
+        case CKRST_TSS_STAGEBLEND:
+            if (Value <= 0xFF)
+            {
+                if (Value)
+                {
+                    CKStageBlend* v17 = static_cast<CKDX9Rasterizer*>(m_Driver->m_Owner)->m_BlendStages[Value];
+                    if (v17)
+                    {
+                        v18 = Stage;
+                        this->m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, v17->Cop);
+                        this->m_Device->SetTextureStageState(v18, D3DTSS_COLORARG1, v17->Carg1);
+                        this->m_Device->SetTextureStageState(v18, D3DTSS_COLORARG2, v17->Carg2);
+                        this->m_Device->SetTextureStageState(v18, D3DTSS_ALPHAOP, v17->Aop);
+                        this->m_Device->SetTextureStageState(v18, D3DTSS_ALPHAARG1, v17->Aarg1);
+                        this->m_Device->SetTextureStageState(v18, D3DTSS_ALPHAARG2, v17->Aarg2);
+                        v4 = this->m_Device->ValidateDevice((DWORD *)&Stage);
+                        if (v4 >= 0)
+                            goto LABEL_45;
+                        this->m_Device->SetTextureStageState(v18, D3DTSS_COLOROP, 1);
+                        this->m_Device->SetTextureStageState(v18, D3DTSS_ALPHAOP, 1);
+                        result = v4 >= 0;
+                    }
+                    else
+                    {
+                        result = 0;
+                    }
+                }
+                else
+                {
+                    v16 = Stage;
+                    this->m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, 1);
+                    this->m_Device->SetTextureStageState(v16, D3DTSS_ALPHAOP, 1);
+                    result = 1;
+                }
+            }
+            else
+            {
+                result = 0;
+            }
+            break;
+        default:
+            v4 = this->m_Device->SetTextureStageState(Stage, (D3DTEXTURESTAGESTATETYPE)Tss, Value);
+        LABEL_45:
+            result = v4 >= 0;
+            break;
+    }
+    return result;
 }
 
 BOOL CKDX9RasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
@@ -455,12 +726,12 @@ BOOL CKDX9RasterizerContext::SetPixelShader(CKDWORD PShaderIndex)
 
 BOOL CKDX9RasterizerContext::SetVertexShaderConstant(CKDWORD Register, const void* Data, CKDWORD CstCount)
 {
-	return CKRasterizerContext::SetVertexShaderConstant(Register, Data, CstCount);
+    return SUCCEEDED(m_Device->SetPixelShaderConstantF(Register, static_cast<const float *>(Data), CstCount));
 }
 
 BOOL CKDX9RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const void* Data, CKDWORD CstCount)
 {
-	return CKRasterizerContext::SetPixelShaderConstant(Register, Data, CstCount);
+    return SUCCEEDED(m_Device->SetPixelShaderConstantF(Register, static_cast<const float *>(Data), CstCount));
 }
 
 BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices, int indexcount,
@@ -480,15 +751,19 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
         SetRenderState(VXRENDERSTATE_CLIPPING, 0);
     }
 
+    CKDWORD index = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
     CKDX9VertexBufferDesc *vertexBufferDesc = static_cast<CKDX9VertexBufferDesc *>(
-        m_VertexBuffers[GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip)]);
+        m_VertexBuffers[index]);
     if (vertexBufferDesc == NULL)
         return 0;
     CKDWORD currentVCount = vertexBufferDesc->m_CurrentVCount;
     void *ppbData = NULL;
     HRESULT hr = D3DERR_INVALIDCALL;
     CKDWORD startIndex = 0;
-    if (currentVCount + data->VertexCount <= m_VertexBuffers[0]->m_MaxVertexCount)
+
+    if (!CreateVertexBuffer(index, vertexBufferDesc))
+        return 0;
+    if (currentVCount + data->VertexCount <= vertexBufferDesc->m_MaxVertexCount)
     {
         hr = vertexBufferDesc->DxBuffer->Lock(vertexSize * currentVCount, vertexSize * data->VertexCount, &ppbData,
                                          D3DLOCK_NOOVERWRITE);
@@ -612,12 +887,27 @@ BOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char* 
 
 void CKDX9RasterizerContext::UpdateDirectXData()
 {
+    IDirect3DSurface9 *pBackBuffer = NULL, *pZStencilSurface = NULL;
+    assert(SUCCEEDED(m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer)));
+    assert(SUCCEEDED(m_Device->GetDepthStencilSurface(&pZStencilSurface)));
+    m_DirectXData.D3DDevice = m_Device;
+    m_DirectXData.DxVersion = D3DX_VERSION;
+    m_DirectXData.D3DViewport = NULL;
+    m_DirectXData.DDBackBuffer = pBackBuffer;
+    m_DirectXData.DDPrimaryBuffer = NULL;
+    m_DirectXData.DDZBuffer = pZStencilSurface;
+    m_DirectXData.DirectDraw = NULL;
+    m_DirectXData.Direct3D = m_Owner->m_D3D9;
+    m_DirectXData.DDClipper = NULL;
+    if (pZStencilSurface)
+        assert(SUCCEEDED(pZStencilSurface->Release()));
+    if (pBackBuffer)
+        assert(SUCCEEDED(pBackBuffer->Release()));
 }
 
 BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc* VB,
 	CKDWORD StartIndex, CKDWORD VertexCount, WORD* indices, int indexcount, BOOL Clip)
 {
-    CKDWORD startIndex = 0;
     if (indices)
     {
         CKDX9IndexBufferDesc* desc = this->m_IndexBuffer[Clip];
@@ -645,7 +935,6 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
         if (indexcount + desc->m_CurrentICount <= desc->m_MaxIndexCount)
         {
             desc->DxBuffer->Lock(2 * desc->m_CurrentICount, 2 * indexcount, &pbData, D3DLOCK_NOOVERWRITE);
-            startIndex = desc->m_CurrentICount;
             desc->m_CurrentICount += indexcount;
         } else
         {
@@ -681,7 +970,10 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
             break;
     }
     if (!indices || pType == VX_POINTLIST)
-        return SUCCEEDED(m_Device->DrawPrimitive(D3DPT_POINTLIST, StartIndex, primCount));
+    {
+        HRESULT hr = m_Device->DrawPrimitive(D3DPT_POINTLIST, StartIndex, primCount);
+        return SUCCEEDED(hr);
+    }
     if (FAILED(m_Device->GetIndices(&m_IndexBuffer[Clip]->DxBuffer)))
         return 0;
     // baseVertexIndex == 0?
@@ -692,8 +984,17 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 {
     if (m_CurrentVertexShaderCache)
     {
-        CKVertexShaderDesc* shaderDesc = m_VertexShaders[m_CurrentVertexShaderCache];
-        
+        int index = index = ((int)(VFormat & 0x14 | ((int)VFormat >> 3) & 0x1F8) >> 2) + 1;
+        CKDX9VertexShaderDesc *shaderDesc =
+            static_cast<CKDX9VertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShaderCache]);
+        if (shaderDesc)
+        {
+            if (!shaderDesc->DxShader)
+            {
+               // D3DXDeclaratorFromFVF()
+                
+            }
+        }
     }
 }
 
@@ -705,26 +1006,103 @@ BOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc* Desir
 
 BOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc* DesiredFormat)
 {
-	return FALSE;
-
+    if (VShader >= m_VertexShaders.Size() || !DesiredFormat)
+        return 0;
+    CKVertexShaderDesc *shader = m_VertexShaders[VShader];
+    if (shader)
+        delete shader;
+    m_VertexShaders[VShader] = NULL;
+    CKDX9VertexShaderDesc* desc = new CKDX9VertexShaderDesc;
+    if (!desc)
+        return 0;
+    desc->m_Function = NULL;
+    desc->m_FunctionData.Clear();
+    desc->DxShader = NULL;
+    desc->Owner = NULL;
+    if (desc->Create(this, DesiredFormat))
+    {
+        m_VertexShaders[VShader] = desc;
+        return 1;
+    }
+    return 0;
 }
 
 BOOL CKDX9RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc* DesiredFormat)
 {
-	return FALSE;
-
+    if (PShader >= m_PixelShaders.Size() || !DesiredFormat)
+        return 0;
+    if (m_PixelShaders[PShader])
+        delete m_PixelShaders[PShader];
+    CKDX9PixelShaderDesc *desc = new CKDX9PixelShaderDesc;
+    if (!desc)
+        return 0;
+    desc->m_Function = NULL;
+    desc->DxShader = NULL;
+    desc->Owner = NULL;
+    if (desc->Create(this, DesiredFormat->m_Function))
+    {
+        m_PixelShaders[PShader] = desc;
+        return 1;
+    }
+    return 0;
 }
 
 BOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc* DesiredFormat)
 {
-	return FALSE;
-
+    if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
+        return 0;
+    DWORD fvf = D3DFVF_XYZB2;
+    if ((DesiredFormat->m_Flags & CKRST_VB_DYNAMIC) != 0)
+        fvf |= D3DFVF_TEX2;
+    IDirect3DVertexBuffer9 *vb = NULL;
+    if (FAILED(m_Device->CreateVertexBuffer(DesiredFormat->m_MaxVertexCount * DesiredFormat->m_VertexSize, fvf,
+                                            DesiredFormat->m_VertexFormat, D3DPOOL_DEFAULT, &vb, NULL)))
+        return 0;
+    if (m_VertexBuffers[VB] == DesiredFormat)
+    {
+        CKDX9VertexBufferDesc *dx9Desc = static_cast<CKDX9VertexBufferDesc *>(DesiredFormat);
+        dx9Desc->DxBuffer = vb;
+        return 1;
+    }
+    if (m_VertexBuffers[VB])
+        delete m_VertexBuffers[VB];
+    CKDX9VertexBufferDesc *desc = new CKDX9VertexBufferDesc;
+    if (!desc)
+        return 0;
+    desc->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
+    desc->m_VertexSize = DesiredFormat->m_VertexSize;
+    desc->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount;
+    desc->m_VertexFormat = DesiredFormat->m_VertexFormat;
+    desc->m_Flags = DesiredFormat->m_Flags;
+    desc->DxBuffer = vb;
+    desc->m_Flags |= 1;
+    m_VertexBuffers[VB] = desc;
+    return 1;
 }
 
 BOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc* DesiredFormat)
 {
-	return FALSE;
-
+    if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
+        return 0;
+    DWORD usage = D3DUSAGE_WRITEONLY;
+    if ((DesiredFormat->m_Flags & CKRST_VB_DYNAMIC) != 0)
+        usage |= D3DUSAGE_DYNAMIC;
+    IDirect3DIndexBuffer9 *buffer;
+    if (FAILED(m_Device->CreateIndexBuffer(2 * DesiredFormat->m_MaxIndexCount, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT,
+                                           &buffer, NULL)))
+        return 0;
+    if (m_IndexBuffer[IB])
+        delete m_IndexBuffer[IB];
+    CKDX9IndexBufferDesc *desc = new CKDX9IndexBufferDesc;
+    if (!desc)
+        return 0;
+    desc->m_CurrentICount = DesiredFormat->m_CurrentICount;
+    desc->m_MaxIndexCount = DesiredFormat->m_MaxIndexCount;
+    desc->m_Flags = DesiredFormat->m_Flags;
+    desc->DxBuffer = buffer;
+    desc->m_Flags |= 1;
+    m_IndexBuffer[IB] = desc;
+    return 1;
 }
 
 void CKDX9RasterizerContext::FlushNonManagedObjects()
