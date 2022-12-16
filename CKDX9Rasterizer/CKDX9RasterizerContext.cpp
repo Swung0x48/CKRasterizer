@@ -4,7 +4,6 @@ CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver* Driver) :
 	m_Device(nullptr),
 	m_PresentParams(), m_DirectXData(),
 	m_SoftwareVertexProcessing(0),
-	m_SoftwareShader(0),
 	m_ResetLastFrame(0), m_IndexBuffer{},
 	m_DefaultBackBuffer(nullptr),
 	m_DefaultDepthBuffer(nullptr),
@@ -295,7 +294,7 @@ BOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
     if (m_SceneBegined)
         EndScene();
     // dword_24cff074 = vsync;
-    if (!m_SoftwareShader && vsync && !m_Fullscreen)
+    if (vsync && !m_Fullscreen)
     {
         D3DRASTER_STATUS RasterStatus;
         HRESULT hr = m_Device->GetRasterStatus(0, &RasterStatus);
@@ -351,7 +350,7 @@ BOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData* data)
 
 BOOL CKDX9RasterizerContext::EnableLight(CKDWORD Light, BOOL Enable)
 {
-	return CKRasterizerContext::EnableLight(Light, Enable);
+    return SUCCEEDED(m_Device->LightEnable(Light, Enable));
 }
 
 BOOL CKDX9RasterizerContext::SetMaterial(CKMaterialData* mat)
@@ -369,7 +368,7 @@ BOOL CKDX9RasterizerContext::SetViewport(CKViewportData* data)
 BOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix& Mat)
 {
     CKDWORD UnityMatrixMask = 0;
-    D3DTRANSFORMSTATETYPE D3DTs;
+    D3DTRANSFORMSTATETYPE D3DTs = (D3DTRANSFORMSTATETYPE)Type;
     switch (Type)
     {
         case VXMATRIX_WORLD:
@@ -416,12 +415,12 @@ BOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatr
 
 BOOL CKDX9RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
-	return CKRasterizerContext::SetRenderState(State, Value);
+    return SUCCEEDED(m_Device->SetRenderState((D3DRENDERSTATETYPE)State, Value));
 }
 
 BOOL CKDX9RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD* Value)
 {
-	return CKRasterizerContext::GetRenderState(State, Value);
+    return SUCCEEDED(m_Device->GetRenderState((D3DRENDERSTATETYPE)State, Value));
 }
 
 BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
@@ -436,12 +435,22 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
 
 BOOL CKDX9RasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
 {
-	return CKRasterizerContext::SetVertexShader(VShaderIndex);
+    if (VShaderIndex >= m_VertexShaders.Size())
+        return 0;
+    CKVertexShaderDesc* desc = m_VertexShaders[VShaderIndex];
+    m_CurrentVertexShaderCache = VShaderIndex;
+    m_CurrentVertexFormatCache = 0;
+    return desc != NULL;
 }
 
 BOOL CKDX9RasterizerContext::SetPixelShader(CKDWORD PShaderIndex)
 {
-	return CKRasterizerContext::SetPixelShader(PShaderIndex);
+    if (PShaderIndex >= m_PixelShaders.Size())
+        return 0;
+    CKDX9PixelShaderDesc* desc = static_cast<CKDX9PixelShaderDesc *>(m_PixelShaders[PShaderIndex]);
+    if (desc)
+        return SUCCEEDED(m_Device->GetPixelShader(&desc->DxShader));
+    return 0;
 }
 
 BOOL CKDX9RasterizerContext::SetVertexShaderConstant(CKDWORD Register, const void* Data, CKDWORD CstCount)
@@ -457,13 +466,57 @@ BOOL CKDX9RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const void
 BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices, int indexcount,
 	VxDrawPrimitiveData* data)
 {
-	return CKRasterizerContext::DrawPrimitive(pType, indices, indexcount, data);
+    if (!m_SceneBegined)
+        BeginScene();
+    CKBOOL clip = 0;
+    CKDWORD vertexSize;
+    CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
+    if ((data->Flags & CKRST_DP_DOCLIP) != 0)
+    {
+        SetRenderState(VXRENDERSTATE_CLIPPING, 1);
+        clip = 1;
+    } else
+    {
+        SetRenderState(VXRENDERSTATE_CLIPPING, 0);
+    }
+
+    CKDX9VertexBufferDesc *vertexBufferDesc = static_cast<CKDX9VertexBufferDesc *>(
+        m_VertexBuffers[GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip)]);
+    if (vertexBufferDesc == NULL)
+        return 0;
+    CKDWORD currentVCount = vertexBufferDesc->m_CurrentVCount;
+    void *ppbData = NULL;
+    HRESULT hr = D3DERR_INVALIDCALL;
+    CKDWORD startIndex = 0;
+    if (currentVCount + data->VertexCount <= m_VertexBuffers[0]->m_MaxVertexCount)
+    {
+        hr = vertexBufferDesc->DxBuffer->Lock(vertexSize * currentVCount, vertexSize * data->VertexCount, &ppbData,
+                                         D3DLOCK_NOOVERWRITE);
+        startIndex = vertexBufferDesc->m_CurrentVCount;
+        vertexBufferDesc->m_CurrentVCount += data->VertexCount;
+    } else
+    {
+        hr = vertexBufferDesc->DxBuffer->Lock(0, vertexSize * data->VertexCount, &ppbData, D3DLOCK_DISCARD);
+        vertexBufferDesc->m_CurrentVCount = data->VertexCount;
+    }
+    if (FAILED(hr))
+        return 0;
+    CKRSTLoadVertexBuffer(reinterpret_cast<CKBYTE *>(ppbData), vertexFormat, vertexSize, data);
+    vertexBufferDesc->DxBuffer->Unlock();
+    return InternalDrawPrimitiveVB(pType, vertexBufferDesc, startIndex, data->VertexCount, indices, indexcount, clip);
 }
 
 BOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
 	CKDWORD VertexCount, WORD* indices, int indexcount)
 {
-	return CKRasterizerContext::DrawPrimitiveVB(pType, VertexBuffer, StartIndex, VertexCount, indices, indexcount);
+    if (VertexBuffer >= m_VertexBuffers.Size())
+        return 0;
+    CKVertexBufferDesc* vertexBufferDesc = m_VertexBuffers[VertexBuffer];
+    if (vertexBufferDesc == NULL)
+        return 0;
+    if (!m_SceneBegined)
+        BeginScene();
+    return InternalDrawPrimitiveVB(pType, static_cast<CKDX9VertexBufferDesc*>(vertexBufferDesc), StartIndex, VertexCount, indices, indexcount, TRUE);
 }
 
 BOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
@@ -486,12 +539,6 @@ void* CKDX9RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, 
 BOOL CKDX9RasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 {
 	return CKRasterizerContext::UnlockVertexBuffer(VB);
-}
-
-BOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImageDescEx& SurfDesc, CKRST_CUBEFACE Face,
-	int miplevel)
-{
-	return CKRasterizerContext::LoadCubeMapTexture(Texture, SurfDesc, Face, miplevel);
 }
 
 BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx& SurfDesc, int miplevel)
@@ -563,64 +610,6 @@ BOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char* 
 
 }
 
-BOOL CKDX9RasterizerContext::CreateTextureFromFileInMemory(CKDWORD Texture, void* mem, DWORD sz, TexFromFile* param)
-{
-	return FALSE;
-
-}
-
-BOOL CKDX9RasterizerContext::CreateCubeTextureFromFile(CKDWORD Texture, const char* Filename, TexFromFile* param)
-{
-	return FALSE;
-
-}
-
-BOOL CKDX9RasterizerContext::CreateCubeTextureFromFileInMemory(CKDWORD Texture, void* mem, DWORD sz, TexFromFile* param)
-{
-	return FALSE;
-
-}
-
-BOOL CKDX9RasterizerContext::CreateVolumeTextureFromFile(CKDWORD Texture, const char* Filename, TexFromFile* param)
-{
-	return FALSE;
-
-}
-
-BOOL CKDX9RasterizerContext::CreateVolumeTextureFromFileInMemory(CKDWORD Texture, void* mem, DWORD sz,
-	TexFromFile* param)
-{
-	return FALSE;
-
-}
-
-BOOL CKDX9RasterizerContext::LoadVolumeMapTexture(CKDWORD Texture, const VxImageDescEx& SurfDesc, DWORD Depth,
-	int miplevel)
-{
-	return FALSE;
-
-}
-
-void CKDX9RasterizerContext::EnsureVBBufferNotInUse(CKVertexBufferDesc* desc)
-{
-}
-
-void CKDX9RasterizerContext::EnsureIBBufferNotInUse(CKIndexBufferDesc* desc)
-{
-}
-
-float CKDX9RasterizerContext::GetSurfacesVideoMemoryOccupation(int* NbTextures, int* NbSprites, float* TextureSize,
-	float* SpriteSize)
-{
-	return 0.0;
-}
-
-BOOL CKDX9RasterizerContext::FlushPendingGPUCommands()
-{
-	return FALSE;
-
-}
-
 void CKDX9RasterizerContext::UpdateDirectXData()
 {
 }
@@ -628,12 +617,84 @@ void CKDX9RasterizerContext::UpdateDirectXData()
 BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc* VB,
 	CKDWORD StartIndex, CKDWORD VertexCount, WORD* indices, int indexcount, BOOL Clip)
 {
-	return FALSE;
+    CKDWORD startIndex = 0;
+    if (indices)
+    {
+        CKDX9IndexBufferDesc* desc = this->m_IndexBuffer[Clip];
+        int length = indexcount + 100;
+        if (!desc || desc->m_MaxIndexCount < indexcount)
+        {
+            if (length <= 10000)
+                length = 10000;
+            CKDX9IndexBufferDesc ibDesc;
+            ibDesc.DxBuffer = NULL;
+            ibDesc.m_MaxIndexCount = 0;
+            ibDesc.m_CurrentICount = 0;
+            ibDesc.m_Flags = 0;
+            desc = &ibDesc;
 
+            DWORD usage = (D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY |
+                           (m_SoftwareVertexProcessing ? D3DUSAGE_SOFTWAREPROCESSING : 0));
+            if (FAILED(m_Device->CreateIndexBuffer(2 * length, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT, &desc->DxBuffer, NULL)))
+                // TODO: Log
+                return 0;
+            desc->m_MaxIndexCount = length;
+            m_IndexBuffer[Clip] = desc;
+        }
+        void *pbData = NULL;
+        if (indexcount + desc->m_CurrentICount <= desc->m_MaxIndexCount)
+        {
+            desc->DxBuffer->Lock(2 * desc->m_CurrentICount, 2 * indexcount, &pbData, D3DLOCK_NOOVERWRITE);
+            startIndex = desc->m_CurrentICount;
+            desc->m_CurrentICount += indexcount;
+        } else
+        {
+            desc->DxBuffer->Lock(0, 2 * indexcount, &pbData, D3DLOCK_DISCARD);
+            desc->m_CurrentICount = indexcount;
+        }
+        if (pbData)
+        {
+            memcpy(pbData, indices, 2 * indexcount);
+        }
+        desc->DxBuffer->Unlock();
+    }
+    SetupStreams(VB->DxBuffer, VB->m_VertexFormat, VB->m_VertexSize);
+    int primCount = indexcount;
+    if (indexcount == 0)
+        primCount = VertexCount;
+    switch (pType)
+    {
+        case VX_LINELIST:
+            primCount /= 2;
+            break;
+        case VX_LINESTRIP:
+            primCount--;
+            break;
+        case VX_TRIANGLELIST:
+            primCount /= 3;
+            break;
+        case VX_TRIANGLESTRIP:
+        case VX_TRIANGLEFAN:
+            primCount -= 2;
+            break;
+        default:
+            break;
+    }
+    if (!indices || pType == VX_POINTLIST)
+        return SUCCEEDED(m_Device->DrawPrimitive(D3DPT_POINTLIST, StartIndex, primCount));
+    if (FAILED(m_Device->GetIndices(&m_IndexBuffer[Clip]->DxBuffer)))
+        return 0;
+    // baseVertexIndex == 0?
+    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, 0, VertexCount, startIndex, primCount));
 }
 
 void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize)
 {
+    if (m_CurrentVertexShaderCache)
+    {
+        CKVertexShaderDesc* shaderDesc = m_VertexShaders[m_CurrentVertexShaderCache];
+        
+    }
 }
 
 BOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc* DesiredFormat)
@@ -666,16 +727,6 @@ BOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc* De
 
 }
 
-BOOL CKDX9RasterizerContext::TextureCanUseAutoGenMipMap(D3DFORMAT TextureFormat)
-{
-	return FALSE;
-
-}
-
-void CKDX9RasterizerContext::UpdateTextureBPL(CKDWORD Texture)
-{
-}
-
 void CKDX9RasterizerContext::FlushNonManagedObjects()
 {
 }
@@ -697,10 +748,6 @@ void CKDX9RasterizerContext::ReleaseScreenBackup()
     if (m_ScreenBackup)
         m_ScreenBackup->Release();
     m_ScreenBackup = NULL;
-}
-
-void CKDX9RasterizerContext::ResetDevice()
-{
 }
 
 CKDWORD CKDX9RasterizerContext::DX9PresentInterval(DWORD PresentInterval)
