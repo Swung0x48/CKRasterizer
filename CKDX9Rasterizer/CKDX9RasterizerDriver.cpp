@@ -129,7 +129,6 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 	pD3D->GetAdapterDisplayMode(AdapterIndex, &DisplayMode);
 
 	for (D3DFORMAT Format : AdapterFormats) {
-		m_RenderFormats.PushBack(Format);
 		UINT AdapterModeCount = pD3D->GetAdapterModeCount(AdapterIndex, Format);
 		if (AdapterModeCount > 0) {
 			m_RenderFormats.PushBack(Format);
