@@ -332,22 +332,22 @@ BOOL CKDX9RasterizerContext::BeginScene()
     m_SceneBegined = 1;
     return SUCCEEDED(hr);
 }
-
-struct CUSTOMVERTEX
-{
-    FLOAT x, y, z;
-    FLOAT rhw;
-    DWORD color;
-    FLOAT tu, tv; // Texture coordinates
-};
-// Custom flexible vertex format (FVF) describing the custom vertex structure
-#define D3DFVF_CUSTOMVERTEX (D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1)
+//
+//struct CUSTOMVERTEX
+//{
+//    FLOAT x, y, z;
+//    FLOAT rhw;
+//    DWORD color;
+//    FLOAT tu, tv; // Texture coordinates
+//};
+//// Custom flexible vertex format (FVF) describing the custom vertex structure
+//#define D3DFVF_CUSTOMVERTEX (D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1)
 BOOL CKDX9RasterizerContext::EndScene()
 {
     if (!m_SceneBegined)
         return 1;
     
-    CUSTOMVERTEX vertices[] = {
+    /*CUSTOMVERTEX vertices[] = {
         {
             320.0f,
             50.0f,
@@ -379,7 +379,7 @@ BOOL CKDX9RasterizerContext::EndScene()
     assert((SUCCEEDED(vb->Unlock())));
     assert(SUCCEEDED(m_Device->SetStreamSource(0, vb, 0, sizeof(CUSTOMVERTEX))));
     assert(SUCCEEDED(m_Device->SetFVF(D3DFVF_CUSTOMVERTEX)));
-    assert(SUCCEEDED(m_Device->DrawPrimitive(D3DPT_TRIANGLELIST, 0, 1)));
+    assert(SUCCEEDED(m_Device->DrawPrimitive(D3DPT_TRIANGLELIST, 0, 1)));*/
 
 
     HRESULT hr = m_Device->EndScene();
@@ -1062,6 +1062,7 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
     {
         CKDX9IndexBufferDesc* desc = this->m_IndexBuffer[Clip];
         int length = indexcount + 100;
+        HRESULT hr = D3DERR_INVALIDCALL;
         if (!desc || desc->m_MaxIndexCount < indexcount || !desc->DxBuffer)
         {
             if (desc)
@@ -1073,21 +1074,16 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
             }
             if (length <= 10000)
                 length = 10000;
-            CKDX9IndexBufferDesc ibDesc;
-            ibDesc.DxBuffer = NULL;
-            ibDesc.m_MaxIndexCount = 0;
-            ibDesc.m_CurrentICount = 0;
-            ibDesc.m_Flags = 0;
-            desc = &ibDesc;
+            desc = new CKDX9IndexBufferDesc;
+            desc->DxBuffer = NULL;
+            desc->m_MaxIndexCount = 0;
+            desc->m_CurrentICount = 0;
+            desc->m_Flags = 0;
 
             DWORD usage = (D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY |
                            (m_SoftwareVertexProcessing ? D3DUSAGE_SOFTWAREPROCESSING : 0));
-            assert(SUCCEEDED(m_Device->CreateIndexBuffer(
-                2 * length, usage,
-                D3DFMT_INDEX16,
-                D3DPOOL_DEFAULT,
-                &desc->DxBuffer,
-                NULL)));
+            assert(SUCCEEDED(hr = m_Device->CreateIndexBuffer(2 * length, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT,
+                                                              &desc->DxBuffer, NULL)));
             desc->m_MaxIndexCount = length;
             m_IndexBuffer[Clip] = desc;
         }
