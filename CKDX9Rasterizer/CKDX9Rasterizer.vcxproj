@@ -159,7 +159,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="CKDX9Rasterizer.h" />
-    <ClInclude Include="common_include.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CKDX9PixelFormatUtils.cpp" />
