@@ -82,7 +82,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
 	m_PresentParams.Windowed = !Fullscreen;
 	m_PresentParams.SwapEffect = D3DSWAPEFFECT_DISCARD;
 	m_PresentParams.EnableAutoDepthStencil = TRUE;
-	m_PresentParams.FullScreen_RefreshRateInHz = Fullscreen ? RefreshRate : 0;
+	m_PresentParams.FullScreen_RefreshRateInHz = Fullscreen ? RefreshRate : D3DPRESENT_RATE_DEFAULT;
 	m_PresentParams.PresentationInterval = Fullscreen ? D3DPRESENT_INTERVAL_IMMEDIATE : D3DPRESENT_INTERVAL_DEFAULT;
     m_PresentParams.BackBufferFormat = Driver->FindNearestRenderTargetFormat(Bpp, !Fullscreen);
     m_PresentParams.AutoDepthStencilFormat =
@@ -171,8 +171,8 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
         m_PixelFormat = D3DFormatToVxPixelFormat(pDesc.Format);
         VxPixelFormat2ImageDesc(m_PixelFormat, desc);
         m_Bpp = desc.BitsPerPixel;
-        m_Width = desc.Width;
-        m_Height = desc.Height;
+        m_Width = pDesc.Width;
+        m_Height = pDesc.Height;
     }
     IDirect3DSurface9 *pStencilSurface = NULL;
     if (SUCCEEDED(m_Device->GetDepthStencilSurface(&pStencilSurface)))
