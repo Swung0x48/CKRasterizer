@@ -342,12 +342,11 @@ struct CUSTOMVERTEX
 };
 // Custom flexible vertex format (FVF) describing the custom vertex structure
 #define D3DFVF_CUSTOMVERTEX (D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1)
-int a = 85, b = 85, c = 85;
 BOOL CKDX9RasterizerContext::EndScene()
 {
     if (!m_SceneBegined)
         return 1;
-
+    
     CUSTOMVERTEX vertices[] = {
         {
             320.0f,
@@ -891,7 +890,85 @@ BOOL CKDX9RasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 
 BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx& SurfDesc, int miplevel)
 {
-	return CKRasterizerContext::LoadTexture(Texture, SurfDesc, miplevel);
+    //if (Texture >= m_Textures.Size())
+    //    return 0;
+    //CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture]);
+    //if (!desc || !desc->DxTexture)
+    //    return 0;
+    //if ((desc->Flags & (CKRST_TEXTURE_CUBEMAP | CKRST_TEXTURE_RENDERTARGET)) != 0)
+    //    return 1;
+    //int actual_miplevel = (miplevel < 0) ? 0 : miplevel;
+    //D3DSURFACE_DESC SurfaceDesc;
+    //IDirect3DSurface9 *pSurface = NULL;
+    //IDirect3DSurface9 *pSurfaceLevel = NULL;
+
+    //desc->DxTexture->GetLevelDesc(actual_miplevel, &SurfaceDesc);
+    //if (SurfaceDesc.Format == D3DFMT_DXT1 || SurfaceDesc.Format == D3DFMT_DXT2 || SurfaceDesc.Format == D3DFMT_DXT3 ||
+    //    SurfaceDesc.Format == D3DFMT_DXT4 || SurfaceDesc.Format == D3DFMT_DXT5)
+    //{
+    //    desc->DxTexture->GetSurfaceLevel(actual_miplevel, &pSurfaceLevel);
+    //    if (pSurfaceLevel)
+    //    {
+    //        RECT SrcRect{0, 0, SurfDesc.Height, SurfDesc.Width};
+    //        D3DFORMAT format = VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(SurfDesc));
+    //        D3DXLoadSurfaceFromMemory(pSurfaceLevel, NULL, NULL, SurfDesc.Image, format, SurfDesc.BytesPerLine, NULL,
+    //                                  &SrcRect, 3, 0);
+
+    //        CKDWORD MipMapCount = m_Textures[Texture]->MipMapCount;
+    //        HRESULT hr;
+    //        if (miplevel == -1 && MipMapCount > 0)
+    //        {
+    //            for (int i = 1; i < MipMapCount + 1; ++i)
+    //            {
+    //                desc->DxTexture->GetSurfaceLevel(i, &pSurface);
+    //                hr = D3DXLoadSurfaceFromSurface(pSurface, NULL, NULL, pSurfaceLevel, NULL, NULL, 5, NULL);
+    //                pSurfaceLevel->Release();
+    //            }
+    //        } else
+    //        {
+    //            pSurface = pSurfaceLevel;
+    //        }
+    //        if (pSurface)
+    //            pSurface->Release();
+    //        return SUCCEEDED(hr);
+    //    }
+    //    return 0;
+    //}
+    //VxImageDescEx src = SurfDesc;
+    //VxImageDescEx dst;
+    //if (miplevel != -1 || !desc->MipMapCount)
+    //    pSurface = NULL;
+    //if (pSurface)
+    //{
+    //    CKBYTE* image = m_Driver->m_Owner->AllocateObjects(SurfaceDesc.Width * SurfaceDesc.Height);
+    //    if (SurfaceDesc.Width != src.Width || SurfaceDesc.Height != src.Height)
+    //    {
+    //        dst.Size = sizeof(VxImageDescEx);
+    //        ZeroMemory(&dst.Flags, sizeof(VxImageDescEx) - sizeof(dst.Size));
+    //        dst.Width = src.Width;
+    //        dst.Height = src.Height;
+    //        dst.BitsPerPixel = 32;
+    //        dst.BytesPerLine = 4 * SurfDesc.Width;
+    //        dst.AlphaMask = 0xFF000000;
+    //        dst.RedMask = 0xFF0000;
+    //        dst.GreenMask = 0xFF00;
+    //        dst.BlueMask = 0xFF;
+    //        dst.Image = image;
+    //        VxDoBlit(src, dst);
+    //        src = dst;
+    //    }
+    //}
+    //D3DLOCKED_RECT LockRect;
+    //if (FAILED(desc->DxTexture->LockRect(actual_miplevel, &LockRect, NULL, 0)))
+    //    return 0;
+    //LoadSurface(SurfaceDesc, LockRect, src);
+    //desc->DxTexture->UnlockRect(actual_miplevel);
+    //if (pSurface)
+    //{
+    //    dst = src;
+
+    //}
+    return 0;
 }
 
 BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect* Dest, CKRST_CUBEFACE Face)
@@ -985,8 +1062,15 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
     {
         CKDX9IndexBufferDesc* desc = this->m_IndexBuffer[Clip];
         int length = indexcount + 100;
-        if (!desc || desc->m_MaxIndexCount < indexcount)
+        if (!desc || desc->m_MaxIndexCount < indexcount || !desc->DxBuffer)
         {
+            if (desc)
+            {
+                if (desc->DxBuffer)
+                    desc->DxBuffer->Release();
+                delete desc;
+                desc = NULL;
+            }
             if (length <= 10000)
                 length = 10000;
             CKDX9IndexBufferDesc ibDesc;
@@ -1047,10 +1131,10 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
     }
     if (!indices || pType == VX_POINTLIST)
     {
-        HRESULT hr = m_Device->DrawPrimitive(D3DPT_POINTLIST, StartIndex, primCount);
+        HRESULT hr = m_Device->DrawPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, primCount);
         return SUCCEEDED(hr);
     }
-    if (FAILED(m_Device->GetIndices(&m_IndexBuffer[Clip]->DxBuffer)))
+    if (FAILED(m_Device->SetIndices(m_IndexBuffer[Clip]->DxBuffer)))
         return 0;
     // baseVertexIndex == 0?
     return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, 0, 0, VertexCount, StartIndex, primCount));
@@ -1058,32 +1142,34 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
 
 void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize)
 {
-    if (m_CurrentVertexShaderCache)
-    {
-        CKDX9VertexShaderDesc *desc = static_cast<CKDX9VertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShaderCache]);
-        int index = ((int)(VFormat & 0x14 | ((int)VFormat >> 3) & 0x1F8) >> 2) + 1;
-        if (desc)
-        {
-            assert(SUCCEEDED(m_Device->SetVertexShader(NULL)));
-            assert(SUCCEEDED(m_Device->SetFVF(VFormat)));
-            desc->DxShader = NULL;
-        }
-    } else
-    {
-        if (VFormat != m_CurrentVertexFormatCache)
-        {
-            m_CurrentVertexFormatCache = VFormat;
-            assert(SUCCEEDED(m_Device->SetFVF(VFormat)));
-        }
-    }
-    if (Buffer != m_CurrentVertexBufferCache || m_CurrentVertexSizeCache != VSize)
-    {
-        UINT offset = 0;
-        //assert(SUCCEEDED(m_Device->GetStreamSource(0, &Buffer, &offset, NULL)));
-        assert(SUCCEEDED(m_Device->SetStreamSource(0, Buffer, 0, VSize)));
-        m_CurrentVertexBufferCache = Buffer;
-        m_CurrentVertexSizeCache = VSize;
-    }
+    // TODO: Utilize cache
+    assert(SUCCEEDED(m_Device->SetFVF(VFormat)));
+    assert(SUCCEEDED(m_Device->SetStreamSource(0, Buffer, 0, VSize)));
+
+    //if (m_CurrentVertexShaderCache)
+    //{
+    //    CKDX9VertexShaderDesc *desc = static_cast<CKDX9VertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShaderCache]);
+    //    if (desc)
+    //    {
+    //        assert(SUCCEEDED(m_Device->SetVertexShader(NULL)));
+    //        assert(SUCCEEDED(m_Device->SetFVF(VFormat)));
+    //        desc->DxShader = NULL;
+    //    }
+    //} else
+    //{
+    //    if (VFormat != m_CurrentVertexFormatCache)
+    //    {
+    //        m_CurrentVertexFormatCache = VFormat;
+    //        assert(SUCCEEDED(m_Device->SetFVF(VFormat)));
+    //    }
+    //}
+    //if (Buffer != m_CurrentVertexBufferCache || m_CurrentVertexSizeCache != VSize)
+    //{
+    //    //assert(SUCCEEDED(m_Device->GetStreamSource(0, &Buffer, &offset, NULL)));
+    //    assert(SUCCEEDED(m_Device->SetStreamSource(0, Buffer, 0, VSize)));
+    //    m_CurrentVertexBufferCache = Buffer;
+    //    m_CurrentVertexSizeCache = VSize;
+    //}
 }
 
 BOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc* DesiredFormat)
