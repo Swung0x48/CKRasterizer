@@ -1,4 +1,10 @@
 #include "CKDX9Rasterizer.h"
+#define STEP 0
+
+#if (STEP)
+#include <conio.h>
+static bool step_mode = false;
+#endif
 
 CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver* Driver) :
 	m_Device(nullptr),
@@ -59,6 +65,11 @@ int DepthBitPerPixelFromFormat(D3DFORMAT Format, CKDWORD *StencilSize)
 BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
 	BOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
+#if (STEP)
+    AllocConsole();
+    freopen("CON", "w", stdout);
+    freopen("CON", "w", stderr);
+#endif
 	m_InCreateDestroy = TRUE;
     CKRECT Rect;
 	if (Window)
@@ -321,6 +332,14 @@ BOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
         if (hr == D3DERR_DEVICENOTRESET)
             Resize(m_PosX, m_PosY, m_Width, m_Height, 0);
     }
+#if (STEP)
+    fprintf(stderr, "swap\n");
+    int x = _getch();
+    if (x == 'z')
+        step_mode = true;
+    else if (x == 'x')
+        step_mode = false;
+#endif
     return SUCCEEDED(hr);
 }
 
@@ -781,6 +800,14 @@ BOOL CKDX9RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const void
 BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices, int indexcount,
 	VxDrawPrimitiveData* data)
 {
+#if (STEP)
+    fprintf(stderr, "drawprimitive ib %d\n", indexcount);
+    if (step_mode)
+    {
+        this->BackToFront(false);
+        _getch();
+    }
+#endif
     if (!m_SceneBegined)
         BeginScene();
     CKBOOL clip = 0;
@@ -826,6 +853,11 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
 BOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
 	CKDWORD VertexCount, WORD* indices, int indexcount)
 {
+#if (STEP)
+    fprintf(stderr, "drawprimitive vb %d %d\n", VertexCount, indexcount);
+    if (step_mode)
+        _getch();
+#endif
     if (VertexBuffer >= m_VertexBuffers.Size())
         return 0;
     CKVertexBufferDesc* vertexBufferDesc = m_VertexBuffers[VertexBuffer];
@@ -839,6 +871,11 @@ BOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Vert
 BOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
 	CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
+#if (STEP)
+    fprintf(stderr, "drawprimitive vbib %d %d\n", VertexCount, Indexcount);
+    if (step_mode)
+        _getch();
+#endif
 	return CKRasterizerContext::DrawPrimitiveVBIB(pType, VB, IB, MinVIndex, VertexCount, StartIndex, Indexcount);
 }
 
@@ -1073,6 +1110,7 @@ void CKDX9RasterizerContext::UpdateDirectXData()
 BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc* VB,
 	CKDWORD StartIndex, CKDWORD VertexCount, WORD* indices, int indexcount, BOOL Clip)
 {
+    int ibstart = 0;
     if (indices)
     {
         CKDX9IndexBufferDesc* desc = this->m_IndexBuffer[Clip];
@@ -1106,6 +1144,7 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
         if (indexcount + desc->m_CurrentICount <= desc->m_MaxIndexCount)
         {
             desc->DxBuffer->Lock(2 * desc->m_CurrentICount, 2 * indexcount, &pbData, D3DLOCK_NOOVERWRITE);
+            ibstart = desc->m_CurrentICount;
             desc->m_CurrentICount += indexcount;
         } else
         {
@@ -1148,7 +1187,7 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
     if (FAILED(m_Device->SetIndices(m_IndexBuffer[Clip]->DxBuffer)))
         return 0;
     // baseVertexIndex == 0?
-    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, 0, 0, VertexCount, StartIndex, primCount));
+    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, 0, VertexCount, ibstart, primCount));
 }
 
 void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize)
