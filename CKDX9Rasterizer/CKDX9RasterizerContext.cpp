@@ -917,12 +917,31 @@ BOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Typ
 void* CKDX9RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
 	CKRST_LOCKFLAGS Lock)
 {
-	return CKRasterizerContext::LockVertexBuffer(VB, StartVertex, VertexCount, Lock);
+    if (VB >= m_VertexBuffers.Size())
+        return FALSE;
+
+    CKDX9VertexBufferDesc* vb = m_VertexBuffers[VB];
+    if (!vb || !vb->DxBuffer)
+        return FALSE;
+
+    void* pVertices;
+    if (FAILED(vb->DxBuffer->Lock(StartVertex * vb->m_VertexSize, VertexCount * vb->m_VertexSize, (BYTE **)&pVertices,
+                                  Lock << 12)))
+        return NULL;
+
+    return pVertices;
 }
 
 BOOL CKDX9RasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 {
-	return CKRasterizerContext::UnlockVertexBuffer(VB);
+    if (VB >= m_VertexBuffers.Size())
+        return FALSE;
+
+    CKDX9VertexBufferDesc* vb = m_VertexBuffers[VB];
+    if (!vb || !vb->DxBuffer)
+        return FALSE;
+
+    return SUCCEEDED(vb->DxBuffer->Unlock());
 }
 
 BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
