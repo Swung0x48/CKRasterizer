@@ -84,30 +84,32 @@ void CKDX9Rasterizer::Close(void)
 
 void CKDX9Rasterizer::InitBlendStages()
 {
-	// TODO: Check index
-	memset(this->m_BlendStages, 0, sizeof(this->m_BlendStages));
+	memset(m_BlendStages, NULL, sizeof(m_BlendStages));
+
 	CKStageBlend* b = new CKStageBlend;
 	b->Cop = D3DTOP_MODULATE;
-	b->Carg1 = 2;
-	b->Carg2 = 1;
+    b->Carg1 = D3DTA_TEXTURE;
+    b->Carg2 = D3DTA_CURRENT;
 	b->Aop = D3DTOP_SELECTARG1;
-	b->Aarg1 = 1;
-	b->Aarg2 = 1;
-	this->m_BlendStages[0] = b; // 19?
+    b->Aarg1 = D3DTA_CURRENT;
+    b->Aarg2 = D3DTA_CURRENT;
+    m_BlendStages[STAGEBLEND(VXBLEND_ZERO, VXBLEND_SRCCOLOR)] = b;
+
 	b = new CKStageBlend;
 	b->Cop = D3DTOP_MODULATE;
-	b->Carg1 = 2;
-	b->Carg2 = 1;
+    b->Carg1 = D3DTA_TEXTURE;
+    b->Carg2 = D3DTA_CURRENT;
 	b->Aop = D3DTOP_SELECTARG1;
-	b->Aarg1 = 1;
-	b->Aarg2 = 1;
-	this->m_BlendStages[2] = b; // 145?
+    b->Aarg1 = D3DTA_CURRENT;
+    b->Aarg2 = D3DTA_CURRENT;
+    m_BlendStages[STAGEBLEND(VXBLEND_DESTCOLOR, VXBLEND_ZERO)] = b;
+
 	b = new CKStageBlend;
 	b->Cop = D3DTOP_ADD;
-	b->Carg1 = 2;
-	b->Carg2 = 1;
+    b->Carg1 = D3DTA_TEXTURE;
+    b->Carg2 = D3DTA_CURRENT;
 	b->Aop = D3DTOP_SELECTARG1;
-	b->Aarg1 = 1;
-	b->Aarg2 = 1;
-	this->m_BlendStages[1] = b; // 34?
+    b->Aarg1 = D3DTA_CURRENT;
+    b->Aarg2 = D3DTA_CURRENT;
+    m_BlendStages[STAGEBLEND(VXBLEND_ONE, VXBLEND_ONE)] = b;
 }
