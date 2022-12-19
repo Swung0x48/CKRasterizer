@@ -1428,8 +1428,15 @@ CKDWORD CKDX9RasterizerContext::DX9PresentInterval(DWORD PresentInterval)
 BOOL CKDX9RasterizerContext::LoadSurface(const D3DSURFACE_DESC& ddsd, const D3DLOCKED_RECT& LockRect,
 	const VxImageDescEx& SurfDesc)
 {
-	return FALSE;
-
+    VxImageDescEx desc;
+    desc.Size = sizeof(VxImageDescEx);
+    VxPixelFormat2ImageDesc(D3DFormatToVxPixelFormat(ddsd->Format), desc);
+    desc.Width = ddsd->Width;
+    desc.Height = ddsd->Height;
+    desc.BytesPerLine = LockRect->Pitch;
+    desc.Image = LockRect->pBits;
+    VxDoBlit(SurfDesc, desc);
+	return TRUE;
 }
 
 LPDIRECT3DSURFACE9 CKDX9RasterizerContext::GetTempZBuffer(int Width, int Height)
