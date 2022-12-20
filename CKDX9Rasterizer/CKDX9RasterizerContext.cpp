@@ -495,12 +495,65 @@ BOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatr
 
 BOOL CKDX9RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
+    if (m_StateCache[State].Flag != 0)
+        return TRUE;
+
+    if (m_StateCache[State].Valid != 0 && m_StateCache[State].Value == Value)
+    {
+        ++m_RenderStateCacheHit;
+        return TRUE;
+    }
+
+    ++m_RenderStateCacheMiss;
+    m_StateCache[State].Value = Value;
+    m_StateCache[State].Valid = 1;
+
+    if (State < m_StateCacheMissMask.Size() && m_StateCacheMissMask.IsSet(State))
+        return FALSE;
+
+    if (State < m_StateCacheHitMask.Size() && m_StateCacheHitMask.IsSet(State))
+    {
+        static D3DCULL VXCullModes[4] = {D3DCULL_NONE, D3DCULL_NONE, D3DCULL_CW, D3DCULL_CCW};
+        static D3DCULL VXCullModesInverted[4] = {D3DCULL_NONE, D3DCULL_NONE, D3DCULL_CCW, D3DCULL_CW};
+
+        if (State == VXRENDERSTATE_CULLMODE)
+        {
+            if (!m_InverseWinding)
+                return SUCCEEDED(m_Device->SetRenderState(D3DRS_CULLMODE, VXCullModes[Value]));
+            else
+                return SUCCEEDED(m_Device->SetRenderState(D3DRS_CULLMODE, VXCullModesInverted[Value]));
+        }
+        if (State == VXRENDERSTATE_INVERSEWINDING)
+        {
+            m_InverseWinding = Value != 0;
+            m_StateCache[VXRENDERSTATE_CULLMODE].Valid = 0;
+        }
+        return TRUE;
+    }
+
     return SUCCEEDED(m_Device->SetRenderState((D3DRENDERSTATETYPE)State, Value));
 }
 
 BOOL CKDX9RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD* Value)
 {
-    return SUCCEEDED(m_Device->GetRenderState((D3DRENDERSTATETYPE)State, Value));
+    if (m_StateCache[State].Flag != 0)
+    {
+        *Value = m_StateCache[State].Value;
+        return TRUE;
+    }
+    else
+    {
+        *Value = m_StateCache[State].DefaultValue;
+        if (State == VXRENDERSTATE_INVERSEWINDING)
+        {
+            *Value = m_InverseWinding;
+            return TRUE;
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
 }
 
 BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
