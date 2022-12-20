@@ -245,11 +245,46 @@ BOOL CKDX9RasterizerDriver::IsTextureFormatOk(D3DFORMAT TextureFormat, D3DFORMAT
 
 D3DFORMAT CKDX9RasterizerDriver::FindNearestTextureFormat(CKTextureDesc* desc)
 {
-    for (int i = 0; i < m_TextureFormats.Size(); ++i)
+	// TODO: AI generated
+    DWORD flags = desc->Format.Flags;
+    int min_delta = 64;
+    int bpp = desc->Format.BitsPerPixel;
+    unsigned int BitCount = GetBitCount(desc->Format.AlphaMask);
+
+    if (flags == 19)
     {
-        
+        BitCount = 1;
+        bpp = 16;
     }
-	return D3DFORMAT();
+    else if (flags >= 0x13 && flags <= 0x17)
+    {
+        BitCount = 8;
+        bpp = 32;
+    }
+
+    CKTextureDesc *desc = NULL;
+    for (CKTextureDesc *iter = this->m_TextureFormats.Begin(); iter < m_TextureFormats.End(); ++iter)
+    {
+        if (bpp == iter->Format.BitsPerPixel && GetBitCount(iter->Format.AlphaMask) == BitCount)
+        {
+            return TextureDescToD3DFormat(iter);
+        }
+
+        if (!desc->Format.AlphaMask || iter->Format.AlphaMask)
+        {
+            int cur_delta = abs(bpp - iter->Format.BitsPerPixel);
+            if (cur_delta < min_delta)
+            {
+                min_delta = cur_delta;
+                desc = iter;
+            }
+        }
+    }
+    if (desc)
+    {
+        return TextureDescToD3DFormat(desc);
+    }
+    return D3DFMT_UNKNOWN;
 }
 
 D3DFORMAT CKDX9RasterizerDriver::FindNearestRenderTargetFormat(int Bpp, BOOL Windowed)
