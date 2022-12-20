@@ -1,7 +1,7 @@
 #include "CKDX9Rasterizer.h"
 #define STEP 0
 
-#if (STEP)
+#if STEP
 #include <conio.h>
 static bool step_mode = false;
 #endif
@@ -63,7 +63,7 @@ int DepthBitPerPixelFromFormat(D3DFORMAT Format, CKDWORD *StencilSize)
 BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
 	BOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
-#if (STEP)
+#if STEP
     AllocConsole();
     freopen("CON", "w", stdout);
     freopen("CON", "w", stderr);
@@ -500,6 +500,7 @@ BOOL CKDX9RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD* Va
 
 BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 {
+    fprintf(stderr, "settexture %d %d\n", Texture, Stage);
     if (Texture >= m_Textures.Size())
         return 0;
     HRESULT hr = D3DERR_INVALIDCALL;
@@ -798,7 +799,7 @@ BOOL CKDX9RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const void
 BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices, int indexcount,
 	VxDrawPrimitiveData* data)
 {
-#if (STEP)
+#if STEP
     fprintf(stderr, "drawprimitive ib %d\n", indexcount);
     if (step_mode)
     {
@@ -851,7 +852,7 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
 BOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
 	CKDWORD VertexCount, WORD* indices, int indexcount)
 {
-#if (STEP)
+#if STEP
     fprintf(stderr, "drawprimitive vb %d %d\n", VertexCount, indexcount);
     if (step_mode)
         _getch();
@@ -869,7 +870,7 @@ BOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Vert
 BOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
 	CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
-#if (STEP)
+#if STEP
     fprintf(stderr, "drawprimitive vbib %d %d\n", VertexCount, Indexcount);
     if (step_mode)
         _getch();
@@ -944,13 +945,14 @@ BOOL CKDX9RasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 
 BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
 {
+    fprintf(stderr, "load texture %d %dx%d %d\n", Texture, SurfDesc.Width, SurfDesc.Height, miplevel);
     if (Texture >= m_Textures.Size())
-        return 0;
+        return FALSE;
     CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture]);
     if (!desc || !desc->DxTexture)
-        return 0;
+        return FALSE;
     if ((desc->Flags & (CKRST_TEXTURE_CUBEMAP | CKRST_TEXTURE_RENDERTARGET)) != 0)
-        return 1;
+        return TRUE;
     int actual_miplevel = (miplevel < 0) ? 0 : miplevel;
     D3DSURFACE_DESC SurfaceDesc;
     IDirect3DSurface9 *pSurface = NULL;
@@ -1016,7 +1018,7 @@ BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &S
     }
     D3DLOCKED_RECT LockRect;
     if (FAILED(desc->DxTexture->LockRect(actual_miplevel, &LockRect, NULL, 0)))
-        return 0;
+        return FALSE;
     LoadSurface(SurfaceDesc, LockRect, src);
     desc->DxTexture->UnlockRect(actual_miplevel);
     if (pSurface)
@@ -1419,8 +1421,18 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 
 BOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc* DesiredFormat)
 {
-	return FALSE;
-
+    fprintf(stderr, "create texture %d %dx%d\n", Texture, DesiredFormat->Format.Width, DesiredFormat->Format.Height);
+    if (Texture >= m_Textures.Size())
+        return FALSE;
+    if (m_Textures[Texture])
+        return TRUE;
+    CKDX9TextureDesc *desc = new CKDX9TextureDesc();
+    m_Textures[Texture] = desc;
+    auto width = DesiredFormat->Format.Width;
+    auto height = DesiredFormat->Format.Height;
+    auto miplvl = DesiredFormat->MipMapCount;
+    auto fmt = VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(DesiredFormat->Format));
+    return SUCCEEDED(m_Device->CreateTexture(width, height, miplvl, D3DUSAGE_DYNAMIC, fmt, D3DPOOL_DEFAULT, &(desc->DxTexture), NULL));
 }
 
 BOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc* DesiredFormat)
