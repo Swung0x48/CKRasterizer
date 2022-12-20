@@ -1741,7 +1741,33 @@ BOOL CKDX9RasterizerContext::LoadSurface(const D3DSURFACE_DESC& ddsd, const D3DL
 	return TRUE;
 }
 
+#pragma warning(disable : 4035)
+
+_inline unsigned long GetMSB(unsigned long data)
+{
+    _asm
+    {
+        mov		eax,data
+        bsr		eax,eax
+    }
+}
+
+#pragma warning(default : 4035)
+
 LPDIRECT3DSURFACE9 CKDX9RasterizerContext::GetTempZBuffer(int Width, int Height)
 {
-	return NULL;
+    CKDWORD index = GetMSB(Height) << 4 | GetMSB(Width);
+    if (index > 0xFF)
+        return NULL;
+
+    LPDIRECT3DSURFACE9 surface = m_TempZBuffers[index];
+    if (surface)
+        return surface;
+
+    if (FAILED(m_Device->CreateDepthStencilSurface(Width, Height, m_PresentParams.AutoDepthStencilFormat,
+                                                   D3DMULTISAMPLE_NONE, 0, TRUE, &surface, NULL)))
+        return NULL;
+
+    m_TempZBuffers[index] = surface;
+    return surface;
 }
