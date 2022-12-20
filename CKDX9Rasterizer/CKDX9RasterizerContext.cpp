@@ -918,12 +918,12 @@ void* CKDX9RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, 
     if (VB >= m_VertexBuffers.Size())
         return FALSE;
 
-    CKDX9VertexBufferDesc* vb = m_VertexBuffers[VB];
+    CKDX9VertexBufferDesc *vb = static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!vb || !vb->DxBuffer)
         return FALSE;
 
-    void* pVertices;
-    if (FAILED(vb->DxBuffer->Lock(StartVertex * vb->m_VertexSize, VertexCount * vb->m_VertexSize, (BYTE **)&pVertices,
+    void* pVertices = NULL;
+    if (FAILED(vb->DxBuffer->Lock(StartVertex * vb->m_VertexSize, VertexCount * vb->m_VertexSize, &pVertices,
                                   Lock << 12)))
         return NULL;
 
@@ -935,7 +935,7 @@ BOOL CKDX9RasterizerContext::UnlockVertexBuffer(CKDWORD VB)
     if (VB >= m_VertexBuffers.Size())
         return FALSE;
 
-    CKDX9VertexBufferDesc* vb = m_VertexBuffers[VB];
+    CKDX9VertexBufferDesc *vb = static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!vb || !vb->DxBuffer)
         return FALSE;
 
@@ -1606,11 +1606,11 @@ BOOL CKDX9RasterizerContext::LoadSurface(const D3DSURFACE_DESC& ddsd, const D3DL
 {
     VxImageDescEx desc;
     desc.Size = sizeof(VxImageDescEx);
-    VxPixelFormat2ImageDesc(D3DFormatToVxPixelFormat(ddsd->Format), desc);
-    desc.Width = ddsd->Width;
-    desc.Height = ddsd->Height;
-    desc.BytesPerLine = LockRect->Pitch;
-    desc.Image = LockRect->pBits;
+    VxPixelFormat2ImageDesc(D3DFormatToVxPixelFormat(ddsd.Format), desc);
+    desc.Width = ddsd.Width;
+    desc.Height = ddsd.Height;
+    desc.BytesPerLine = LockRect.Pitch;
+    desc.Image = static_cast<XBYTE *>(LockRect.pBits);
     VxDoBlit(SurfDesc, desc);
 	return TRUE;
 }
