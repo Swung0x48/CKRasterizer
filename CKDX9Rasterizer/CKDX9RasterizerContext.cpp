@@ -1108,7 +1108,7 @@ BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect*
     assert(SUCCEEDED(desc->DxTexture->GetSurfaceLevel(0, &textureSurface)));
     POINT pt{destRect.left, destRect.top};
 
-    HRESULT hr;
+    HRESULT hr = E_FAIL;
     if (backBuffer && textureSurface)
     {
         assert(SUCCEEDED(hr = m_Device->UpdateSurface(textureSurface, &srcRect, backBuffer, &pt)));
@@ -1153,6 +1153,7 @@ BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst
 int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc)
 {
     D3DSURFACE_DESC desc;
+    ZeroMemory(&desc, sizeof(desc));
     IDirect3DSurface9 *surface = NULL;
     int v33 = 0;
 
