@@ -289,7 +289,9 @@ protected:
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
 
     //---- Cleanup
+    void FlushCaches();
     void FlushNonManagedObjects();
+    void ReleaseStateBlocks();
     void ReleaseIndexBuffers();
     void ClearStreamCache();
     void ReleaseScreenBackup();
@@ -347,9 +349,9 @@ public:
     // Render states which must be disabled or which values must be translated...
     CKDWORD *m_TranslatedRenderStates[VXRENDERSTATE_MAXSTATE];
 
-    DWORD m_TextureMinFilterStateBlocks[8][8];
-    DWORD m_TextureMagFilterStateBlocks[8][8];
-    DWORD m_TextureMapBlendStateBlocks[80];
+    LPDIRECT3DSTATEBLOCK9 m_TextureMinFilterStateBlocks[8][8];
+    LPDIRECT3DSTATEBLOCK9 m_TextureMagFilterStateBlocks[8][8];
+    LPDIRECT3DSTATEBLOCK9 m_TextureMapBlendStateBlocks[10][8];
 
     //-----------------------------------------------------
     // + To do texture rendering, Z-buffers are created when

@@ -495,12 +495,65 @@ BOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatr
 
 BOOL CKDX9RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
+    if (m_StateCache[State].Flag != 0)
+        return TRUE;
+
+    if (m_StateCache[State].Valid != 0 && m_StateCache[State].Value == Value)
+    {
+        ++m_RenderStateCacheHit;
+        return TRUE;
+    }
+
+    ++m_RenderStateCacheMiss;
+    m_StateCache[State].Value = Value;
+    m_StateCache[State].Valid = 1;
+
+    if (State < m_StateCacheMissMask.Size() && m_StateCacheMissMask.IsSet(State))
+        return FALSE;
+
+    if (State < m_StateCacheHitMask.Size() && m_StateCacheHitMask.IsSet(State))
+    {
+        static D3DCULL VXCullModes[4] = {D3DCULL_NONE, D3DCULL_NONE, D3DCULL_CW, D3DCULL_CCW};
+        static D3DCULL VXCullModesInverted[4] = {D3DCULL_NONE, D3DCULL_NONE, D3DCULL_CCW, D3DCULL_CW};
+
+        if (State == VXRENDERSTATE_CULLMODE)
+        {
+            if (!m_InverseWinding)
+                return SUCCEEDED(m_Device->SetRenderState(D3DRS_CULLMODE, VXCullModes[Value]));
+            else
+                return SUCCEEDED(m_Device->SetRenderState(D3DRS_CULLMODE, VXCullModesInverted[Value]));
+        }
+        if (State == VXRENDERSTATE_INVERSEWINDING)
+        {
+            m_InverseWinding = Value != 0;
+            m_StateCache[VXRENDERSTATE_CULLMODE].Valid = 0;
+        }
+        return TRUE;
+    }
+
     return SUCCEEDED(m_Device->SetRenderState((D3DRENDERSTATETYPE)State, Value));
 }
 
 BOOL CKDX9RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD* Value)
 {
-    return SUCCEEDED(m_Device->GetRenderState((D3DRENDERSTATETYPE)State, Value));
+    if (m_StateCache[State].Flag != 0)
+    {
+        *Value = m_StateCache[State].Value;
+        return TRUE;
+    }
+    else
+    {
+        *Value = m_StateCache[State].DefaultValue;
+        if (State == VXRENDERSTATE_INVERSEWINDING)
+        {
+            *Value = m_InverseWinding;
+            return TRUE;
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
 }
 
 BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
@@ -539,238 +592,201 @@ BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 
 BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
-    int v4; // ebx
-    int v6; // edi
-    CKDWORD v7; // ebp
-    CKDWORD v8; // edx
-    BOOL result; // eax
-    int v10; // edi
-    CKDWORD v11; // ebp
-    DWORD v12; // ecx
-    int v13; // edi
-    CKDWORD v14; // ebp
-    CKDWORD m_PresentInterval; // eax
-    int v16; // edi
-    int v18; // edi
-    DWORD v19; // edi
-    int v20; // ebp
-    HRESULT v21; // ebx
-    int v22; // [esp+4Ch] [ebp-10h]
-
-    v4 = -1;
     switch (Tss)
     {
         case CKRST_TSS_ADDRESS:
-            v19 = Value;
-            v20 = Stage;
-            v21 = this->m_Device->SetSamplerState(Stage, D3DSAMP_ADDRESSU, Value);
-            this->m_Device->SetSamplerState(v20, D3DSAMP_ADDRESSV, v19);
-            this->m_Device->SetSamplerState(v20, D3DSAMP_ADDRESSW, v19);
-            result = v21 >= 0;
+            m_Device->SetSamplerState(Stage, D3DSAMP_ADDRESSU, Value);
+            m_Device->SetSamplerState(Stage, D3DSAMP_ADDRESSV, Value);
+            m_Device->SetSamplerState(Stage, D3DSAMP_ADDRESSW, Value);
             break;
         case CKRST_TSS_MAGFILTER:
-            if (this->m_PresentInterval)
+            if (m_PresentInterval == 0)
             {
-                this->m_Device->SetSamplerState(Stage, D3DSAMP_MAGFILTER, 1);
-                result = 0;
+                LPDIRECT3DSTATEBLOCK9 block = m_TextureMagFilterStateBlocks[Value][Stage];
+                if (block && SUCCEEDED(block->Apply()))
+                    return TRUE;
+
+                switch (Value)
+                {
+                    case VXTEXTUREFILTER_NEAREST:
+                    case VXTEXTUREFILTER_MIPNEAREST:
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+                        break;
+                    case VXTEXTUREFILTER_LINEAR:
+                    case VXTEXTUREFILTER_MIPLINEAR:
+                    case VXTEXTUREFILTER_LINEARMIPNEAREST:
+                    case VXTEXTUREFILTER_LINEARMIPLINEAR:
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+                        break;
+                    case VXTEXTUREFILTER_ANISOTROPIC:
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MAXANISOTROPY, D3DTEXF_LINEAR);
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MAGFILTER, D3DTEXF_ANISOTROPIC);
+                        break;
+                    default:
+                        break;
+                }
             }
             else
             {
-                v10 = Stage;
-                v11 = Value;
-                v12 = this->m_TextureMagFilterStateBlocks[Value][Stage];
-                if (v12)
-                {
-                    /*v4 = this->m_Device->ApplyStateBlock(v12);
-                    if (v4 >= 0)*/
-                        goto LABEL_45;
-                }
-                switch (v11)
-                {
-                    case 1u:
-                    case 3u:
-                        this->m_Device->SetSamplerState(v10, D3DSAMP_MAGFILTER, 1);
-                        result = v4 >= 0;
-                        break;
-                    case 2u:
-                    case 4u:
-                    case 5u:
-                    case 6u:
-                        this->m_Device->SetSamplerState(v10, D3DSAMP_MAGFILTER, 2);
-                        result = v4 >= 0;
-                        break;
-                    case 7u:
-                        this->m_Device->SetSamplerState(v10, D3DSAMP_MAXANISOTROPY, 2);
-                        this->m_Device->SetSamplerState(v10, D3DSAMP_MAGFILTER, 3);
-                        result = v4 >= 0;
-                        break;
-                    default:
-                        goto LABEL_45;
-                }
+                m_Device->SetSamplerState(Stage, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+                return FALSE;
             }
             break;
         case CKRST_TSS_MINFILTER:
-            v13 = Stage;
-            v14 = Value;
-            /*if (this->m_TextureMinFilterStateBlocks[Value][Stage] && !this->m_PresentInterval &&
-                !this->m_CurrentPresentInterval)
+            if (m_PresentInterval == 0 && m_CurrentPresentInterval == 0)
             {
-                v4 = this->m_Device->ApplyStateBlock(this->m_TextureMinFilterStateBlocks[Value][Stage]);
-            }*/
-            m_PresentInterval = this->m_PresentInterval;
-            if (!m_PresentInterval && !this->m_CurrentPresentInterval && v4 >= 0)
-                goto LABEL_45;
-            switch (v14)
+                LPDIRECT3DSTATEBLOCK9 block = m_TextureMagFilterStateBlocks[Value][Stage];
+                if (block && SUCCEEDED(block->Apply()))
+                    return TRUE;
+            }
+
+            switch (Value)
             {
-                case 1u:
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER, 1);
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER, 0);
-                    result = v4 >= 0;
+                case VXTEXTUREFILTER_NEAREST:
+                    m_Device->SetSamplerState(Stage, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+                    m_Device->SetSamplerState(Stage, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
                     break;
-                case 2u:
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER,
-                                                         2 - (m_PresentInterval != 0));
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER, 0);
-                    result = v4 >= 0;
+                case VXTEXTUREFILTER_LINEAR:
+                    if (m_PresentInterval == 0)
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+                    else
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+                    m_Device->SetSamplerState(Stage, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
                     break;
-                case 3u:
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER, 1);
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER,
-                                                         this->m_CurrentPresentInterval == 0);
-                    result = v4 >= 0;
+                case VXTEXTUREFILTER_MIPNEAREST:
+                    m_Device->SetSamplerState(Stage, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+                    if (m_CurrentPresentInterval == 0)
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MIPFILTER, D3DTEXF_POINT);
+                    else
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
                     break;
-                case 4u:
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER,
-                                                         2 - (m_PresentInterval != 0));
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER,
-                                                         this->m_CurrentPresentInterval == 0);
-                    result = v4 >= 0;
+                case VXTEXTUREFILTER_MIPLINEAR:
+                    if (m_PresentInterval == 0)
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+                    else
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+                    if (m_CurrentPresentInterval == 0)
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MIPFILTER, D3DTEXF_POINT);
+                    else
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
                     break;
-                case 5u:
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER, 1);
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER,
-                                                         this->m_CurrentPresentInterval != 0 ? 0 : 2);
-                    result = v4 >= 0;
+                case VXTEXTUREFILTER_LINEARMIPNEAREST:
+                    m_Device->SetSamplerState(Stage, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+                    if (m_CurrentPresentInterval == 0)
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MIPFILTER, D3DTEXF_LINEAR);
+                    else
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
                     break;
-                case 6u:
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER,
-                                                         2 - (m_PresentInterval != 0));
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MIPFILTER,
-                                                         this->m_CurrentPresentInterval != 0 ? 0 : 2);
-                    result = v4 >= 0;
+                case VXTEXTUREFILTER_LINEARMIPLINEAR:
+                    if (m_PresentInterval == 0)
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+                    else
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+                    if (m_CurrentPresentInterval == 0)
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MIPFILTER, D3DTEXF_LINEAR);
+                    else
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
                     break;
-                case 7u:
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MINFILTER,
-                                                         2 * (m_PresentInterval == 0) + 1);
-                    this->m_Device->SetSamplerState(v13, D3DSAMP_MAXANISOTROPY, 2);
-                    result = v4 >= 0;
+                case VXTEXTUREFILTER_ANISOTROPIC:
+                    if (m_PresentInterval == 0)
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MINFILTER, D3DTEXF_ANISOTROPIC);
+                    else
+                        m_Device->SetSamplerState(Stage, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+                    m_Device->SetSamplerState(Stage, D3DSAMP_MAXANISOTROPY, D3DTEXF_LINEAR);
                     break;
                 default:
-                    goto LABEL_45;
+                    break;
             }
             break;
         case CKRST_TSS_TEXTUREMAPBLEND:
-            v6 = Stage;
-            v7 = Value;
-            v8 = Stage + 8 * Value;
-            if (this->m_TextureMapBlendStateBlocks[v8])
-            {/*
-                v4 = this->m_Device->ApplyStateBlock(this->m_TextureMapBlendStateBlocks[v8]);
-                if (v4 >= 0)*/
-                    goto LABEL_45;
-            }
-            switch (v7)
             {
-                case 1u:
-                case 7u:
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLOROP, 2);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG1, 2);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAOP, 2);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAARG1, 2);
-                    return 1;
-                case 2u:
-                case 4u:
-                case 6u:
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLOROP, 4);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG1, 2);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG2, 1);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAOP, 4);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAARG1, 2);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAARG2, 1);
-                    return 1;
-                case 3u:
-                case 5u:
-                    m_Device->SetTextureStageState(v6, D3DTSS_COLOROP, 13);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG1, 2);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG2, 1);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAOP, 2);
-                    goto LABEL_10;
-                case 8u:
-                    m_Device->SetTextureStageState(v6, D3DTSS_COLOROP, 7);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG1, 2);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG2, 1);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAOP, 2);
-                    goto LABEL_10;
-                case 9u:
-                    m_Device->SetTextureStageState(v6, D3DTSS_COLORARG1, 2);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLOROP, 24);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_COLORARG2, 3);
-                    this->m_Device->SetTextureStageState(v6, D3DTSS_ALPHAOP, 2);
-                LABEL_10:
-                    //m_Device->SetTextureStageState(v6, D3DTSS_ALPHAARG1, v22);
+                LPDIRECT3DSTATEBLOCK9 block = m_TextureMapBlendStateBlocks[Value][Stage];
+                if (block && SUCCEEDED(block->Apply()))
+                    return TRUE;
+            }
+
+            switch (Value)
+            {
+                case VXTEXTUREBLEND_DECAL:
+                case VXTEXTUREBLEND_COPY:
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+                    break;
+                case VXTEXTUREBLEND_MODULATE:
+                case VXTEXTUREBLEND_MODULATEALPHA:
+                case VXTEXTUREBLEND_MODULATEMASK:
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, D3DTOP_MODULATE);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG2, D3DTA_CURRENT);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG2, D3DTA_CURRENT);
+                    break;
+                case VXTEXTUREBLEND_DECALALPHA:
+                case VXTEXTUREBLEND_DECALMASK:
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, D3DTOP_BLENDTEXTUREALPHA);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG2, D3DTA_CURRENT);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG1, D3DTA_CURRENT);
+                    break;
+                case VXTEXTUREBLEND_ADD:
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, D3DTOP_ADD);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG2, D3DTA_CURRENT);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG1, D3DTA_CURRENT);
+                    break;
+                case VXTEXTUREBLEND_DOTPRODUCT3:
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, D3DTOP_DOTPRODUCT3);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG2, D3DTA_TFACTOR);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG1, D3DTA_CURRENT);
                     break;
                 default:
                     break;
             }
-            result = 1;
             break;
         case CKRST_TSS_STAGEBLEND:
             if (Value <= 0xFF)
             {
-                if (Value)
+                if (Value == 0)
                 {
-                    CKStageBlend* v17 = static_cast<CKDX9Rasterizer*>(m_Driver->m_Owner)->m_BlendStages[Value];
-                    if (v17)
-                    {
-                        v18 = Stage;
-                        this->m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, v17->Cop);
-                        this->m_Device->SetTextureStageState(v18, D3DTSS_COLORARG1, v17->Carg1);
-                        this->m_Device->SetTextureStageState(v18, D3DTSS_COLORARG2, v17->Carg2);
-                        this->m_Device->SetTextureStageState(v18, D3DTSS_ALPHAOP, v17->Aop);
-                        this->m_Device->SetTextureStageState(v18, D3DTSS_ALPHAARG1, v17->Aarg1);
-                        this->m_Device->SetTextureStageState(v18, D3DTSS_ALPHAARG2, v17->Aarg2);
-                        v4 = this->m_Device->ValidateDevice((DWORD *)&Stage);
-                        if (v4 >= 0)
-                            goto LABEL_45;
-                        this->m_Device->SetTextureStageState(v18, D3DTSS_COLOROP, 1);
-                        this->m_Device->SetTextureStageState(v18, D3DTSS_ALPHAOP, 1);
-                        result = v4 >= 0;
-                    }
-                    else
-                    {
-                        result = 0;
-                    }
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, D3DTOP_DISABLE);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+                    return TRUE;
                 }
-                else
+
+                CKStageBlend *blend = static_cast<CKDX9Rasterizer *>(m_Driver->m_Owner)->m_BlendStages[Value];
+                if (!blend)
+                    return FALSE;
+
+                m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, blend->Cop);
+                m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG1, blend->Carg1);
+                m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG2, blend->Carg2);
+                m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, blend->Aop);
+                m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG1, blend->Aarg1);
+                m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG2, blend->Aarg2);
+
+                if (FAILED(m_Device->ValidateDevice((DWORD *)&Stage)))
                 {
-                    v16 = Stage;
-                    this->m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, 1);
-                    this->m_Device->SetTextureStageState(v16, D3DTSS_ALPHAOP, 1);
-                    result = 1;
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, D3DTOP_DISABLE);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
                 }
             }
             else
             {
-                result = 0;
+                return FALSE;
             }
             break;
         default:
-            v4 = this->m_Device->SetTextureStageState(Stage, (D3DTEXTURESTAGESTATETYPE)Tss, Value);
-        LABEL_45:
-            result = v4 >= 0;
-            break;
+            return SUCCEEDED(m_Device->SetTextureStageState(Stage, (D3DTEXTURESTAGESTATETYPE)Tss, Value));
     }
-    return result;
+
+    return TRUE;
 }
 
 BOOL CKDX9RasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
@@ -888,7 +904,44 @@ BOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB
     if (step_mode)
         _getch();
 #endif
-	return CKRasterizerContext::DrawPrimitiveVBIB(pType, VB, IB, MinVIndex, VertexCount, StartIndex, Indexcount);
+    if (VB >= m_VertexBuffers.Size())
+        return FALSE;
+
+    if (IB >= m_IndexBuffers.Size())
+        return FALSE;
+
+    CKDX9VertexBufferDesc *vertexBufferDesc = static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[VB]);
+    if (vertexBufferDesc == NULL)
+        return FALSE;
+
+    CKDX9IndexBufferDesc *indexBufferDesc = static_cast<CKDX9IndexBufferDesc *>(m_IndexBuffers[IB]);
+    if (indexBufferDesc == NULL)
+        return FALSE;
+
+    SetupStreams(vertexBufferDesc->DxBuffer, vertexBufferDesc->m_VertexFormat, vertexBufferDesc->m_VertexSize);
+
+    switch (pType)
+    {
+        case VX_LINELIST:
+            Indexcount = Indexcount >> 1;
+            break;
+        case VX_LINESTRIP:
+            Indexcount = Indexcount - 1;
+            break;
+        case VX_TRIANGLELIST:
+            Indexcount = Indexcount / 3;
+            break;
+        case VX_TRIANGLESTRIP:
+        case VX_TRIANGLEFAN:
+            Indexcount = Indexcount - 2;
+            break;
+        default:
+            break;
+    }
+
+    m_Device->GetIndices(&indexBufferDesc->DxBuffer);
+
+	return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, 0, 0, VertexCount, StartIndex, Indexcount));
 }
 
 BOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void* DesiredFormat)
@@ -1285,34 +1338,40 @@ BOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, 
 
 BOOL CKDX9RasterizerContext::SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane& PlaneEquation)
 {
-	return CKRasterizerContext::SetUserClipPlane(ClipPlaneIndex, PlaneEquation);
+    return SUCCEEDED(m_Device->SetClipPlane(ClipPlaneIndex, (const float *)&PlaneEquation));
 }
 
 BOOL CKDX9RasterizerContext::GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane& PlaneEquation)
 {
-	return CKRasterizerContext::GetUserClipPlane(ClipPlaneIndex, PlaneEquation);
+    return SUCCEEDED(m_Device->GetClipPlane(ClipPlaneIndex, (float *)&PlaneEquation));
 }
 
 void* CKDX9RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
 {
-	return CKRasterizerContext::LockIndexBuffer(IB, StartIndex, IndexCount, Lock);
+    if (IB >= m_IndexBuffers.Size())
+        return FALSE;
+
+    CKDX9IndexBufferDesc *ib = static_cast<CKDX9IndexBufferDesc *>(m_IndexBuffers[IB]);
+    if (!ib || !ib->DxBuffer)
+        return FALSE;
+
+    void *pIndices = NULL;
+    if (FAILED(ib->DxBuffer->Lock(StartIndex * 2, IndexCount * 2, &pIndices, Lock << 12)))
+        return NULL;
+
+    return pIndices;
 }
 
 BOOL CKDX9RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
-	return CKRasterizerContext::UnlockIndexBuffer(IB);
-}
+    if (IB >= m_IndexBuffers.Size())
+        return FALSE;
 
-BOOL CKDX9RasterizerContext::LockTextureVideoMemory(CKDWORD Texture, VxImageDescEx& Desc, int MipLevel,
-	VX_LOCKFLAGS Flags)
-{
-	return FALSE;
-}
+    CKDX9IndexBufferDesc *ib = static_cast<CKDX9IndexBufferDesc *>(m_IndexBuffers[IB]);
+    if (!ib || !ib->DxBuffer)
+        return FALSE;
 
-BOOL CKDX9RasterizerContext::UnlockTextureVideoMemory(CKDWORD Texture, int MipLevel)
-{
-	return FALSE;
-
+    return SUCCEEDED(ib->DxBuffer->Unlock());
 }
 
 BOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char* Filename, TexFromFile* param)
@@ -1599,6 +1658,41 @@ BOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc* De
     return 1;
 }
 
+void CKDX9RasterizerContext::FlushCaches()
+{
+    FlushRenderStateCache();
+
+    m_InverseWinding = FALSE;
+
+    memset(m_TextureMinFilterStateBlocks, NULL, sizeof(m_TextureMinFilterStateBlocks));
+    memset(m_TextureMagFilterStateBlocks, NULL, sizeof(m_TextureMagFilterStateBlocks));
+    memset(m_TextureMapBlendStateBlocks, NULL, sizeof(m_TextureMapBlendStateBlocks));
+
+    if (m_Device)
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            for (int j = 0; j < 8; j++)
+            {
+                m_Device->BeginStateBlock();
+                SetTextureStageState(i, CKRST_TSS_MINFILTER, j + 1);
+                m_Device->EndStateBlock(&m_TextureMinFilterStateBlocks[j][i]);
+                
+                m_Device->BeginStateBlock();
+                SetTextureStageState(i, CKRST_TSS_MAGFILTER, j + 1);
+                m_Device->EndStateBlock(&m_TextureMagFilterStateBlocks[j][i]);
+
+                for (int k = 0; k < 10; k++)
+                {
+                    m_Device->BeginStateBlock();
+                    SetTextureStageState(i, CKRST_TSS_TEXTUREMAPBLEND, k + 1);
+                    m_Device->EndStateBlock(&m_TextureMapBlendStateBlocks[k][i]);
+                }
+            }
+        }
+    }
+}
+
 void CKDX9RasterizerContext::FlushNonManagedObjects()
 {
     if (m_Device)
@@ -1626,6 +1720,30 @@ void CKDX9RasterizerContext::FlushNonManagedObjects()
     ReleaseTempZBuffers();
     FlushObjects(60);
     return ReleaseIndexBuffers();
+}
+
+void CKDX9RasterizerContext::ReleaseStateBlocks()
+{
+    if (m_Device)
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            for (int j = 0; j < 8; j++)
+            {
+                m_TextureMinFilterStateBlocks[j][i]->Release();
+                m_TextureMagFilterStateBlocks[j][i]->Release();
+            }
+
+            for (int k = 0; k < 10; k++)
+            {
+                m_TextureMapBlendStateBlocks[k][i]->Release();
+            }
+        }
+
+        memset(m_TextureMinFilterStateBlocks, NULL, sizeof(m_TextureMinFilterStateBlocks));
+        memset(m_TextureMagFilterStateBlocks, NULL, sizeof(m_TextureMagFilterStateBlocks));
+        memset(m_TextureMapBlendStateBlocks, NULL, sizeof(m_TextureMapBlendStateBlocks));
+    }
 }
 
 void CKDX9RasterizerContext::ReleaseIndexBuffers()
@@ -1672,7 +1790,33 @@ BOOL CKDX9RasterizerContext::LoadSurface(const D3DSURFACE_DESC& ddsd, const D3DL
 	return TRUE;
 }
 
+#pragma warning(disable : 4035)
+
+_inline unsigned long GetMSB(unsigned long data)
+{
+    _asm
+    {
+        mov		eax,data
+        bsr		eax,eax
+    }
+}
+
+#pragma warning(default : 4035)
+
 LPDIRECT3DSURFACE9 CKDX9RasterizerContext::GetTempZBuffer(int Width, int Height)
 {
-	return NULL;
+    CKDWORD index = GetMSB(Height) << 4 | GetMSB(Width);
+    if (index > 0xFF)
+        return NULL;
+
+    LPDIRECT3DSURFACE9 surface = m_TempZBuffers[index];
+    if (surface)
+        return surface;
+
+    if (FAILED(m_Device->CreateDepthStencilSurface(Width, Height, m_PresentParams.AutoDepthStencilFormat,
+                                                   D3DMULTISAMPLE_NONE, 0, TRUE, &surface, NULL)))
+        return NULL;
+
+    m_TempZBuffers[index] = surface;
+    return surface;
 }
