@@ -898,7 +898,44 @@ BOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB
     if (step_mode)
         _getch();
 #endif
-	return CKRasterizerContext::DrawPrimitiveVBIB(pType, VB, IB, MinVIndex, VertexCount, StartIndex, Indexcount);
+    if (VB >= m_VertexBuffers.Size())
+        return FALSE;
+
+    if (IB >= m_IndexBuffers.Size())
+        return FALSE;
+
+    CKDX9VertexBufferDesc *vertexBufferDesc = static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[VB]);
+    if (vertexBufferDesc == NULL)
+        return FALSE;
+
+    CKDX9IndexBufferDesc *indexBufferDesc = static_cast<CKDX9IndexBufferDesc *>(m_IndexBuffers[IB]);
+    if (indexBufferDesc == NULL)
+        return FALSE;
+
+    SetupStreams(vertexBufferDesc->DxBuffer, vertexBufferDesc->m_VertexFormat, vertexBufferDesc->m_VertexSize);
+
+    switch (pType)
+    {
+        case VX_LINELIST:
+            Indexcount = Indexcount >> 1;
+            break;
+        case VX_LINESTRIP:
+            Indexcount = Indexcount - 1;
+            break;
+        case VX_TRIANGLELIST:
+            Indexcount = Indexcount / 3;
+            break;
+        case VX_TRIANGLESTRIP:
+        case VX_TRIANGLEFAN:
+            Indexcount = Indexcount - 2;
+            break;
+        default:
+            break;
+    }
+
+    m_Device->GetIndices(&indexBufferDesc->DxBuffer);
+
+	return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, 0, 0, VertexCount, StartIndex, Indexcount));
 }
 
 BOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void* DesiredFormat)
