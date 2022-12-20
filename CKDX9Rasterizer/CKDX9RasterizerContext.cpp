@@ -604,7 +604,7 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
             {
                 LPDIRECT3DSTATEBLOCK9 block = m_TextureMagFilterStateBlocks[Value][Stage];
                 if (block && SUCCEEDED(block->Apply()))
-                    break;
+                    return TRUE;
 
                 switch (Value)
                 {
@@ -629,6 +629,7 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
             else
             {
                 m_Device->SetSamplerState(Stage, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+                return FALSE;
             }
             break;
         case CKRST_TSS_MINFILTER:
@@ -636,7 +637,7 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
             {
                 LPDIRECT3DSTATEBLOCK9 block = m_TextureMagFilterStateBlocks[Value][Stage];
                 if (block && SUCCEEDED(block->Apply()))
-                    break;
+                    return TRUE;
             }
 
             switch (Value)
@@ -701,7 +702,7 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
             {
                 LPDIRECT3DSTATEBLOCK9 block = m_TextureMapBlendStateBlocks[Value][Stage];
                 if (block && SUCCEEDED(block->Apply()))
-                    break;
+                    return TRUE;
             }
 
             switch (Value)
@@ -756,24 +757,29 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
                 {
                     m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, D3DTOP_DISABLE);
                     m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+                    return TRUE;
                 }
 
-                CKStageBlend* blend = static_cast<CKDX9Rasterizer*>(m_Driver->m_Owner)->m_BlendStages[Value];
-                if (blend)
+                CKStageBlend *blend = static_cast<CKDX9Rasterizer *>(m_Driver->m_Owner)->m_BlendStages[Value];
+                if (!blend)
+                    return FALSE;
+
+                m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, blend->Cop);
+                m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG1, blend->Carg1);
+                m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG2, blend->Carg2);
+                m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, blend->Aop);
+                m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG1, blend->Aarg1);
+                m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG2, blend->Aarg2);
+
+                if (FAILED(m_Device->ValidateDevice((DWORD *)&Stage)))
                 {
-                    m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, blend->Cop);
-                    m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG1, blend->Carg1);
-                    m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG2, blend->Carg2);
-                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, blend->Aop);
-                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG1, blend->Aarg1);
-                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG2, blend->Aarg2);
-
-                    if (FAILED(m_Device->ValidateDevice((DWORD*)&Stage)))
-                    {
-                        m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, D3DTOP_DISABLE);
-                        m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
-                    }
+                    m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, D3DTOP_DISABLE);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
                 }
+            }
+            else
+            {
+                return FALSE;
             }
             break;
         default:
