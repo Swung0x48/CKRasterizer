@@ -1,7 +1,9 @@
 #include "CKDX9Rasterizer.h"
+
+#define LOGGING 0
 #define STEP 0
 
-#if (STEP)
+#if STEP
 #include <conio.h>
 static bool step_mode = false;
 #endif
@@ -63,7 +65,7 @@ int DepthBitPerPixelFromFormat(D3DFORMAT Format, CKDWORD *StencilSize)
 BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
 	BOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
-#if (STEP)
+#if (STEP) || (LOGGING)
     AllocConsole();
     freopen("CON", "w", stdout);
     freopen("CON", "w", stderr);
@@ -82,6 +84,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
 		LONG PrevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
 		SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle & ~WS_CHILDWINDOW);
 	}
+    if (Bpp == 16) Bpp = 32; // doesn't really matter, but just in case
     CKDX9RasterizerDriver *Driver = static_cast<CKDX9RasterizerDriver *>(m_Driver);
 	ZeroMemory(&m_PresentParams, sizeof(m_PresentParams));
 	m_PresentParams.hDeviceWindow = (HWND) Window;
@@ -330,8 +333,10 @@ BOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
         if (hr == D3DERR_DEVICENOTRESET)
             Resize(m_PosX, m_PosY, m_Width, m_Height, 0);
     }
-#if (STEP)
-    fprintf(stderr, "swap\n");
+#if LOGGING
+    fprintf(stderr, "buffer swap\n");
+#endif
+#if STEP
     int x = _getch();
     if (x == 'z')
         step_mode = true;
@@ -500,6 +505,9 @@ BOOL CKDX9RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD* Va
 
 BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 {
+#if LOGGING
+    fprintf(stderr, "settexture %d %d\n", Texture, Stage);
+#endif
     if (Texture >= m_Textures.Size())
         return 0;
     HRESULT hr = D3DERR_INVALIDCALL;
@@ -798,8 +806,10 @@ BOOL CKDX9RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const void
 BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices, int indexcount,
 	VxDrawPrimitiveData* data)
 {
-#if (STEP)
+#if LOGGING
     fprintf(stderr, "drawprimitive ib %d\n", indexcount);
+#endif
+#if STEP
     if (step_mode)
     {
         this->BackToFront(false);
@@ -851,8 +861,10 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
 BOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
 	CKDWORD VertexCount, WORD* indices, int indexcount)
 {
-#if (STEP)
+#if LOGGING
     fprintf(stderr, "drawprimitive vb %d %d\n", VertexCount, indexcount);
+#endif
+#if STEP
     if (step_mode)
         _getch();
 #endif
@@ -869,8 +881,10 @@ BOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Vert
 BOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
 	CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
-#if (STEP)
+#if LOGGING
     fprintf(stderr, "drawprimitive vbib %d %d\n", VertexCount, Indexcount);
+#endif
+#if STEP
     if (step_mode)
         _getch();
 #endif
@@ -944,13 +958,16 @@ BOOL CKDX9RasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 
 BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
 {
+#if LOGGING
+    fprintf(stderr, "load texture %d %dx%d %d\n", Texture, SurfDesc.Width, SurfDesc.Height, miplevel);
+#endif
     if (Texture >= m_Textures.Size())
-        return 0;
+        return FALSE;
     CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture]);
     if (!desc || !desc->DxTexture)
-        return 0;
+        return FALSE;
     if ((desc->Flags & (CKRST_TEXTURE_CUBEMAP | CKRST_TEXTURE_RENDERTARGET)) != 0)
-        return 1;
+        return TRUE;
     int actual_miplevel = (miplevel < 0) ? 0 : miplevel;
     D3DSURFACE_DESC SurfaceDesc;
     IDirect3DSurface9 *pSurface = NULL;
@@ -985,6 +1002,10 @@ BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &S
             }
             if (pSurface)
                 pSurface->Release();
+#if LOGGING
+            if (FAILED(hr))
+                fprintf(stderr, "LoadTexture (DXTC) failed with %x\n", hr);
+#endif
             return SUCCEEDED(hr);
         }
         return 0;
@@ -1015,8 +1036,14 @@ BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &S
         }
     }
     D3DLOCKED_RECT LockRect;
-    if (FAILED(desc->DxTexture->LockRect(actual_miplevel, &LockRect, NULL, 0)))
-        return 0;
+    HRESULT hr = desc->DxTexture->LockRect(actual_miplevel, &LockRect, NULL, 0);
+    if (FAILED(hr))
+    {
+#if LOGGING
+        fprintf(stderr, "LoadTexture (Locking) failed with %x\n", hr);
+#endif
+        return FALSE;
+    }
     LoadSurface(SurfaceDesc, LockRect, src);
     desc->DxTexture->UnlockRect(actual_miplevel);
     if (pSurface)
@@ -1031,13 +1058,19 @@ BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &S
             if (dst.Height > 1)
                 dst.Height >>= 1;
             dst.Image = image;
-            if (FAILED(desc->DxTexture->LockRect(i, &LockRect, NULL, NULL)))
-                return 0;
+            hr = desc->DxTexture->LockRect(i, &LockRect, NULL, NULL);
+            if (FAILED(hr))
+            {
+#if LOGGING
+                fprintf(stderr, "LoadTexture (Mipmap generation) failed with %x\n", hr);
+#endif
+                return FALSE;
+            }
             LoadSurface(SurfaceDesc, LockRect, dst);
             desc->DxTexture->UnlockRect(i);
         }
     }
-    return 1;
+    return TRUE;
 }
 
 #include <cstdint>
@@ -1047,6 +1080,11 @@ BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &S
 #define SLOBYTE(x) SBYTEn(x, LOW_IND(x, int8_t))
 BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect* Dest, CKRST_CUBEFACE Face)
 {
+#if LOGGING
+    fprintf(stderr, "copy to texture %d (%f,%f,%f,%f) (%f,%f,%f,%f)\n", Texture,
+        Src->left, Src->top, Src->right, Src->bottom,
+        Dest->left, Dest->top, Dest->right, Dest->bottom);
+#endif
     if (Texture >= m_Textures.Size())
         return 0;
     CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture]);
@@ -1070,7 +1108,7 @@ BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect*
     assert(SUCCEEDED(desc->DxTexture->GetSurfaceLevel(0, &textureSurface)));
     POINT pt{destRect.left, destRect.top};
 
-    HRESULT hr;
+    HRESULT hr = E_FAIL;
     if (backBuffer && textureSurface)
     {
         assert(SUCCEEDED(hr = m_Device->UpdateSurface(textureSurface, &srcRect, backBuffer, &pt)));
@@ -1115,6 +1153,7 @@ BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst
 int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc)
 {
     D3DSURFACE_DESC desc;
+    ZeroMemory(&desc, sizeof(desc));
     IDirect3DSurface9 *surface = NULL;
     int v33 = 0;
 
@@ -1419,12 +1458,27 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 
 BOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc* DesiredFormat)
 {
-	return FALSE;
-
+#if LOGGING
+    fprintf(stderr, "create texture %d %dx%d\n", Texture, DesiredFormat->Format.Width, DesiredFormat->Format.Height);
+#endif
+    if (Texture >= m_Textures.Size())
+        return FALSE;
+    if (m_Textures[Texture])
+        return TRUE;
+    CKDX9TextureDesc *desc = new CKDX9TextureDesc();
+    m_Textures[Texture] = desc;
+    auto width = DesiredFormat->Format.Width;
+    auto height = DesiredFormat->Format.Height;
+    auto miplvl = DesiredFormat->MipMapCount;
+    auto fmt = VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(DesiredFormat->Format));
+    return SUCCEEDED(m_Device->CreateTexture(width, height, miplvl, D3DUSAGE_DYNAMIC, fmt, D3DPOOL_DEFAULT, &(desc->DxTexture), NULL));
 }
 
 BOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc* DesiredFormat)
 {
+#if LOGGING
+    fprintf(stderr, "create vertex shader %d\n", VShader);
+#endif
     if (VShader >= m_VertexShaders.Size() || !DesiredFormat)
         return 0;
     CKVertexShaderDesc *shader = m_VertexShaders[VShader];
@@ -1454,6 +1508,9 @@ BOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderD
 
 BOOL CKDX9RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc* DesiredFormat)
 {
+#if LOGGING
+    fprintf(stderr, "create pixel shader %d\n", PShader);
+#endif
     if (PShader >= m_PixelShaders.Size() || !DesiredFormat)
         return 0;
     if (DesiredFormat == m_PixelShaders[PShader])
