@@ -262,7 +262,7 @@ D3DFORMAT CKDX9RasterizerDriver::FindNearestTextureFormat(CKTextureDesc* desc)
         bpp = 32;
     }
 
-    CKTextureDesc *desc = NULL;
+    CKTextureDesc *textureDesc = NULL;
     for (CKTextureDesc *iter = this->m_TextureFormats.Begin(); iter < m_TextureFormats.End(); ++iter)
     {
         if (bpp == iter->Format.BitsPerPixel && GetBitCount(iter->Format.AlphaMask) == BitCount)
@@ -276,13 +276,13 @@ D3DFORMAT CKDX9RasterizerDriver::FindNearestTextureFormat(CKTextureDesc* desc)
             if (cur_delta < min_delta)
             {
                 min_delta = cur_delta;
-                desc = iter;
+                textureDesc = iter;
             }
         }
     }
-    if (desc)
+    if (textureDesc)
     {
-        return TextureDescToD3DFormat(desc);
+        return TextureDescToD3DFormat(textureDesc);
     }
     return D3DFMT_UNKNOWN;
 }
