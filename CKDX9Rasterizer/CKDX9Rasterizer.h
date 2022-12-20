@@ -185,7 +185,7 @@ class CKDX9RasterizerContext : public CKRasterizerContext
 {
 public:
     //--- Construction/destruction
-    CKDX9RasterizerContext(CKDX9RasterizerDriver *Driver);
+    CKDX9RasterizerContext();
     virtual ~CKDX9RasterizerContext();
 
     //--- Creation
@@ -358,8 +358,8 @@ public:
     // TempZbuffers array and are attached when doing
     // texture rendering
     LPDIRECT3DSURFACE9 m_TempZBuffers[NBTEMPZBUFFER];
-private:
-    CKDX9Rasterizer* m_Owner;
+
+    CKDX9Rasterizer *m_Owner;
 };
 
 /*****************************************************************
