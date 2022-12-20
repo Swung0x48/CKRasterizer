@@ -1,6 +1,6 @@
 #include "CKDX9Rasterizer.h"
 
-#define LOGGING 1
+#define LOGGING 0
 #define STEP 0
 
 #if STEP
@@ -84,6 +84,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
 		LONG PrevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
 		SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle & ~WS_CHILDWINDOW);
 	}
+    if (Bpp == 16) Bpp = 32; // doesn't really matter, but just in case
     CKDX9RasterizerDriver *Driver = static_cast<CKDX9RasterizerDriver *>(m_Driver);
 	ZeroMemory(&m_PresentParams, sizeof(m_PresentParams));
 	m_PresentParams.hDeviceWindow = (HWND) Window;
