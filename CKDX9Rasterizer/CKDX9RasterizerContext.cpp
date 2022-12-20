@@ -1305,24 +1305,30 @@ BOOL CKDX9RasterizerContext::GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane& P
 
 void* CKDX9RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
 {
-	return CKRasterizerContext::LockIndexBuffer(IB, StartIndex, IndexCount, Lock);
+    if (IB >= m_IndexBuffers.Size())
+        return FALSE;
+
+    CKDX9IndexBufferDesc *ib = static_cast<CKDX9IndexBufferDesc *>(m_IndexBuffers[IB]);
+    if (!ib || !ib->DxBuffer)
+        return FALSE;
+
+    void *pIndices = NULL;
+    if (FAILED(ib->DxBuffer->Lock(StartIndex * 2, IndexCount * 2, &pIndices, Lock << 12)))
+        return NULL;
+
+    return pIndices;
 }
 
 BOOL CKDX9RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
-	return CKRasterizerContext::UnlockIndexBuffer(IB);
-}
+    if (IB >= m_IndexBuffers.Size())
+        return FALSE;
 
-BOOL CKDX9RasterizerContext::LockTextureVideoMemory(CKDWORD Texture, VxImageDescEx& Desc, int MipLevel,
-	VX_LOCKFLAGS Flags)
-{
-	return FALSE;
-}
+    CKDX9IndexBufferDesc *ib = static_cast<CKDX9IndexBufferDesc *>(m_IndexBuffers[IB]);
+    if (!ib || !ib->DxBuffer)
+        return FALSE;
 
-BOOL CKDX9RasterizerContext::UnlockTextureVideoMemory(CKDWORD Texture, int MipLevel)
-{
-	return FALSE;
-
+    return SUCCEEDED(ib->DxBuffer->Unlock());
 }
 
 BOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char* Filename, TexFromFile* param)
