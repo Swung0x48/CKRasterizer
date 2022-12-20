@@ -1295,12 +1295,12 @@ BOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, 
 
 BOOL CKDX9RasterizerContext::SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane& PlaneEquation)
 {
-	return CKRasterizerContext::SetUserClipPlane(ClipPlaneIndex, PlaneEquation);
+    return SUCCEEDED(m_Device->SetClipPlane(ClipPlaneIndex, (const float *)&PlaneEquation));
 }
 
 BOOL CKDX9RasterizerContext::GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane& PlaneEquation)
 {
-	return CKRasterizerContext::GetUserClipPlane(ClipPlaneIndex, PlaneEquation);
+    return SUCCEEDED(m_Device->GetClipPlane(ClipPlaneIndex, (float *)&PlaneEquation));
 }
 
 void* CKDX9RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
