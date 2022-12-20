@@ -915,12 +915,31 @@ BOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Typ
 void* CKDX9RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
 	CKRST_LOCKFLAGS Lock)
 {
-	return CKRasterizerContext::LockVertexBuffer(VB, StartVertex, VertexCount, Lock);
+    if (VB >= m_VertexBuffers.Size())
+        return FALSE;
+
+    CKDX9VertexBufferDesc* vb = m_VertexBuffers[VB];
+    if (!vb || !vb->DxBuffer)
+        return FALSE;
+
+    void* pVertices;
+    if (FAILED(vb->DxBuffer->Lock(StartVertex * vb->m_VertexSize, VertexCount * vb->m_VertexSize, (BYTE **)&pVertices,
+                                  Lock << 12)))
+        return NULL;
+
+    return pVertices;
 }
 
 BOOL CKDX9RasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 {
-	return CKRasterizerContext::UnlockVertexBuffer(VB);
+    if (VB >= m_VertexBuffers.Size())
+        return FALSE;
+
+    CKDX9VertexBufferDesc* vb = m_VertexBuffers[VB];
+    if (!vb || !vb->DxBuffer)
+        return FALSE;
+
+    return SUCCEEDED(vb->DxBuffer->Unlock());
 }
 
 BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
@@ -1585,8 +1604,15 @@ CKDWORD CKDX9RasterizerContext::DX9PresentInterval(DWORD PresentInterval)
 BOOL CKDX9RasterizerContext::LoadSurface(const D3DSURFACE_DESC& ddsd, const D3DLOCKED_RECT& LockRect,
 	const VxImageDescEx& SurfDesc)
 {
-	return FALSE;
-
+    VxImageDescEx desc;
+    desc.Size = sizeof(VxImageDescEx);
+    VxPixelFormat2ImageDesc(D3DFormatToVxPixelFormat(ddsd->Format), desc);
+    desc.Width = ddsd->Width;
+    desc.Height = ddsd->Height;
+    desc.BytesPerLine = LockRect->Pitch;
+    desc.Image = LockRect->pBits;
+    VxDoBlit(SurfDesc, desc);
+	return TRUE;
 }
 
 LPDIRECT3DSURFACE9 CKDX9RasterizerContext::GetTempZBuffer(int Width, int Height)
