@@ -266,9 +266,9 @@ public:
 
     //---------------------------------------------------------------------
     //---- New methods to lock video memory (DX only)
-    virtual CKBOOL LockTextureVideoMemory(CKDWORD Texture, VxImageDescEx &Desc, int MipLevel = 0,
-                                          VX_LOCKFLAGS Flags = VX_LOCK_DEFAULT);
-    virtual CKBOOL UnlockTextureVideoMemory(CKDWORD Texture, int MipLevel = 0);
+    //virtual CKBOOL LockTextureVideoMemory(CKDWORD Texture, VxImageDescEx &Desc, int MipLevel = 0,
+    //                                      VX_LOCKFLAGS Flags = VX_LOCK_DEFAULT);
+    //virtual CKBOOL UnlockTextureVideoMemory(CKDWORD Texture, int MipLevel = 0);
 
     //---- To Enable more direct creation of system objects	without
     //---- CK2_3D holding a copy of the texture

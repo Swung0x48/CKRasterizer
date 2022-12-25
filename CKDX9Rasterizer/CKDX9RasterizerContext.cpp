@@ -1,6 +1,6 @@
 #include "CKDX9Rasterizer.h"
 
-#define LOGGING 0
+#define LOGGING 1
 #define STEP 0
 
 #if STEP
@@ -411,7 +411,48 @@ BOOL CKDX9RasterizerContext::EndScene()
 
 BOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData* data)
 {
-    if (data && Light < 0x80)
+    // Could be a problem
+    D3DLIGHT9 lightData;
+    switch (data->Type)
+    {
+        case VX_LIGHTDIREC:
+            lightData.Type = D3DLIGHT_DIRECTIONAL;
+            break;
+        case VX_LIGHTPOINT:
+            lightData.Type = D3DLIGHT_POINT;
+            break;
+        case VX_LIGHTSPOT:
+            lightData.Type = D3DLIGHT_SPOT;
+        default:
+            return 0;
+    }
+    lightData.Range = data->Range;
+    lightData.Attenuation0 = data->Attenuation0;
+    lightData.Attenuation1 = data->Attenuation1;
+    lightData.Attenuation2 = data->Attenuation2;
+    lightData.Ambient.a = data->Ambient.a;
+    lightData.Ambient.r = data->Ambient.r;
+    lightData.Ambient.g = data->Ambient.g;
+    lightData.Ambient.b = data->Ambient.b;
+    lightData.Diffuse.a = data->Diffuse.a;
+    lightData.Diffuse.r = data->Diffuse.r;
+    lightData.Diffuse.g = data->Diffuse.g;
+    lightData.Diffuse.b = data->Diffuse.b;
+    lightData.Position.x = data->Position.x;
+    lightData.Position.y = data->Position.y;
+    lightData.Position.z = data->Position.z;
+    lightData.Direction.x = data->Direction.x;
+    lightData.Direction.y = data->Direction.y;
+    lightData.Direction.z = data->Direction.z;
+    lightData.Falloff = data->Falloff;
+    lightData.Specular.a = data->Specular.a;
+    lightData.Specular.r = data->Specular.r;
+    lightData.Specular.g = data->Specular.g;
+    lightData.Specular.b = data->Specular.b;
+    lightData.Theta = data->InnerSpotCone;
+    lightData.Phi = data->OuterSpotCone;
+
+    /*if (data && Light < 0x80)
         m_CurrentLightData[Light] = *data;
     CKLightData lightData = *data;
     if (data->Type != VX_LIGHTPARA)
@@ -421,9 +462,10 @@ BOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData* data)
         lightData.InnerSpotCone = 3.14;
         if (lightData.OuterSpotCone < lightData.InnerSpotCone)
             lightData.OuterSpotCone = lightData.InnerSpotCone;
-    }
-    ConvertAttenuationModelFromDX5(lightData.Attenuation0, lightData.Attenuation1, lightData.Attenuation2, data->Range);
-    return SUCCEEDED(m_Device->SetLight(Light, (D3DLIGHT9*) &lightData));
+    }*/
+    //ConvertAttenuationModelFromDX5(lightData.Attenuation0, lightData.Attenuation1, lightData.Attenuation2, data->Range);
+    return SUCCEEDED(m_Device->SetLight(Light, &lightData));
+    return 1;
 }
 
 BOOL CKDX9RasterizerContext::EnableLight(CKDWORD Light, BOOL Enable)
@@ -837,7 +879,7 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
     CKBOOL clip = 0;
     CKDWORD vertexSize;
     CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
-    if ((data->Flags & CKRST_DP_DOCLIP) != 0)
+    if ((data->Flags & CKRST_DP_DOCLIP))
     {
         SetRenderState(VXRENDERSTATE_CLIPPING, 1);
         clip = 1;
