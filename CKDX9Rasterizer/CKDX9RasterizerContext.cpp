@@ -137,7 +137,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
     else
     {
         BehaviorFlag |= D3DCREATE_HARDWARE_VERTEXPROCESSING;
-        if ((Driver->m_D3DCaps.DevCaps & D3DDEVCAPS_PUREDEVICE) != 0)
+        if (Driver->m_D3DCaps.DevCaps & D3DDEVCAPS_PUREDEVICE)
             BehaviorFlag |= D3DCREATE_PUREDEVICE;
         m_SoftwareVertexProcessing = FALSE;
     }
@@ -199,7 +199,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
     SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
     SetRenderState(VXRENDERSTATE_COLORVERTEX, 0);
     UpdateDirectXData();
-	// this->FlushCaches();
+	FlushCaches();
     UpdateObjectArrays(m_Driver->m_Owner);
     ClearStreamCache();
     if (m_Fullscreen)
@@ -230,7 +230,7 @@ BOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height, C
         }
         m_PresentParams.BackBufferWidth = Width;
         m_PresentParams.BackBufferHeight = Height;
-        // 24cc5b00()
+        ReleaseStateBlocks();
         FlushNonManagedObjects();
         ClearStreamCache();
         if (m_PresentParams.MultiSampleType == D3DMULTISAMPLE_NONE && m_Antialias != D3DMULTISAMPLE_NONE)
@@ -274,7 +274,7 @@ BOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height, C
         }
 
         UpdateDirectXData();
-        // FlushCaches();
+        FlushCaches();
         return SUCCEEDED(hr);
     }
     return 1;
@@ -426,6 +426,7 @@ BOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData* data)
         default:
             return 0;
     }
+    
     lightData.Range = data->Range;
     lightData.Attenuation0 = data->Attenuation0;
     lightData.Attenuation1 = data->Attenuation1;
@@ -463,7 +464,7 @@ BOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData* data)
         if (lightData.OuterSpotCone < lightData.InnerSpotCone)
             lightData.OuterSpotCone = lightData.InnerSpotCone;
     }*/
-    //ConvertAttenuationModelFromDX5(lightData.Attenuation0, lightData.Attenuation1, lightData.Attenuation2, data->Range);
+    ConvertAttenuationModelFromDX5(lightData.Attenuation0, lightData.Attenuation1, lightData.Attenuation2, data->Range);
     return SUCCEEDED(m_Device->SetLight(Light, &lightData));
     return 1;
 }
@@ -1242,7 +1243,13 @@ BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect*
 
 BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst)
 {
-	return CKRasterizerContext::DrawSprite(Sprite, src, dst);
+    if (Sprite >= m_Sprites.Size())
+        return 0;
+    CKSpriteDesc *sprite = m_Sprites[Sprite];
+    if (sprite == NULL)
+        return 0;
+    
+    return 1;
 }
 
 int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc)
