@@ -1,6 +1,6 @@
 #include "CKDX9Rasterizer.h"
 
-#define LOGGING 1
+#define LOGGING 0
 #define STEP 0
 
 #if STEP
@@ -1730,13 +1730,12 @@ void CKDX9RasterizerContext::FlushCaches()
                 m_Device->BeginStateBlock();
                 SetTextureStageState(i, CKRST_TSS_MAGFILTER, j + 1);
                 m_Device->EndStateBlock(&m_TextureMagFilterStateBlocks[j][i]);
-
-                for (int k = 0; k < 10; k++)
-                {
-                    m_Device->BeginStateBlock();
-                    SetTextureStageState(i, CKRST_TSS_TEXTUREMAPBLEND, k + 1);
-                    m_Device->EndStateBlock(&m_TextureMapBlendStateBlocks[k][i]);
-                }
+            }
+            for (int k = 0; k < 10; k++)
+            {
+                m_Device->BeginStateBlock();
+                SetTextureStageState(i, CKRST_TSS_TEXTUREMAPBLEND, k + 1);
+                m_Device->EndStateBlock(&m_TextureMapBlendStateBlocks[k][i]);
             }
         }
     }
