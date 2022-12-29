@@ -3,6 +3,7 @@
 #define LOGGING 1
 #define STEP 0
 #define LOG_LOADTEXTURE 1
+#define LOG_CREATETEXTURE 1
 
 
 #if STEP
@@ -1264,7 +1265,75 @@ BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst
     CKSpriteDesc *sprite = m_Sprites[Sprite];
     if (sprite == NULL)
         return 0;
-    
+    if (sprite->Textures.Size() < 16)
+        return 0;
+    if (src->GetWidth() <= 0.0)
+        return 0;
+    if (src->right < 0.0)
+        return 0;
+    if (sprite->Format.Width < src->left)
+        return 0;
+    if (src->GetHeight() < 0.0)
+        return 0;
+    if (src->bottom < 0.0)
+        return 0;
+    if (sprite->Format.Height <= src->top)
+        return 0;
+    if (dst->GetWidth() <= 0.0)
+        return 0;
+    if (dst->right < 0.0)
+        return 0;
+    if (m_Width <= dst->left)
+        return 0;
+    if (dst->left <= 0.0)
+        return 0;
+    if (dst->bottom < 0.0)
+        return 0;
+    if (m_Height <= dst->top)
+        return 0;
+    assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1)));
+    assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE)));
+    assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1)));
+    assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE)));
+    assert(SUCCEEDED(m_Device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT)));
+    assert(SUCCEEDED(m_Device->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE)));
+    assert(SUCCEEDED(m_Device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT)));
+    assert(SetRenderState(VXRENDERSTATE_ZWRITEENABLE, 0));
+    assert(SetRenderState(VXRENDERSTATE_TEXTUREPERSPECTIVE, 0));
+    assert(SetRenderState(VXRENDERSTATE_FILLMODE, 3));
+    assert(SetRenderState(VXRENDERSTATE_ZENABLE, 0));
+    assert(SetRenderState(VXRENDERSTATE_LIGHTING, 0));
+    assert(SetRenderState(VXRENDERSTATE_CULLMODE, 1));
+    assert(SetRenderState(VXRENDERSTATE_WRAP0, 0));
+    assert(SetRenderState(VXRENDERSTATE_CLIPPING, 0));
+    assert(SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, 0));
+    D3DVIEWPORT9 Viewport;
+    Viewport.Height = m_Height;
+    Viewport.Width = m_Width;
+    Viewport.X = 0;
+    Viewport.Y = 0;
+    Viewport.MinZ = 0.0;
+    Viewport.MaxZ = 1.0;
+    assert(SUCCEEDED(m_Device->SetViewport(&Viewport)));
+    CKDWORD currentVCount = 0;
+    int count = 4 * sprite->Textures.Size();
+    CKDX9VertexBufferDesc *vb =
+        static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[GetDynamicVertexBuffer(CKRST_VF_TLVERTEX, count, 32, 1)]);
+    if (!vb)
+        return 0;
+    void *pBuf = NULL;
+    if (vb->m_CurrentVCount + count <= vb->m_MaxVertexCount)
+    {
+        assert(SUCCEEDED(vb->DxBuffer->Lock(32 * vb->m_CurrentVCount, 32 * count, &pBuf, D3DLOCK_NOOVERWRITE)));
+        currentVCount = vb->m_CurrentVCount;
+        vb->m_CurrentVCount = count + currentVCount;
+    } else
+    {
+        assert(SUCCEEDED(vb->DxBuffer->Lock(0, 32 * count, &pBuf, D3DLOCK_DISCARD)));
+        vb->m_CurrentVCount = count;
+    }
+    CKSPRTextInfo *info = &sprite->Textures[0];
+    // TODO
     return 1;
 }
 
@@ -1816,7 +1885,6 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 
 BOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc* DesiredFormat)
 {
-
     if (Texture >= m_Textures.Size())
         return FALSE;
     if (m_Textures[Texture])
