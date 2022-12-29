@@ -321,7 +321,7 @@ public:
     //--- Index buffer filled when drawing primitives
     CKDX9IndexBufferDesc *m_IndexBuffer[2]; // Clip/unclipped
 
-    CKBOOL m_ResetLastFrame;
+    int m_CurrentTextureIndex;
 
     //-----------------------------------------------------
     //--- Render Target if rendering is redirected to a texture
