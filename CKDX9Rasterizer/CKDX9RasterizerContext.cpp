@@ -619,32 +619,33 @@ BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 #if LOGGING && LOG_SETTEXTURE
     fprintf(stderr, "settexture %d %d\n", Texture, Stage);
 #endif
-    if (Texture >= m_Textures.Size())
-        return 0;
-    HRESULT hr = D3DERR_INVALIDCALL;
-    CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc*>(m_Textures[Texture]);
-    if (desc && desc->DxTexture)
+    CKDX9TextureDesc *desc = NULL;
+    HRESULT hr = E_FAIL;
+    if (Texture != 0 && Texture < m_Textures.Size() &&
+        (desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture])) != NULL && desc->DxTexture != NULL)
     {
         hr = m_Device->SetTexture(Stage, desc->DxTexture);
         if (Stage == 0)
         {
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLOROP, 4)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, 2)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG2, 1)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, 4)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, 2)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_CURRENT)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_CURRENT)));
         }
     } else
     {
         hr = m_Device->SetTexture(Stage, NULL);
         if (Stage == 0)
         {
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLOROP, 2)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, 0)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, 2)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_DIFFUSE)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1)));
+            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE)));
         }
     }
-    
+
     return SUCCEEDED(hr);
 }
 
@@ -1847,7 +1848,6 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
     }
     if (FAILED(m_Device->SetIndices(m_IndexBuffer[Clip]->DxBuffer)))
         return 0;
-    // baseVertexIndex == 0?
     return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, 0, VertexCount, ibstart, primCount));
 }
 
