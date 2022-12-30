@@ -155,9 +155,11 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
             m_DisplayModes.PushBack({640, 480, 16, (int)DisplayMode.RefreshRate});
 		}
 	}
-	assert(SUCCEEDED(pD3D->GetDeviceCaps(AdapterIndex, D3DDEVTYPE_HAL, &m_D3DCaps)));
+    HRESULT hr;
 
-	// TODO: Populate 2D/3D capabilities
+    hr = pD3D->GetDeviceCaps(AdapterIndex, D3DDEVTYPE_HAL, &m_D3DCaps);
+    assert(SUCCEEDED(hr));
+    // TODO: Populate 2D/3D capabilities
 
 	m_Hardware = 1;
 	m_3DCaps.StencilCaps = m_D3DCaps.StencilCaps;

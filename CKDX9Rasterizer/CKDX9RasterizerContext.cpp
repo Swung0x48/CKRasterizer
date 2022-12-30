@@ -2,8 +2,9 @@
 
 #define LOGGING 1
 #define STEP 0
-#define LOG_LOADTEXTURE 1
-#define LOG_CREATETEXTURE 1
+#define LOG_LOADTEXTURE 0
+#define LOG_CREATETEXTURE 0
+#define LOG_DRAWPRIMITIVE 1
 
 
 #if STEP
@@ -301,7 +302,9 @@ BOOL CKDX9RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD
     return result == 0;
 }
 
+#if LOGGING && LOG_LOADTEXTURE
 static int texture_used[100] = {0};
+#endif
 BOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
 {
     if (m_InCreateDestroy || !m_Device)
@@ -337,7 +340,7 @@ BOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
         if (hr == D3DERR_DEVICENOTRESET)
             Resize(m_PosX, m_PosY, m_Width, m_Height, 0);
     }
-#if LOGGING
+#if LOGGING && LOG_LOADTEXTURE
     int count = 0;
     for (int i = 0; i < 100; ++i)
     {
@@ -627,22 +630,32 @@ BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
         hr = m_Device->SetTexture(Stage, desc->DxTexture);
         if (Stage == 0)
         {
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_CURRENT)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_CURRENT)));
+            hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+            assert(SUCCEEDED(hr));
+            m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+            assert(SUCCEEDED(hr));
+            m_Device->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_CURRENT);
+            assert(SUCCEEDED(hr));
+            m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
+            assert(SUCCEEDED(hr));
+            m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+            assert(SUCCEEDED(hr));
+            m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_CURRENT);
+            assert(SUCCEEDED(hr));
         }
     } else
     {
         hr = m_Device->SetTexture(Stage, NULL);
         if (Stage == 0)
         {
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_DIFFUSE)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1)));
-            assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE)));
+            hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+            assert(SUCCEEDED(hr));
+            hr = m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_DIFFUSE);
+            assert(SUCCEEDED(hr));
+            hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+            assert(SUCCEEDED(hr));
+            hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
+            assert(SUCCEEDED(hr));
         }
     }
 
@@ -910,14 +923,15 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
         m_VertexBuffers[index]);
     if (vertexBufferDesc == NULL)
         return 0;
-    CKDWORD currentVCount = vertexBufferDesc->m_CurrentVCount;
     void *ppbData = NULL;
     HRESULT hr = D3DERR_INVALIDCALL;
     CKDWORD startIndex = 0;
-    
-    if (currentVCount + data->VertexCount <= vertexBufferDesc->m_MaxVertexCount)
+    //vertexBufferDesc->m_CurrentVCount = 0; // TODO: get rid of this
+    if (vertexBufferDesc->m_CurrentVCount + data->VertexCount <= vertexBufferDesc->m_MaxVertexCount)
     {
-        hr = vertexBufferDesc->DxBuffer->Lock(vertexSize * currentVCount, vertexSize * data->VertexCount, &ppbData,
+
+        hr = vertexBufferDesc->DxBuffer->Lock(vertexSize * vertexBufferDesc->m_CurrentVCount,
+                                              vertexSize * data->VertexCount, &ppbData,
                                          D3DLOCK_NOOVERWRITE);
         startIndex = vertexBufferDesc->m_CurrentVCount;
         vertexBufferDesc->m_CurrentVCount += data->VertexCount;
@@ -929,7 +943,8 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
     if (FAILED(hr))
         return 0;
     CKRSTLoadVertexBuffer(reinterpret_cast<CKBYTE *>(ppbData), vertexFormat, vertexSize, data);
-    assert(SUCCEEDED(vertexBufferDesc->DxBuffer->Unlock()));
+    hr = vertexBufferDesc->DxBuffer->Unlock();
+    assert(SUCCEEDED(hr));
     return InternalDrawPrimitiveVB(pType, vertexBufferDesc, startIndex, data->VertexCount, indices, indexcount, clip);
 }
 
@@ -1015,9 +1030,18 @@ BOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Typ
             result = CreateTexture(ObjIndex, static_cast<CKTextureDesc *>(DesiredFormat));
             break;
         case CKRST_OBJ_SPRITE:
+        {
             return 0;
             result = CreateSprite(ObjIndex, static_cast<CKSpriteDesc *>(DesiredFormat));
+            CKSpriteDesc* desc = m_Sprites[ObjIndex];
+            fprintf(stderr, "idx: %d\n", ObjIndex);
+            for (auto it = desc->Textures.Begin(); it != desc->Textures.End(); ++it)
+            {
+                fprintf(stderr, "(%d,%d) WxH: %dx%d, SWxSH: %dx%d\n", it->x, it->y, it->w, it->h, it->sw, it->sh);
+            }
+            fprintf(stderr, "---\n");
             break;
+        }
         case CKRST_OBJ_VERTEXBUFFER:
             result = CreateVertexBuffer(ObjIndex, static_cast<CKVertexBufferDesc *>(DesiredFormat));
             break;
@@ -1158,8 +1182,9 @@ BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &S
 #endif
         return FALSE;
     }
-    assert(LoadSurface(SurfaceDesc, LockRect, src));
-    assert(SUCCEEDED(desc->DxTexture->UnlockRect(actual_miplevel)));
+    LoadSurface(SurfaceDesc, LockRect, src);
+    hr = desc->DxTexture->UnlockRect(actual_miplevel);
+    assert(SUCCEEDED(hr));
     if (pSurface)
     {
         dst = src;
@@ -1199,6 +1224,7 @@ BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect*
         Src->left, Src->top, Src->right, Src->bottom,
         Dest->left, Dest->top, Dest->right, Dest->bottom);
 #endif
+    HRESULT hr;
     if (Texture >= m_Textures.Size())
         return 0;
     CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture]);
@@ -1218,11 +1244,12 @@ BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect*
 
     IDirect3DSurface9 *backBuffer = NULL;
     IDirect3DSurface9 *textureSurface = NULL;
-    assert(SUCCEEDED(m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)));
-    assert(SUCCEEDED(desc->DxTexture->GetSurfaceLevel(0, &textureSurface)));
+    hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
+    assert(SUCCEEDED(hr));
+    hr = desc->DxTexture->GetSurfaceLevel(0, &textureSurface);
+    assert(SUCCEEDED(hr));
     POINT pt{destRect.left, destRect.top};
-
-    HRESULT hr = E_FAIL;
+    
     if (backBuffer && textureSurface)
     {
         assert(SUCCEEDED(hr = m_Device->UpdateSurface(textureSurface, &srcRect, backBuffer, &pt)));
@@ -1247,7 +1274,8 @@ BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect*
             desc->Flags &= 0x7F;
             desc->Flags |= (CKRST_TEXTURE_RENDERTARGET | CKRST_TEXTURE_VALID);
             desc->DxTexture->GetSurfaceLevel(0, &textureSurface);
-            assert(SUCCEEDED(hr = m_Device->UpdateSurface(backBuffer, &srcRect, textureSurface, &pt)));
+            hr = m_Device->UpdateSurface(backBuffer, &srcRect, textureSurface, &pt);
+            assert(SUCCEEDED(hr));
             if (textureSurface)
                 textureSurface->Release();
             if (backBuffer)
@@ -1293,22 +1321,39 @@ BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst
         return 0;
     if (m_Height <= dst->top)
         return 0;
-    assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1)));
-    assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE)));
-    assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1)));
-    assert(SUCCEEDED(m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE)));
-    assert(SUCCEEDED(m_Device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT)));
-    assert(SUCCEEDED(m_Device->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE)));
-    assert(SUCCEEDED(m_Device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT)));
-    assert(SetRenderState(VXRENDERSTATE_ZWRITEENABLE, 0));
-    assert(SetRenderState(VXRENDERSTATE_TEXTUREPERSPECTIVE, 0));
-    assert(SetRenderState(VXRENDERSTATE_FILLMODE, 3));
-    assert(SetRenderState(VXRENDERSTATE_ZENABLE, 0));
-    assert(SetRenderState(VXRENDERSTATE_LIGHTING, 0));
-    assert(SetRenderState(VXRENDERSTATE_CULLMODE, 1));
-    assert(SetRenderState(VXRENDERSTATE_WRAP0, 0));
-    assert(SetRenderState(VXRENDERSTATE_CLIPPING, 0));
-    assert(SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, 0));
+    HRESULT hr;
+    hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+    assert(SUCCEEDED(hr));
+    hr = m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+    assert(SUCCEEDED(hr));
+    hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+    assert(SUCCEEDED(hr));
+    hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+    assert(SUCCEEDED(hr));
+    hr = m_Device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+    assert(SUCCEEDED(hr));
+    hr = m_Device->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+    assert(SUCCEEDED(hr));
+    hr = m_Device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+    assert(SUCCEEDED(hr));
+    BOOL ret = SetRenderState(VXRENDERSTATE_ZWRITEENABLE, 0);
+    assert(ret);
+    ret = SetRenderState(VXRENDERSTATE_TEXTUREPERSPECTIVE, 0);
+    assert(ret);
+    ret = SetRenderState(VXRENDERSTATE_FILLMODE, 3);
+    assert(ret);
+    ret = SetRenderState(VXRENDERSTATE_ZENABLE, 0);
+    assert(ret);
+    ret = SetRenderState(VXRENDERSTATE_LIGHTING, 0);
+    assert(ret);
+    ret = SetRenderState(VXRENDERSTATE_CULLMODE, 1);
+    assert(ret);
+    ret = SetRenderState(VXRENDERSTATE_WRAP0, 0);
+    assert(ret);
+    ret = SetRenderState(VXRENDERSTATE_CLIPPING, 0);
+    assert(ret);
+    ret = SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, 0);
+    assert(ret);
     D3DVIEWPORT9 Viewport;
     Viewport.Height = m_Height;
     Viewport.Width = m_Width;
@@ -1316,7 +1361,8 @@ BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst
     Viewport.Y = 0;
     Viewport.MinZ = 0.0;
     Viewport.MaxZ = 1.0;
-    assert(SUCCEEDED(m_Device->SetViewport(&Viewport)));
+    hr = m_Device->SetViewport(&Viewport);
+    assert(SUCCEEDED(hr));
     CKDWORD StartVertex = 0;
     int count = 4 * sprite->Textures.Size();
     CKDX9VertexBufferDesc *vb =
@@ -1326,12 +1372,14 @@ BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst
     void *pBuf = NULL;
     if (vb->m_CurrentVCount + count <= vb->m_MaxVertexCount)
     {
-        assert(SUCCEEDED(vb->DxBuffer->Lock(32 * vb->m_CurrentVCount, 32 * count, &pBuf, D3DLOCK_NOOVERWRITE)));
+        hr = vb->DxBuffer->Lock(32 * vb->m_CurrentVCount, 32 * count, &pBuf, D3DLOCK_NOOVERWRITE);
+        assert(SUCCEEDED(hr));
         StartVertex = vb->m_CurrentVCount;
         vb->m_CurrentVCount = count + StartVertex;
     } else
     {
-        assert(SUCCEEDED(vb->DxBuffer->Lock(0, 32 * count, &pBuf, D3DLOCK_DISCARD)));
+        hr = vb->DxBuffer->Lock(0, 32 * count, &pBuf, D3DLOCK_DISCARD);
+        assert(SUCCEEDED(hr));
         vb->m_CurrentVCount = count;
     }
     float width_ratio = dst->GetWidth() / src->GetWidth();
@@ -1375,20 +1423,25 @@ BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst
                                 0.0, 1.0);
         vbData[3].V = VxVector4(vbData[2].V.x, vbData[0].V.y, 0.0, 1.0);
     }
-    assert(SUCCEEDED(vb->DxBuffer->Unlock()));
+    hr = vb->DxBuffer->Unlock();
+    assert(SUCCEEDED(hr));
     m_CurrentVertexBufferCache = NULL;
     SetupStreams(vb->DxBuffer, CKRST_VF_TLVERTEX, 32);
     for (auto texture = sprite->Textures.Begin(); texture != sprite->Textures.End(); ++texture)
     {
         if (texture->x <= src->right && texture->y <= src->bottom && texture->x + texture->w >= src->left && texture->y + texture->h >= src->top)
         {
-            assert(SUCCEEDED(m_Device->SetTexture(0, static_cast<CKDX9TextureDesc *>(m_Textures[texture->IndexTexture])->DxTexture)));           
-            assert(SUCCEEDED(m_Device->DrawPrimitive(D3DPT_TRIANGLEFAN, StartVertex, 2)));
+            hr = m_Device->SetTexture(0, static_cast<CKDX9TextureDesc *>(m_Textures[texture->IndexTexture])->DxTexture);
+            assert(SUCCEEDED(hr));
+            hr = m_Device->DrawPrimitive(D3DPT_TRIANGLEFAN, StartVertex, 2);
+            assert(SUCCEEDED(hr));
         }
     }
-    assert(SUCCEEDED(m_Device->GetStreamSource(0, NULL, NULL, NULL)));
-    assert(SUCCEEDED(m_Device->SetViewport((const D3DVIEWPORT9 *)&m_ViewportData)));
-    assert(SetRenderState(VXRENDERSTATE_ZENABLE, 1));
+    hr = m_Device->GetStreamSource(0, NULL, NULL, NULL);
+    assert(SUCCEEDED(hr));
+    hr = m_Device->SetViewport((const D3DVIEWPORT9 *)&m_ViewportData);
+    assert(SUCCEEDED(hr));
+    SetRenderState(VXRENDERSTATE_ZENABLE, 1);
     return 1;
 }
 
@@ -1399,24 +1452,29 @@ int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffe
     IDirect3DSurface9 *surface = NULL;
     int v33 = 0;
 
+    HRESULT hr;
     switch (buffer)
     {
         case VXBUFFER_BACKBUFFER:
         {
-            assert(SUCCEEDED(m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &surface)));
+            hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &surface);
+            assert(SUCCEEDED(hr));
             if (!surface)
                 return 0;
-            assert(SUCCEEDED(surface->GetDesc(&desc)));
+            hr = surface->GetDesc(&desc);
+            assert(SUCCEEDED(hr));
             VX_PIXELFORMAT vxpf = D3DFormatToVxPixelFormat(desc.Format);
             VxPixelFormat2ImageDesc(vxpf, img_desc);
             break;
         }
         case VXBUFFER_ZBUFFER:
         {
-            assert(SUCCEEDED(m_Device->GetDepthStencilSurface(&surface)));
+            hr = m_Device->GetDepthStencilSurface(&surface);
+            assert(SUCCEEDED(hr));
             if (!surface)
                 return 0;
-            assert(SUCCEEDED(surface->GetDesc(&desc)));
+            hr = surface->GetDesc(&desc);
+            assert(SUCCEEDED(hr));
             img_desc.BitsPerPixel = 32;
             img_desc.AlphaMask = 0;
             img_desc.BlueMask = 0xFF;
@@ -1441,10 +1499,12 @@ int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffe
         }
         case VXBUFFER_STENCILBUFFER:
         {
-            assert(SUCCEEDED(m_Device->GetDepthStencilSurface(&surface)));
+            hr = m_Device->GetDepthStencilSurface(&surface);
+            assert(SUCCEEDED(hr));
             if (!surface)
                 return 0;
-            assert(SUCCEEDED(surface->GetDesc(&desc)));
+            hr = surface->GetDesc(&desc);
+            assert(SUCCEEDED(hr));
             D3DFORMAT D3DFormat = desc.Format;
             img_desc.BitsPerPixel = 32;
             img_desc.AlphaMask = 0;
@@ -1508,24 +1568,29 @@ int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffe
                 imgBuffer += 4;
             }
         }
-        assert(SUCCEEDED(ImageSurface->UnlockRect()));
-        assert(SUCCEEDED(ImageSurface->Release()));
+        hr = ImageSurface->UnlockRect();
+        assert(SUCCEEDED(hr));
+        hr = ImageSurface->Release();
+        assert(SUCCEEDED(hr));
     }
     return (buffer == VXBUFFER_BACKBUFFER);
 }
 
 int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT* rect, VXBUFFER_TYPE buffer, const VxImageDescEx& img_desc)
 {
+    HRESULT hr;
     if (!img_desc.Image)
         return 0;
     if (buffer != VXBUFFER_BACKBUFFER)
         return 0;
     IDirect3DSurface9 *backBuffer;
-    HRESULT hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
+    hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
+    assert(SUCCEEDED(hr));
     if (FAILED(hr) || !backBuffer)
         return 0;
-    D3DSURFACE_DESC desc;
-    assert(SUCCEEDED(backBuffer->GetDesc(&desc)));
+    D3DSURFACE_DESC desc{};
+    hr = backBuffer->GetDesc(&desc);
+    assert(SUCCEEDED(hr));
     VxImageDescEx vxdesc;
     vxdesc.Size = 52;
     ZeroMemory(&vxdesc.Flags, sizeof(VxImageDescEx) - sizeof(vxdesc.Size));
@@ -1601,10 +1666,14 @@ int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT* rect, VXBUFFER_TYPE buf
         while (hi);
     }
     if (surface)
-        assert(SUCCEEDED(surface->UnlockRect()));
+    {
+        hr = surface->UnlockRect();
+    }
     hr = m_Device->UpdateSurface(backBuffer, NULL, surface, NULL);
-    assert(SUCCEEDED(surface->Release()));
-    assert(SUCCEEDED(backBuffer->Release()));
+    assert(SUCCEEDED(hr));
+    hr = surface->Release();
+    assert(SUCCEEDED(hr));
+    hr = backBuffer->Release();
     return SUCCEEDED(hr);
 }
 
@@ -1617,9 +1686,12 @@ BOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, 
         if (m_DefaultBackBuffer)
         {
             HRESULT hr = m_Device->SetRenderTarget(0, m_DefaultBackBuffer);
-            assert(SUCCEEDED(m_DefaultBackBuffer->Release()));
+            assert(SUCCEEDED(hr));
+            hr = m_DefaultBackBuffer->Release();
+            assert(SUCCEEDED(hr));
             m_DefaultBackBuffer = NULL;
-            assert(SUCCEEDED(m_DefaultDepthBuffer->Release()));
+            hr = m_DefaultDepthBuffer->Release();
+            assert(SUCCEEDED(hr));
             m_DefaultBackBuffer = NULL;
             if (m_CurrentTextureIndex >= m_Textures.Size())
                 return SUCCEEDED(hr);
@@ -1667,7 +1739,10 @@ BOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, 
         return 0;
     }
     for (int i = 0; i < m_Driver->m_3DCaps.MaxNumberTextureStage; ++i)
-        assert(SUCCEEDED(m_Device->SetTexture(i, NULL)));
+    {
+        hr = m_Device->SetTexture(i, NULL);
+        assert(SUCCEEDED(hr));
+    }
     if (Height < 0 || desc->DxRenderTexture && desc->DxTexture)
     {
         IDirect3DSurface9 *surface = NULL;
@@ -1676,18 +1751,21 @@ BOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, 
         {
             if (type == D3DRTYPE_CUBETEXTURE)
             {
-                assert(SUCCEEDED(desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, 0, &surface)));
+                hr = desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, 0, &surface);
+                assert(SUCCEEDED(hr));
             }
         } else
         {
             desc->DxRenderTexture = desc->DxTexture;
-            assert(SUCCEEDED(desc->DxTexture->GetSurfaceLevel(0, &surface)));
+            hr = desc->DxTexture->GetSurfaceLevel(0, &surface);
+            assert(SUCCEEDED(hr));
         }
         IDirect3DSurface9* zbuffer = GetTempZBuffer(desc->Format.Width, desc->Format.Height);
-        D3DSURFACE_DESC SurfaceDesc;
+        D3DSURFACE_DESC SurfaceDesc{};
         if (surface)
         {
-            assert(SUCCEEDED(surface->GetDesc(&SurfaceDesc)));
+            hr = surface->GetDesc(&SurfaceDesc);
+            assert(SUCCEEDED(hr));
             hr = (SurfaceDesc.Usage & D3DUSAGE_RENDERTARGET) ? m_Device->SetRenderTarget(0, surface) : -1;
             surface->Release();
             if (SUCCEEDED(hr))
@@ -1720,20 +1798,24 @@ BOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, 
     if (FAILED(hr))
     {
         desc->Flags &= ~1u;
-        assert(SUCCEEDED(m_DefaultBackBuffer->Release()));
+        hr = m_DefaultBackBuffer->Release();
+        assert(SUCCEEDED(hr));
         m_DefaultBackBuffer = NULL;
         return 0;
     }
-    assert(SUCCEEDED(m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, 1, D3DUSAGE_RENDERTARGET,
-                                  m_PresentParams.BackBufferFormat, D3DPOOL_DEFAULT, &desc->DxRenderTexture, NULL)));
+    hr = m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, 1, D3DUSAGE_RENDERTARGET,
+                                 m_PresentParams.BackBufferFormat, D3DPOOL_DEFAULT, &desc->DxRenderTexture, NULL);
+    assert(SUCCEEDED(hr));
 
     IDirect3DSurface9 *surface = NULL;
     if (Height < 0)
     {
-        assert(SUCCEEDED(desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, 0, &surface)));
+        hr = desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, 0, &surface);
+        assert(SUCCEEDED(hr));
     } else
     {
-        assert(SUCCEEDED(desc->DxRenderTexture->GetSurfaceLevel(0, &surface)));
+        hr = desc->DxRenderTexture->GetSurfaceLevel(0, &surface);
+        assert(SUCCEEDED(hr));
     }
     IDirect3DSurface9* zbuffer = GetTempZBuffer(desc->Format.Width, desc->Format.Height);
     hr = m_Device->SetRenderTarget(0, surface);
@@ -1806,8 +1888,11 @@ BOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char* 
 void CKDX9RasterizerContext::UpdateDirectXData()
 {
     IDirect3DSurface9 *pBackBuffer = NULL, *pZStencilSurface = NULL;
-    assert(SUCCEEDED(m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer)));
-    assert(SUCCEEDED(m_Device->GetDepthStencilSurface(&pZStencilSurface)));
+    HRESULT hr;
+    hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer);
+    assert(SUCCEEDED(hr));
+    hr = m_Device->GetDepthStencilSurface(&pZStencilSurface);
+    assert(SUCCEEDED(hr));
     m_DirectXData.D3DDevice = m_Device;
     m_DirectXData.DxVersion = D3DX_VERSION;
     m_DirectXData.D3DViewport = NULL;
@@ -1818,9 +1903,15 @@ void CKDX9RasterizerContext::UpdateDirectXData()
     m_DirectXData.Direct3D = m_Owner->m_D3D9;
     m_DirectXData.DDClipper = NULL;
     if (pZStencilSurface)
-        assert(SUCCEEDED(pZStencilSurface->Release()));
+    {
+        pZStencilSurface->Release();
+        assert(SUCCEEDED(hr));
+    }
     if (pBackBuffer)
-        assert(SUCCEEDED(pBackBuffer->Release()));
+    {
+        hr = pBackBuffer->Release();
+        assert(SUCCEEDED(hr));
+    }
 }
 
 BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc* VB,
@@ -1851,65 +1942,69 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
 
             DWORD usage = (D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY |
                            (m_SoftwareVertexProcessing ? D3DUSAGE_SOFTWAREPROCESSING : 0));
-            assert(SUCCEEDED(hr = m_Device->CreateIndexBuffer(2 * length, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT,
-                                                              &desc->DxBuffer, NULL)));
+            hr = m_Device->CreateIndexBuffer(2 * length, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT, &desc->DxBuffer, NULL);
+            assert(SUCCEEDED(hr));
             desc->m_MaxIndexCount = length;
             m_IndexBuffer[Clip] = desc;
         }
         void *pbData = NULL;
+        //desc->m_CurrentICount = 0; // TODO: get rid of this
         if (indexcount + desc->m_CurrentICount <= desc->m_MaxIndexCount)
         {
-            desc->DxBuffer->Lock(2 * desc->m_CurrentICount, 2 * indexcount, &pbData, D3DLOCK_NOOVERWRITE);
+            hr = desc->DxBuffer->Lock(2 * desc->m_CurrentICount, 2 * indexcount, &pbData, D3DLOCK_NOOVERWRITE);
             ibstart = desc->m_CurrentICount;
             desc->m_CurrentICount += indexcount;
         } else
         {
-            desc->DxBuffer->Lock(0, 2 * indexcount, &pbData, D3DLOCK_DISCARD);
+            hr = desc->DxBuffer->Lock(0, 2 * indexcount, &pbData, D3DLOCK_DISCARD);
             desc->m_CurrentICount = indexcount;
         }
         if (pbData)
         {
             memcpy(pbData, indices, 2 * indexcount);
         }
-        desc->DxBuffer->Unlock();
+        hr = desc->DxBuffer->Unlock();
     }
     SetupStreams(VB->DxBuffer, VB->m_VertexFormat, VB->m_VertexSize);
-    int primCount = indexcount;
+    int primitiveCount = indexcount;
     if (indexcount == 0)
-        primCount = VertexCount;
+        primitiveCount = VertexCount;
     switch (pType)
     {
         case VX_LINELIST:
-            primCount /= 2;
+            primitiveCount /= 2;
             break;
         case VX_LINESTRIP:
-            primCount--;
+            primitiveCount--;
             break;
         case VX_TRIANGLELIST:
-            primCount /= 3;
+            primitiveCount /= 3;
             break;
         case VX_TRIANGLESTRIP:
         case VX_TRIANGLEFAN:
-            primCount -= 2;
+            primitiveCount -= 2;
             break;
         default:
             break;
     }
     if (!indices || pType == VX_POINTLIST)
     {
-        HRESULT hr = m_Device->DrawPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, primCount);
+        HRESULT hr = m_Device->DrawPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, primitiveCount);
         return SUCCEEDED(hr);
     }
     if (FAILED(m_Device->SetIndices(m_IndexBuffer[Clip]->DxBuffer)))
         return 0;
-    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, 0, VertexCount, ibstart, primCount));
+    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, 0, VertexCount, ibstart, primitiveCount));
 }
 
 void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize)
 {
     // TODO: Utilize cache
-    assert(SUCCEEDED(m_Device->SetFVF(VFormat)));
-    assert(SUCCEEDED(m_Device->SetStreamSource(0, Buffer, 0, VSize)));
+    HRESULT hr;
+    hr = m_Device->SetFVF(VFormat);
+    assert(SUCCEEDED(hr));
+    hr = m_Device->SetStreamSource(0, Buffer, 0, VSize);
+    assert(SUCCEEDED(hr));
     
     //if (m_CurrentVertexShaderCache)
     //{
@@ -1943,18 +2038,17 @@ BOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc* Desir
         return FALSE;
     if (m_Textures[Texture])
         return TRUE;
-
 #if LOGGING && LOG_CREATETEXTURE
-    fprintf(stderr, "create texture %d %dx%d\n", Texture, DesiredFormat->Format.Width, DesiredFormat->Format.Height);
+    fprintf(stderr, "create texture %d %dx%d %x\n", Texture, DesiredFormat->Format.Width, DesiredFormat->Format.Height, DesiredFormat->Flags);
 #endif
 
     CKDX9TextureDesc *desc = new CKDX9TextureDesc();
+    //desc->Flags = DesiredFormat->Flags;
+    desc->Format = DesiredFormat->Format;
+    desc->MipMapCount = DesiredFormat->MipMapCount;
     m_Textures[Texture] = desc;
-    auto width = DesiredFormat->Format.Width;
-    auto height = DesiredFormat->Format.Height;
-    auto miplvl = DesiredFormat->MipMapCount;
-    auto fmt = VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(DesiredFormat->Format));
-    return SUCCEEDED(m_Device->CreateTexture(width, height, miplvl, D3DUSAGE_DYNAMIC, fmt, D3DPOOL_DEFAULT, &(desc->DxTexture), NULL));
+    auto fmt = VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(desc->Format));
+    return SUCCEEDED(m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, desc->MipMapCount, D3DUSAGE_DYNAMIC, fmt, D3DPOOL_DEFAULT, &(desc->DxTexture), NULL));
 }
 
 BOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc* DesiredFormat)
@@ -2118,6 +2212,7 @@ void CKDX9RasterizerContext::FlushCaches()
 
 void CKDX9RasterizerContext::FlushNonManagedObjects()
 {
+    HRESULT hr;
     if (m_Device)
     {
         //IDirect3DIndexBuffer9 *ib;
@@ -2126,8 +2221,10 @@ void CKDX9RasterizerContext::FlushNonManagedObjects()
         
         if (m_DefaultBackBuffer && m_DefaultDepthBuffer)
         {
-            assert(SUCCEEDED(m_Device->SetRenderTarget(0, m_DefaultBackBuffer)));
-            assert(SUCCEEDED(m_Device->SetDepthStencilSurface(m_DefaultDepthBuffer)));
+            hr = m_Device->SetRenderTarget(0, m_DefaultBackBuffer);
+            assert(SUCCEEDED(hr));
+            hr = m_Device->SetDepthStencilSurface(m_DefaultDepthBuffer);
+            assert(SUCCEEDED(hr));
             m_DefaultBackBuffer->Release();
             m_DefaultBackBuffer = NULL;
             m_DefaultDepthBuffer->Release();
