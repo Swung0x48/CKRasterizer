@@ -1259,6 +1259,7 @@ BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect*
     return 0;
 }
 
+// TODO: check this
 BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst)
 {
     if (Sprite >= m_Sprites.Size())
@@ -1316,7 +1317,7 @@ BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst
     Viewport.MinZ = 0.0;
     Viewport.MaxZ = 1.0;
     assert(SUCCEEDED(m_Device->SetViewport(&Viewport)));
-    CKDWORD currentVCount = 0;
+    CKDWORD StartVertex = 0;
     int count = 4 * sprite->Textures.Size();
     CKDX9VertexBufferDesc *vb =
         static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[GetDynamicVertexBuffer(CKRST_VF_TLVERTEX, count, 32, 1)]);
@@ -1326,15 +1327,68 @@ BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst
     if (vb->m_CurrentVCount + count <= vb->m_MaxVertexCount)
     {
         assert(SUCCEEDED(vb->DxBuffer->Lock(32 * vb->m_CurrentVCount, 32 * count, &pBuf, D3DLOCK_NOOVERWRITE)));
-        currentVCount = vb->m_CurrentVCount;
-        vb->m_CurrentVCount = count + currentVCount;
+        StartVertex = vb->m_CurrentVCount;
+        vb->m_CurrentVCount = count + StartVertex;
     } else
     {
         assert(SUCCEEDED(vb->DxBuffer->Lock(0, 32 * count, &pBuf, D3DLOCK_DISCARD)));
         vb->m_CurrentVCount = count;
     }
-    CKSPRTextInfo *info = &sprite->Textures[0];
-    // TODO
+    float width_ratio = dst->GetWidth() / src->GetWidth();
+    float height_ratio = dst->GetHeight() / src->GetHeight();
+    CKVertex *vbData = static_cast<CKVertex *>(pBuf);
+    for (auto texture = sprite->Textures.Begin(); texture != sprite->Textures.End(); texture++, vbData += 4)
+    {
+        float tu2 = 1.0, tv2 = 1.0;
+        if (texture->w != texture->sw)
+            tu2 = (float)texture->w / (float)texture->sw;
+        if (texture->h != texture->sh)
+            tv2 = (float)texture->h / (float)texture->sh;
+        // TODO
+
+        vbData[0].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
+        vbData[1].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
+        vbData[2].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
+        vbData[3].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
+        vbData[0].Specular = A_MASK;
+        vbData[1].Specular = A_MASK;
+        vbData[2].Specular = A_MASK;
+        vbData[3].Specular = A_MASK;
+        float tu1 = 0.25 / (texture->sw * width_ratio) + dst->GetWidth();
+        float tv1 = 0.25 / (texture->sh * height_ratio) + dst->GetHeight();
+        vbData[0].tu = tu1;
+        vbData[0].tv = tv1;
+        vbData[1].tu = tu1;
+        vbData[1].tv = tv2;
+        vbData[2].tu = tu2;
+        vbData[2].tv = tv2;
+        vbData[3].tu = tu2;
+        vbData[3].tv = tv1;
+        vbData[0].V = VxVector4((dst->left - src->left) * width_ratio + dst->left,
+                                (dst->top - src->top) * height_ratio + dst->top,
+                                0.0, 1.0);
+        vbData[1].V = VxVector4(vbData[0].V.x,
+            (texture->y + texture->h - src->top) * height_ratio + dst->top,
+            0.0, 1.0);
+        vbData[2].V = VxVector4((texture->x + texture->w - src->left) * width_ratio + dst->left,
+                                (texture->y + texture->h - src->top) * height_ratio + dst->top,
+                                0.0, 1.0);
+        vbData[3].V = VxVector4(vbData[2].V.x, vbData[0].V.y, 0.0, 1.0);
+    }
+    assert(SUCCEEDED(vb->DxBuffer->Unlock()));
+    m_CurrentVertexBufferCache = NULL;
+    SetupStreams(vb->DxBuffer, CKRST_VF_TLVERTEX, 32);
+    for (auto texture = sprite->Textures.Begin(); texture != sprite->Textures.End(); ++texture)
+    {
+        if (texture->x <= src->right && texture->y <= src->bottom && texture->x + texture->w >= src->left && texture->y + texture->h >= src->top)
+        {
+            assert(SUCCEEDED(m_Device->SetTexture(0, static_cast<CKDX9TextureDesc *>(m_Textures[texture->IndexTexture])->DxTexture)));           
+            assert(SUCCEEDED(m_Device->DrawPrimitive(D3DPT_TRIANGLEFAN, StartVertex, 2)));
+        }
+    }
+    assert(SUCCEEDED(m_Device->GetStreamSource(0, NULL, NULL, NULL)));
+    assert(SUCCEEDED(m_Device->SetViewport((const D3DVIEWPORT9 *)&m_ViewportData)));
+    assert(SetRenderState(VXRENDERSTATE_ZENABLE, 1));
     return 1;
 }
 
