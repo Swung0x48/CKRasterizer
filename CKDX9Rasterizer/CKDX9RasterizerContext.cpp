@@ -4,9 +4,11 @@
 #define STEP 0
 #define LOG_LOADTEXTURE 0
 #define LOG_CREATETEXTURE 0
-#define LOG_DRAWPRIMITIVE 1
+#define LOG_DRAWPRIMITIVE 0
+#define LOG_SETTEXURESTAGESTATE 1
+#define LOG_FLUSHCACHES 1
 
-#define USE_D3DSTATEBLOCKS 0 //disable this for now, it f*cks up a bunch of stuff
+#define USE_D3DSTATEBLOCKS 1 //disable this for now, it f*cks up a bunch of stuff
 
 
 #if STEP
@@ -101,7 +103,8 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
 	m_PresentParams.SwapEffect = D3DSWAPEFFECT_DISCARD;
 	m_PresentParams.EnableAutoDepthStencil = TRUE;
 	m_PresentParams.FullScreen_RefreshRateInHz = Fullscreen ? RefreshRate : D3DPRESENT_RATE_DEFAULT;
-	m_PresentParams.PresentationInterval = Fullscreen ? D3DPRESENT_INTERVAL_IMMEDIATE : D3DPRESENT_INTERVAL_DEFAULT;
+    m_PresentParams.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+	//m_PresentParams.PresentationInterval = Fullscreen ? D3DPRESENT_INTERVAL_IMMEDIATE : D3DPRESENT_INTERVAL_DEFAULT;
     m_PresentParams.BackBufferFormat = Driver->FindNearestRenderTargetFormat(Bpp, !Fullscreen);
     m_PresentParams.AutoDepthStencilFormat =
         Driver->FindNearestDepthFormat(
@@ -690,9 +693,14 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
             if (m_PresentInterval == 0)
             {
                 LPDIRECT3DSTATEBLOCK9 block = m_TextureMagFilterStateBlocks[Value][Stage];
-                if (block && SUCCEEDED(block->Apply()))
-                    return TRUE;
-
+                if (block)
+                {
+                    HRESULT hr = block->Apply();
+#if LOGGING && LOG_SETTEXURESTAGESTATE
+                    fprintf(stderr, "Applying TextureMagFilterStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage, hr);
+#endif
+                    return SUCCEEDED(hr);
+                }
                 switch (Value)
                 {
                     case VXTEXTUREFILTER_NEAREST:
@@ -723,8 +731,15 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
             if (m_PresentInterval == 0 && m_CurrentPresentInterval == 0)
             {
                 LPDIRECT3DSTATEBLOCK9 block = m_TextureMagFilterStateBlocks[Value][Stage];
-                if (block && SUCCEEDED(block->Apply()))
-                    return TRUE;
+                if (block)
+                {
+                    HRESULT hr = block->Apply();
+#if LOGGING && LOG_SETTEXURESTAGESTATE
+                    fprintf(stderr, "Applying TextureMagFilterStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage,
+                            hr);
+#endif
+                    return SUCCEEDED(hr);
+                }
             }
 
             switch (Value)
@@ -787,9 +802,16 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
             break;
         case CKRST_TSS_TEXTUREMAPBLEND:
             {
-                /*LPDIRECT3DSTATEBLOCK9 block = m_TextureMapBlendStateBlocks[Value][Stage];
-                if (block && SUCCEEDED(block->Apply()))
-                    return TRUE;*/
+                LPDIRECT3DSTATEBLOCK9 block = m_TextureMapBlendStateBlocks[Value][Stage];
+                if (block)
+                {
+                    HRESULT hr = block->Apply();
+#if LOGGING && LOG_SETTEXURESTAGESTATE
+                    fprintf(stderr, "Applying TextureMapBlendStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage,
+                            hr);
+#endif
+                    return SUCCEEDED(hr);
+                }
             }
 
             switch (Value)
@@ -817,7 +839,7 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
                     m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG1, D3DTA_TEXTURE);
                     m_Device->SetTextureStageState(Stage, D3DTSS_COLORARG2, D3DTA_CURRENT);
                     m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
-                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG1, D3DTA_CURRENT);
+                    m_Device->SetTextureStageState(Stage, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
                     break;
                 case VXTEXTUREBLEND_ADD:
                     m_Device->SetTextureStageState(Stage, D3DTSS_COLOROP, D3DTOP_ADD);
@@ -2067,7 +2089,7 @@ BOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc* Desir
 #endif
 
     CKDX9TextureDesc *desc = new CKDX9TextureDesc();
-    //desc->Flags = DesiredFormat->Flags;
+    desc->Flags = DesiredFormat->Flags;
     desc->Format = DesiredFormat->Format;
     desc->MipMapCount = DesiredFormat->MipMapCount;
     m_Textures[Texture] = desc;
@@ -2222,23 +2244,48 @@ void CKDX9RasterizerContext::FlushCaches()
 #if USE_D3DSTATEBLOCKS
     if (m_Device)
     {
+        HRESULT hr;
         for (int i = 0; i < 8; i++)
         {
             for (int j = 0; j < 8; j++)
             {
-                m_Device->BeginStateBlock();
-                SetTextureStageState(i, CKRST_TSS_MINFILTER, j + 1);
-                m_Device->EndStateBlock(&m_TextureMinFilterStateBlocks[j][i]);
-                
-                m_Device->BeginStateBlock();
-                SetTextureStageState(i, CKRST_TSS_MAGFILTER, j + 1);
-                m_Device->EndStateBlock(&m_TextureMagFilterStateBlocks[j][i]);
+                hr = m_Device->BeginStateBlock();
+                assert(SUCCEEDED(hr));
+#if LOGGING && LOG_FLUSHCACHES
+                fprintf(stderr, "begin TextureMinFilterStateBlocks %d %d -> 0x%x\n", i, j, hr);
+#endif
+                SetTextureStageState(i, CKRST_TSS_MINFILTER, j);
+                hr = m_Device->EndStateBlock(&m_TextureMinFilterStateBlocks[j][i]);
+#if LOGGING && LOG_FLUSHCACHES
+                fprintf(stderr, "end TextureMinFilterStateBlocks %d %d -> 0x%x\n", i, j, hr);
+#endif
+                assert(SUCCEEDED(hr));
+
+                hr = m_Device->BeginStateBlock();
+#if LOGGING && LOG_FLUSHCACHES
+                fprintf(stderr, "begin TextureMagFilterStateBlocks %d %d -> 0x%x\n", i, j, hr);
+#endif
+                assert(SUCCEEDED(hr));
+                SetTextureStageState(i, CKRST_TSS_MAGFILTER, j);
+                hr = m_Device->EndStateBlock(&m_TextureMagFilterStateBlocks[j][i]);
+#if LOGGING && LOG_FLUSHCACHES
+                fprintf(stderr, "end TextureMagFilterStateBlocks %d %d -> 0x%x\n", i, j, hr);
+#endif
+                assert(SUCCEEDED(hr));
             }
             for (int k = 0; k < 10; k++)
             {
-                m_Device->BeginStateBlock();
-                SetTextureStageState(i, CKRST_TSS_TEXTUREMAPBLEND, k + 1);
-                m_Device->EndStateBlock(&m_TextureMapBlendStateBlocks[k][i]);
+                hr = m_Device->BeginStateBlock();
+#if LOGGING && LOG_FLUSHCACHES
+                fprintf(stderr, "begin TextureMapBlendStateBlocks %d %d -> 0x%x\n", i, k, hr);
+#endif
+                assert(SUCCEEDED(hr));
+                SetTextureStageState(i, CKRST_TSS_TEXTUREMAPBLEND, k);
+                hr = m_Device->EndStateBlock(&m_TextureMapBlendStateBlocks[k][i]);
+#if LOGGING && LOG_FLUSHCACHES
+                fprintf(stderr, "end TextureMapBlendStateBlocks %d %d -> 0x%x\n", i, k, hr);
+#endif
+                assert(SUCCEEDED(hr));
             }
         }
     }
