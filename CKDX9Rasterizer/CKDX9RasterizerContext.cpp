@@ -6,6 +6,8 @@
 #define LOG_CREATETEXTURE 0
 #define LOG_DRAWPRIMITIVE 1
 
+#define USE_D3DSTATEBLOCKS 0 //disable this for now, it f*cks up a bunch of stuff
+
 
 #if STEP
 #include <conio.h>
@@ -506,9 +508,8 @@ BOOL CKDX9RasterizerContext::SetMaterial(CKMaterialData* mat)
 
 BOOL CKDX9RasterizerContext::SetViewport(CKViewportData* data)
 {
-    D3DVIEWPORT9 viewport{(DWORD)(data->ViewX), (DWORD)(data->ViewY), (DWORD)data->ViewWidth,
-                          (DWORD)data->ViewHeight,     data->ViewZMin,       data->ViewZMax};
-    return SUCCEEDED(m_Device->SetViewport(&viewport));
+    m_ViewportData = *data;
+    return SUCCEEDED(m_Device->SetViewport((D3DVIEWPORT9*) & m_ViewportData));
 }
 
 BOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix& Mat)
@@ -678,6 +679,12 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
             m_Device->SetSamplerState(Stage, D3DSAMP_ADDRESSU, Value);
             m_Device->SetSamplerState(Stage, D3DSAMP_ADDRESSV, Value);
             m_Device->SetSamplerState(Stage, D3DSAMP_ADDRESSW, Value);
+            break;
+        case CKRST_TSS_ADDRESSU:
+            m_Device->SetSamplerState(Stage, D3DSAMP_ADDRESSU, Value);
+            break;
+        case CKRST_TSS_ADDRESSV:
+            m_Device->SetSamplerState(Stage, D3DSAMP_ADDRESSV, Value);
             break;
         case CKRST_TSS_MAGFILTER:
             if (m_PresentInterval == 0)
@@ -917,6 +924,12 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
     CKBOOL clip = 0;
     CKDWORD vertexSize;
     CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
+    //workaround for 2D Frame without UV
+    if (!(vertexFormat & CKRST_VF_TEXMASK))
+    {
+        vertexFormat |= CKRST_VF_TEX1;
+        vertexSize += 8;
+    }
     if ((data->Flags & CKRST_DP_DOCLIP))
     {
         SetRenderState(VXRENDERSTATE_CLIPPING, 1);
@@ -2009,6 +2022,9 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 {
     // TODO: Utilize cache
     HRESULT hr;
+    //assume we always have at least one set of texture coords, sh*tty workaround for 2D Frame rendering
+    if (!(VFormat & D3DFVF_TEXCOUNT_MASK))
+        VFormat |= D3DFVF_TEX1;
     hr = m_Device->SetFVF(VFormat);
     assert(SUCCEEDED(hr));
     hr = m_Device->SetStreamSource(0, Buffer, 0, VSize);
@@ -2123,12 +2139,21 @@ BOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc* 
 {
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
         return 0;
-    DWORD fvf = D3DFVF_XYZB2;
-    if ((DesiredFormat->m_Flags & CKRST_VB_DYNAMIC) != 0)
-        fvf |= D3DFVF_TEX2;
+    DWORD vfmt = DesiredFormat->m_VertexFormat;
+    DWORD vsize = DesiredFormat->m_VertexSize;
+    if (! (vfmt & D3DFVF_TEXCOUNT_MASK)) //workaround for 2D Frames without UV
+    {
+        vfmt |= D3DFVF_TEX1;
+        vsize += 8;
+    }
+    DWORD usage = 0;
+    if (DesiredFormat->m_Flags & CKRST_VB_DYNAMIC)
+        usage |= D3DUSAGE_DYNAMIC;
+    if (DesiredFormat->m_Flags & CKRST_VB_WRITEONLY)
+        usage |= D3DUSAGE_WRITEONLY;
     IDirect3DVertexBuffer9 *vb = NULL;
-    if (FAILED(m_Device->CreateVertexBuffer(DesiredFormat->m_MaxVertexCount * DesiredFormat->m_VertexSize, fvf,
-                                            DesiredFormat->m_VertexFormat, D3DPOOL_DEFAULT, &vb, NULL)))
+    if (FAILED(m_Device->CreateVertexBuffer(DesiredFormat->m_MaxVertexCount * vsize,
+                                            usage, vfmt, D3DPOOL_DEFAULT, &vb, NULL)))
         return 0;
     if (m_VertexBuffers[VB] == DesiredFormat)
     {
@@ -2142,9 +2167,9 @@ BOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc* 
     if (!desc)
         return 0;
     desc->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
-    desc->m_VertexSize = DesiredFormat->m_VertexSize;
+    desc->m_VertexSize = vsize;
     desc->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount;
-    desc->m_VertexFormat = DesiredFormat->m_VertexFormat;
+    desc->m_VertexFormat = vfmt;
     desc->m_Flags = DesiredFormat->m_Flags;
     desc->DxBuffer = vb;
     desc->m_Flags |= 1;
@@ -2194,6 +2219,7 @@ void CKDX9RasterizerContext::FlushCaches()
     memset(m_TextureMagFilterStateBlocks, NULL, sizeof(m_TextureMagFilterStateBlocks));
     memset(m_TextureMapBlendStateBlocks, NULL, sizeof(m_TextureMapBlendStateBlocks));
 
+#if USE_D3DSTATEBLOCKS
     if (m_Device)
     {
         for (int i = 0; i < 8; i++)
@@ -2216,6 +2242,7 @@ void CKDX9RasterizerContext::FlushCaches()
             }
         }
     }
+#endif
 }
 
 void CKDX9RasterizerContext::FlushNonManagedObjects()
@@ -2258,13 +2285,16 @@ void CKDX9RasterizerContext::ReleaseStateBlocks()
         {
             for (int j = 0; j < 8; j++)
             {
-                m_TextureMinFilterStateBlocks[j][i]->Release();
-                m_TextureMagFilterStateBlocks[j][i]->Release();
+                if (m_TextureMinFilterStateBlocks[j][i])
+                    m_TextureMinFilterStateBlocks[j][i]->Release();
+                if (m_TextureMagFilterStateBlocks[j][i])
+                    m_TextureMagFilterStateBlocks[j][i]->Release();
             }
 
             for (int k = 0; k < 10; k++)
             {
-                m_TextureMapBlendStateBlocks[k][i]->Release();
+                if (m_TextureMapBlendStateBlocks[k][i])
+                    m_TextureMapBlendStateBlocks[k][i]->Release();
             }
         }
 
