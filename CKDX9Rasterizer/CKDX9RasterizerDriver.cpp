@@ -125,7 +125,7 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 {
 	m_AdapterIndex = AdapterIndex;
 	m_Inited = TRUE;
-    IDirect3D9Ex* pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
+    IDirect3D9* pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
 	pD3D->GetAdapterIdentifier(AdapterIndex, D3DENUM_WHQL_LEVEL, &m_D3DIdentifier);
 	D3DDISPLAYMODE DisplayMode;
 	pD3D->GetAdapterDisplayMode(AdapterIndex, &DisplayMode);
@@ -293,11 +293,11 @@ D3DFORMAT CKDX9RasterizerDriver::FindNearestTextureFormat(CKTextureDesc* desc)
 
 D3DFORMAT CKDX9RasterizerDriver::FindNearestRenderTargetFormat(int Bpp, BOOL Windowed)
 {
-    D3DDISPLAYMODEEX DisplayMode;
-    DisplayMode.Size = sizeof(D3DDISPLAYMODEEX);
-    IDirect3D9Ex* pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
+    D3DDISPLAYMODE DisplayMode;
+    IDirect3D9* pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
 
-    HRESULT result = pD3D->GetAdapterDisplayModeEx(m_AdapterIndex, &DisplayMode, NULL);
+    HRESULT result = pD3D->GetAdapterDisplayMode(
+        m_AdapterIndex, &DisplayMode); // pD3D->GetAdapterDisplayMode(m_AdapterIndex, &DisplayMode, NULL);
     if (FAILED(result))
         return D3DFMT_UNKNOWN;
 

@@ -49,7 +49,8 @@ XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
 	HRESULT result = E_FAIL;
 
 	// Create the D3D object, which is needed to create the D3DDevice.
-	if (FAILED(result = Direct3DCreate9Ex(D3D_SDK_VERSION, &m_D3D9)))
+    m_D3D9 = Direct3DCreate9(D3D_SDK_VERSION);
+    if (!m_D3D9)
 	{
 		m_D3D9 = NULL;
 		return FALSE;
