@@ -545,7 +545,7 @@ BOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatr
         case VXMATRIX_TEXTURE5:
         case VXMATRIX_TEXTURE6:
         case VXMATRIX_TEXTURE7:
-            UnityMatrixMask = 0x8 << (Type - 0x10);
+            UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
             break;
         default:
             return FALSE;
@@ -554,8 +554,11 @@ BOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatr
     {
         if ((m_UnityMatrixMask & UnityMatrixMask) != 0)
             return TRUE;
+        m_UnityMatrixMask |= UnityMatrixMask;
+    } else
+    {
+        m_UnityMatrixMask &= ~UnityMatrixMask;
     }
-    m_UnityMatrixMask &= ~UnityMatrixMask;
     return SUCCEEDED(m_Device->SetTransform(D3DTs, (const D3DMATRIX*)&Mat));
 }
 
@@ -777,9 +780,9 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
             break;
         case CKRST_TSS_TEXTUREMAPBLEND:
             {
-                LPDIRECT3DSTATEBLOCK9 block = m_TextureMapBlendStateBlocks[Value][Stage];
+                /*LPDIRECT3DSTATEBLOCK9 block = m_TextureMapBlendStateBlocks[Value][Stage];
                 if (block && SUCCEEDED(block->Apply()))
-                    return TRUE;
+                    return TRUE;*/
             }
 
             switch (Value)
@@ -2265,9 +2268,9 @@ void CKDX9RasterizerContext::ReleaseStateBlocks()
             }
         }
 
-        memset(m_TextureMinFilterStateBlocks, NULL, sizeof(m_TextureMinFilterStateBlocks));
-        memset(m_TextureMagFilterStateBlocks, NULL, sizeof(m_TextureMagFilterStateBlocks));
-        memset(m_TextureMapBlendStateBlocks, NULL, sizeof(m_TextureMapBlendStateBlocks));
+        ZeroMemory(m_TextureMinFilterStateBlocks, sizeof(m_TextureMinFilterStateBlocks));
+        ZeroMemory(m_TextureMagFilterStateBlocks, sizeof(m_TextureMagFilterStateBlocks));
+        ZeroMemory(m_TextureMapBlendStateBlocks, sizeof(m_TextureMapBlendStateBlocks));
     }
 }
 
