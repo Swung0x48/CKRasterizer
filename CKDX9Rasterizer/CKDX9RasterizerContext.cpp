@@ -5,10 +5,10 @@
 #define LOG_LOADTEXTURE 0
 #define LOG_CREATETEXTURE 0
 #define LOG_DRAWPRIMITIVE 0
-#define LOG_SETTEXURESTAGESTATE 1
-#define LOG_FLUSHCACHES 1
+#define LOG_SETTEXURESTAGESTATE 0
+#define LOG_FLUSHCACHES 0
 
-#define USE_D3DSTATEBLOCKS 1 //disable this for now, it f*cks up a bunch of stuff
+#define USE_D3DSTATEBLOCKS 1
 
 
 #if STEP
@@ -730,12 +730,12 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
         case CKRST_TSS_MINFILTER:
             if (m_PresentInterval == 0 && m_CurrentPresentInterval == 0)
             {
-                LPDIRECT3DSTATEBLOCK9 block = m_TextureMagFilterStateBlocks[Value][Stage];
+                LPDIRECT3DSTATEBLOCK9 block = m_TextureMinFilterStateBlocks[Value][Stage];
                 if (block)
                 {
                     HRESULT hr = block->Apply();
 #if LOGGING && LOG_SETTEXURESTAGESTATE
-                    fprintf(stderr, "Applying TextureMagFilterStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage,
+                    fprintf(stderr, "Applying TextureMinFilterStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage,
                             hr);
 #endif
                     return SUCCEEDED(hr);
