@@ -278,7 +278,7 @@ protected:
     //-----------------------
     void UpdateDirectXData();
     CKBOOL InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc *VB, CKDWORD StartIndex,
-                                   CKDWORD VertexCount, CKWORD *indices, int indexcount, CKBOOL Clip, CKDWORD vfmt=~0U);
+                                   CKDWORD VertexCount, CKWORD *indices, int indexcount, CKBOOL Clip);
     void SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize);
 
     //--- Objects creation
@@ -381,7 +381,7 @@ public:
     CKBOOL InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType);
     CKBOOL IsTextureFormatOk(D3DFORMAT TextureFormat, D3DFORMAT AdapterFormat, DWORD Usage = 0);
 
-    D3DFORMAT FindNearestTextureFormat(CKTextureDesc *desc);
+    D3DFORMAT FindNearestTextureFormat(CKTextureDesc *desc, D3DFORMAT AdapterFormat, DWORD Usage = 0);
     D3DFORMAT FindNearestRenderTargetFormat(int Bpp, CKBOOL Windowed);
     D3DFORMAT FindNearestDepthFormat(D3DFORMAT pf, int ZBpp, int StencilBpp);
 

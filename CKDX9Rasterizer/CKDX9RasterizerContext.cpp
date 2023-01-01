@@ -10,7 +10,6 @@
 #define LOG_BATCHSTATS 0
 
 #define USE_D3DSTATEBLOCKS 1
-#define WORKAROUND_2DFRAME 0
 
 
 #if STEP
@@ -962,14 +961,6 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
     CKBOOL clip = 0;
     CKDWORD vertexSize;
     CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
-    //workaround for 2D Frame without UV
-#if WORKAROUND_2DFRAME
-    if (!(vertexFormat & CKRST_VF_TEXMASK))
-    {
-        vertexFormat |= CKRST_VF_TEX1;
-        vertexSize += 8;
-    }
-#endif
     if ((data->Flags & CKRST_DP_DOCLIP))
     {
         SetRenderState(VXRENDERSTATE_CLIPPING, 1);
@@ -1006,7 +997,7 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
     CKRSTLoadVertexBuffer(reinterpret_cast<CKBYTE *>(ppbData), vertexFormat, vertexSize, data);
     hr = vertexBufferDesc->DxBuffer->Unlock();
     assert(SUCCEEDED(hr));
-    return InternalDrawPrimitiveVB(pType, vertexBufferDesc, startIndex, data->VertexCount, indices, indexcount, clip, vertexFormat);
+    return InternalDrawPrimitiveVB(pType, vertexBufferDesc, startIndex, data->VertexCount, indices, indexcount, clip);
 }
 
 BOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
@@ -1319,7 +1310,8 @@ BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect*
     
     if (backBuffer && textureSurface)
     {
-        assert(SUCCEEDED(hr = m_Device->UpdateSurface(textureSurface, &srcRect, backBuffer, &pt)));
+        hr = m_Device->UpdateSurface(textureSurface, &srcRect, backBuffer, &pt);
+        assert(SUCCEEDED(hr));
         textureSurface->Release();
         textureSurface = NULL;
     }
@@ -1747,7 +1739,7 @@ int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT* rect, VXBUFFER_TYPE buf
 BOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, int Height, CKRST_CUBEFACE Face,
 	BOOL GenerateMipMap)
 {
-    assert(SUCCEEDED(EndScene()));
+    EndScene();
     if (!TextureObject)
     {
         if (m_DefaultBackBuffer)
@@ -1982,7 +1974,7 @@ void CKDX9RasterizerContext::UpdateDirectXData()
 }
 
 BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc* VB,
-	CKDWORD StartIndex, CKDWORD VertexCount, WORD* indices, int indexcount, BOOL Clip, CKDWORD vfmt)
+	CKDWORD StartIndex, CKDWORD VertexCount, WORD* indices, int indexcount, BOOL Clip)
 {
     int ibstart = 0;
     if (indices)
@@ -2032,8 +2024,7 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
         }
         hr = desc->DxBuffer->Unlock();
     }
-    vfmt = ~vfmt ? vfmt : VB->m_VertexFormat;
-    SetupStreams(VB->DxBuffer, vfmt, VB->m_VertexSize);
+    SetupStreams(VB->DxBuffer, VB->m_VertexFormat, VB->m_VertexSize);
     int primitiveCount = indexcount;
     if (indexcount == 0)
         primitiveCount = VertexCount;
@@ -2069,11 +2060,6 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 {
     // TODO: Utilize cache
     HRESULT hr;
-    //assume we always have at least one set of texture coords, sh*tty workaround for 2D Frame rendering
-#if WORKAROUND_2DFRAME
-    if (!(VFormat & D3DFVF_TEXCOUNT_MASK))
-        VFormat |= D3DFVF_TEX1;
-#endif
     if (Buffer != m_CurrentVertexBufferCache || m_CurrentVertexSizeCache != VSize)
     {
         hr = m_Device->SetStreamSource(0, NULL, 0, 0);
@@ -2104,8 +2090,16 @@ BOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc* Desir
     desc->Format = DesiredFormat->Format;
     desc->MipMapCount = DesiredFormat->MipMapCount;
     m_Textures[Texture] = desc;
-    auto fmt = VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(desc->Format));
-    return SUCCEEDED(m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, desc->MipMapCount ? desc->MipMapCount : 1, D3DUSAGE_DYNAMIC, fmt, D3DPOOL_DEFAULT, &(desc->DxTexture), NULL));
+    auto fmt = static_cast<CKDX9RasterizerDriver*>(m_Driver)->FindNearestTextureFormat(desc, m_PresentParams.BackBufferFormat, D3DUSAGE_DYNAMIC);
+    HRESULT hr = m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, desc->MipMapCount ? desc->MipMapCount : 1, D3DUSAGE_DYNAMIC, fmt, D3DPOOL_DEFAULT, &(desc->DxTexture), NULL);
+#if LOGGING && LOG_CREATETEXTURE
+    if (FAILED(hr))
+    {
+        fprintf(stderr, "create texture failure: src fmt bpp %d a@0x%x r@0x%x g@0x%x b@0x%x dst fmt 0x%x\n", desc->Format.BitsPerPixel,
+            desc->Format.AlphaMask, desc->Format.RedMask, desc->Format.GreenMask, desc->Format.BlueMask, fmt);
+    }
+#endif
+    return SUCCEEDED(hr);
 }
 
 BOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc* DesiredFormat)
@@ -2174,13 +2168,6 @@ BOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc* 
         return 0;
     DWORD vfmt = DesiredFormat->m_VertexFormat;
     DWORD vsize = DesiredFormat->m_VertexSize;
-#if WORKAROUND_2DFRAME
-    if (! (vfmt & D3DFVF_TEXCOUNT_MASK)) //workaround for 2D Frames without UV
-    {
-        vfmt |= D3DFVF_TEX1;
-        vsize += 8;
-    }
-#endif
     DWORD usage = 0;
     if (DesiredFormat->m_Flags & CKRST_VB_DYNAMIC)
         usage |= D3DUSAGE_DYNAMIC;
