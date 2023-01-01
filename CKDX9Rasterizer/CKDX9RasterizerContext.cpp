@@ -10,6 +10,7 @@
 #define LOG_BATCHSTATS 0
 
 #define USE_D3DSTATEBLOCKS 1
+#define WORKAROUND_2DFRAME 0
 
 
 #if STEP
@@ -452,7 +453,6 @@ BOOL CKDX9RasterizerContext::EndScene()
 
 BOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData* data)
 {
-    // Could be a problem
     D3DLIGHT9 lightData;
     switch (data->Type)
     {
@@ -507,7 +507,6 @@ BOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData* data)
     }*/
     ConvertAttenuationModelFromDX5(lightData.Attenuation0, lightData.Attenuation1, lightData.Attenuation2, data->Range);
     return SUCCEEDED(m_Device->SetLight(Light, &lightData));
-    return 1;
 }
 
 BOOL CKDX9RasterizerContext::EnableLight(CKDWORD Light, BOOL Enable)
@@ -969,11 +968,13 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
     CKDWORD vertexSize;
     CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
     //workaround for 2D Frame without UV
+#if WORKAROUND_2DFRAME
     if (!(vertexFormat & CKRST_VF_TEXMASK))
     {
         vertexFormat |= CKRST_VF_TEX1;
         vertexSize += 8;
     }
+#endif
     if ((data->Flags & CKRST_DP_DOCLIP))
     {
         SetRenderState(VXRENDERSTATE_CLIPPING, 1);
@@ -2073,37 +2074,23 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
     // TODO: Utilize cache
     HRESULT hr;
     //assume we always have at least one set of texture coords, sh*tty workaround for 2D Frame rendering
+#if WORKAROUND_2DFRAME
     if (!(VFormat & D3DFVF_TEXCOUNT_MASK))
         VFormat |= D3DFVF_TEX1;
+#endif
+    if (Buffer != m_CurrentVertexBufferCache || m_CurrentVertexSizeCache != VSize)
+    {
+        hr = m_Device->SetStreamSource(0, NULL, 0, 0);
+        assert(SUCCEEDED(hr));
+
+        hr = m_Device->SetStreamSource(0, Buffer, 0, VSize);
+        assert(SUCCEEDED(hr));
+        m_CurrentVertexBufferCache = Buffer;
+        m_CurrentVertexShaderCache = VSize;
+    }
+
     hr = m_Device->SetFVF(VFormat);
     assert(SUCCEEDED(hr));
-    hr = m_Device->SetStreamSource(0, Buffer, 0, VSize);
-    assert(SUCCEEDED(hr));
-    
-    //if (m_CurrentVertexShaderCache)
-    //{
-    //    CKDX9VertexShaderDesc *desc = static_cast<CKDX9VertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShaderCache]);
-    //    if (desc)
-    //    {
-    //        assert(SUCCEEDED(m_Device->SetVertexShader(NULL)));
-    //        assert(SUCCEEDED(m_Device->SetFVF(VFormat)));
-    //        desc->DxShader = NULL;
-    //    }
-    //} else
-    //{
-    //    if (VFormat != m_CurrentVertexFormatCache)
-    //    {
-    //        m_CurrentVertexFormatCache = VFormat;
-    //        assert(SUCCEEDED(m_Device->SetFVF(VFormat)));
-    //    }
-    //}
-    //if (Buffer != m_CurrentVertexBufferCache || m_CurrentVertexSizeCache != VSize)
-    //{
-    //    //assert(SUCCEEDED(m_Device->GetStreamSource(0, &Buffer, &offset, NULL)));
-    //    assert(SUCCEEDED(m_Device->SetStreamSource(0, Buffer, 0, VSize)));
-    //    m_CurrentVertexBufferCache = Buffer;
-    //    m_CurrentVertexSizeCache = VSize;
-    //}
 }
 
 BOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc* DesiredFormat)
@@ -2191,11 +2178,13 @@ BOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc* 
         return 0;
     DWORD vfmt = DesiredFormat->m_VertexFormat;
     DWORD vsize = DesiredFormat->m_VertexSize;
+#if WORKAROUND_2DFRAME
     if (! (vfmt & D3DFVF_TEXCOUNT_MASK)) //workaround for 2D Frames without UV
     {
         vfmt |= D3DFVF_TEX1;
         vsize += 8;
     }
+#endif
     DWORD usage = 0;
     if (DesiredFormat->m_Flags & CKRST_VB_DYNAMIC)
         usage |= D3DUSAGE_DYNAMIC;
