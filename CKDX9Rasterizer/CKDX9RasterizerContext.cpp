@@ -160,19 +160,14 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
     }
     // screendump?
     HRESULT result =
-        /*m_Owner->m_D3D9->CreateDeviceEx(Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
-                                        BehaviorFlag, &m_PresentParams, Fullscreen ? &DisplayMode : NULL, &m_Device);*/
-        m_Owner->m_D3D9->CreateDevice(Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
-                                        BehaviorFlag, &m_PresentParams, &m_Device);
+        m_Owner->m_D3D9->CreateDeviceEx(Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
+                                        BehaviorFlag, &m_PresentParams, Fullscreen ? &DisplayMode : NULL, &m_Device);
     if (FAILED(result) && m_PresentParams.MultiSampleType)
     {
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
-        result = /*m_Owner->m_D3D9->CreateDeviceEx(Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
+        result = m_Owner->m_D3D9->CreateDeviceEx(Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
                                                  BehaviorFlag, &m_PresentParams, Fullscreen ? &DisplayMode : NULL,
-                                                 &m_Device);*/
-            m_Owner->m_D3D9->CreateDevice(Driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
-                                            BehaviorFlag, &m_PresentParams, 
-                                            &m_Device);
+                                                 &m_Device);
     }
 
     if (Fullscreen)

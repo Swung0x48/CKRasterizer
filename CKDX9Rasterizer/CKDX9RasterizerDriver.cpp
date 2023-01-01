@@ -125,7 +125,7 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 {
 	m_AdapterIndex = AdapterIndex;
 	m_Inited = TRUE;
-    IDirect3D9* pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
+    IDirect3D9Ex* pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
 	pD3D->GetAdapterIdentifier(AdapterIndex, D3DENUM_WHQL_LEVEL, &m_D3DIdentifier);
 	D3DDISPLAYMODE DisplayMode;
 	pD3D->GetAdapterDisplayMode(AdapterIndex, &DisplayMode);

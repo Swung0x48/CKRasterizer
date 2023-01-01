@@ -46,24 +46,21 @@ XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
 	this->m_MainWindow = AppWnd;
 	this->m_Init = TRUE;
 	
-	HRESULT result = E_FAIL;
+	HRESULT hr = E_FAIL;
 
 	// Create the D3D object, which is needed to create the D3DDevice.
-    m_D3D9 = Direct3DCreate9(D3D_SDK_VERSION);
-    if (!m_D3D9)
+    hr = Direct3DCreate9Ex(D3D_SDK_VERSION, &m_D3D9);
+    if (FAILED(hr))
 	{
 		m_D3D9 = NULL;
 		return FALSE;
 	}
-    if (m_D3D9)
-    {
-        UINT count = m_D3D9->GetAdapterCount();
-		for (UINT i = 0; i < count; ++i) {
-			CKDX9RasterizerDriver* driver = new CKDX9RasterizerDriver(this);
-			if (!driver->InitializeCaps(i, D3DDEVTYPE_HAL))
-				delete driver;
-			m_Drivers.PushBack(driver);
-		}
+	UINT count = m_D3D9->GetAdapterCount();
+	for (UINT i = 0; i < count; ++i) {
+		CKDX9RasterizerDriver* driver = new CKDX9RasterizerDriver(this);
+		if (!driver->InitializeCaps(i, D3DDEVTYPE_HAL))
+			delete driver;
+		m_Drivers.PushBack(driver);
 	}
 
 	return TRUE;
