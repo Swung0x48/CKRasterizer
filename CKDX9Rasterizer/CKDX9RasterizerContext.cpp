@@ -5,15 +5,22 @@
 #define LOG_LOADTEXTURE 0
 #define LOG_CREATETEXTURE 0
 #define LOG_DRAWPRIMITIVE 0
-#define LOG_SETTEXURESTAGESTATE 1
-#define LOG_FLUSHCACHES 1
+#define LOG_SETTEXURESTAGESTATE 0
+#define LOG_FLUSHCACHES 0
+#define LOG_BATCHSTATS 0
 
-#define USE_D3DSTATEBLOCKS 1 //disable this for now, it f*cks up a bunch of stuff
+#define USE_D3DSTATEBLOCKS 1
 
 
 #if STEP
 #include <conio.h>
 static bool step_mode = false;
+#endif
+
+#if LOG_BATCHSTATS
+static int directbat = 0;
+static int vbbat = 0;
+static int vbibbat = 0;
 #endif
 
 CKDX9RasterizerContext::CKDX9RasterizerContext() :
@@ -364,6 +371,12 @@ BOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
     fprintf(stderr, "buffer swap\n");
     ZeroMemory(texture_used, 100 * sizeof(int));
 #endif
+#if LOGGING && LOG_BATCHSTATS
+    fprintf(stderr, "batch stats: direct %d, vb %d, vbib %d\n", directbat, vbbat, vbibbat);
+    directbat = 0;
+    vbbat = 0;
+    vbibbat = 0;
+#endif
 #if STEP
     int x = _getch();
     if (x == 'z')
@@ -640,7 +653,7 @@ BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
         (desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture])) != NULL && desc->DxTexture != NULL)
     {
         hr = m_Device->SetTexture(Stage, desc->DxTexture);
-        if (Stage == 0)
+        /*if (Stage == 0)
         {
             hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
             assert(SUCCEEDED(hr));
@@ -654,11 +667,11 @@ BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
             assert(SUCCEEDED(hr));
             m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_CURRENT);
             assert(SUCCEEDED(hr));
-        }
+        }*/
     } else
     {
         hr = m_Device->SetTexture(Stage, NULL);
-        if (Stage == 0)
+        /*if (Stage == 0)
         {
             hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
             assert(SUCCEEDED(hr));
@@ -668,7 +681,7 @@ BOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
             assert(SUCCEEDED(hr));
             hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
             assert(SUCCEEDED(hr));
-        }
+        }*/
     }
 
     return SUCCEEDED(hr);
@@ -688,6 +701,12 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
             break;
         case CKRST_TSS_ADDRESSV:
             m_Device->SetSamplerState(Stage, D3DSAMP_ADDRESSV, Value);
+            break;
+        case CKRST_TSS_BORDERCOLOR:
+        case CKRST_TSS_MIPMAPLODBIAS:
+        case CKRST_TSS_MAXMIPMLEVEL:
+        case CKRST_TSS_MAXANISOTROPY:
+            m_Device->SetSamplerState(Stage, (D3DSAMPLERSTATETYPE)(Tss - (CKRST_TSS_BORDERCOLOR - D3DSAMP_BORDERCOLOR)), Value);
             break;
         case CKRST_TSS_MAGFILTER:
             if (m_PresentInterval == 0)
@@ -730,12 +749,12 @@ BOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGES
         case CKRST_TSS_MINFILTER:
             if (m_PresentInterval == 0 && m_CurrentPresentInterval == 0)
             {
-                LPDIRECT3DSTATEBLOCK9 block = m_TextureMagFilterStateBlocks[Value][Stage];
+                LPDIRECT3DSTATEBLOCK9 block = m_TextureMinFilterStateBlocks[Value][Stage];
                 if (block)
                 {
                     HRESULT hr = block->Apply();
 #if LOGGING && LOG_SETTEXURESTAGESTATE
-                    fprintf(stderr, "Applying TextureMagFilterStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage,
+                    fprintf(stderr, "Applying TextureMinFilterStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage,
                             hr);
 #endif
                     return SUCCEEDED(hr);
@@ -941,6 +960,9 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
         _getch();
     }
 #endif
+#if LOG_BATCHSTATS
+    ++directbat;
+#endif
     if (!m_SceneBegined)
         BeginScene();
     CKBOOL clip = 0;
@@ -1001,6 +1023,9 @@ BOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Vert
     if (step_mode)
         _getch();
 #endif
+#if LOG_BATCHSTATS
+    ++vbbat;
+#endif
     if (VertexBuffer >= m_VertexBuffers.Size())
         return 0;
     CKVertexBufferDesc* vertexBufferDesc = m_VertexBuffers[VertexBuffer];
@@ -1020,6 +1045,9 @@ BOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB
 #if STEP
     if (step_mode)
         _getch();
+#endif
+#if LOG_BATCHSTATS
+    ++vbibbat;
 #endif
     if (VB >= m_VertexBuffers.Size())
         return FALSE;

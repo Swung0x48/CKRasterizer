@@ -151,9 +151,9 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
 					(int) BytesPerPixel(DisplayMode.Format) * 8,
 					(int)DisplayMode.RefreshRate });
 			}
-            // pretend we have a 640x480 @ 16bpp mode for compatibility reasons
-            m_DisplayModes.PushBack({640, 480, 16, (int)DisplayMode.RefreshRate});
-		}
+        }
+        // pretend we have a 640x480 @ 16bpp mode for compatibility reasons
+        m_DisplayModes.PushBack({640, 480, 16, (int)DisplayMode.RefreshRate});
 	}
     HRESULT hr;
 
