@@ -126,7 +126,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
 	    m_PresentParams.BackBufferFormat,
         D3DSCANLINEORDERING_PROGRESSIVE
 	};
-	DWORD BehaviorFlag = D3DCREATE_MULTITHREADED;
+	DWORD BehaviorFlag = 0;
     if (m_Antialias == D3DMULTISAMPLE_NONE)
     {
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
