@@ -105,9 +105,9 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
 	m_PresentParams.hDeviceWindow = (HWND) Window;
 	m_PresentParams.BackBufferWidth = Width;
 	m_PresentParams.BackBufferHeight = Height;
-	m_PresentParams.BackBufferCount = 1;
+	m_PresentParams.BackBufferCount = 2;
 	m_PresentParams.Windowed = !Fullscreen;
-	m_PresentParams.SwapEffect = D3DSWAPEFFECT_DISCARD;
+	m_PresentParams.SwapEffect = D3DSWAPEFFECT_FLIPEX;
 	m_PresentParams.EnableAutoDepthStencil = TRUE;
 	m_PresentParams.FullScreen_RefreshRateInHz = Fullscreen ? RefreshRate : D3DPRESENT_RATE_DEFAULT;
     m_PresentParams.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
@@ -126,7 +126,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
 	    m_PresentParams.BackBufferFormat,
         D3DSCANLINEORDERING_PROGRESSIVE
 	};
-	DWORD BehaviorFlag = 0;
+	DWORD BehaviorFlag = D3DCREATE_ENABLE_PRESENTSTATS;
     if (m_Antialias == D3DMULTISAMPLE_NONE)
     {
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
@@ -334,18 +334,22 @@ BOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
         }
     }
 
-    HRESULT hr = D3DERR_INVALIDCALL;
-    if (m_Driver->m_Owner->m_FullscreenContext == this)
-        hr = m_Device->Present(NULL, NULL, NULL, NULL);
+    HRESULT hr = S_OK;
+    /*if (m_Driver->m_Owner->m_FullscreenContext == this)
+        hr = m_Device->PresentEx(NULL, NULL, NULL, NULL, D3DPRESENT_FORCEIMMEDIATE);
     else
     {
         if (!m_TransparentMode)
         {
             RECT SourceRect { 0, 0, (LONG)m_Width, (LONG)m_Height };
             RECT DestRect{(LONG)m_PosX, (LONG)m_PosY, (LONG)(m_PosX + m_Width), (LONG)(m_PosY + m_Height) };
-            hr = m_Device->Present(&SourceRect, &DestRect, NULL, NULL);
+            hr = m_Device->PresentEx(&SourceRect, &DestRect, NULL, NULL, D3DPRESENT_FORCEIMMEDIATE);
         }
-    }
+    }*/
+    hr = m_Device->PresentEx(
+        NULL, NULL, NULL, NULL, 
+        0);
+        
     if (hr == D3DERR_DEVICELOST)
     {
         hr = m_Device->TestCooperativeLevel();
