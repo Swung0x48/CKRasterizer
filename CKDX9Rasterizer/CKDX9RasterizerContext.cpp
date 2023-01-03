@@ -43,6 +43,27 @@ CKDX9RasterizerContext::CKDX9RasterizerContext() :
 
 CKDX9RasterizerContext::~CKDX9RasterizerContext()
 {
+    ReleaseStateBlocks();
+    ReleaseIndexBuffers();
+    FlushObjects(CKRST_OBJ_ALL);
+    ReleaseScreenBackup();
+    if (m_DefaultBackBuffer)
+        m_DefaultBackBuffer->Release();
+    if (m_DefaultDepthBuffer)
+        m_DefaultDepthBuffer->Release();
+    if (m_Owner->m_FullscreenContext == this)
+        m_Owner->m_FullscreenContext = NULL;
+    if (m_Device)
+        m_Device->Release();
+    m_StateCacheMissMask.Clear();
+    m_StateCacheHitMask.Clear();
+    m_DirtyRects.Clear();
+    m_PixelShaders.Clear();
+    m_VertexShaders.Clear();
+    m_IndexBuffers.Clear();
+    m_VertexBuffers.Clear();
+    m_Sprites.Clear();
+    m_Textures.Clear();
 }
 
 int DepthBitPerPixelFromFormat(D3DFORMAT Format, CKDWORD *StencilSize)
