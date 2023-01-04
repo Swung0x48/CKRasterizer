@@ -325,11 +325,11 @@ BOOL CKDX9RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD
     if (m_Device)
     {
         if (!m_TransparentMode && (Flags & CKRST_CTXCLEAR_COLOR) != 0 && m_Bpp)
-            result = 1;
+            result = D3DCLEAR_TARGET;
         if ((Flags & CKRST_CTXCLEAR_STENCIL) != 0 && m_StencilBpp)
-            result |= 4;
+            result |= D3DCLEAR_STENCIL;
         if ((Flags & CKRST_CTXCLEAR_DEPTH) != 0 && m_ZBpp)
-            result |= 2;
+            result |= D3DCLEAR_ZBUFFER;
         return SUCCEEDED(m_Device->Clear(RectCount, (D3DRECT*)rects, result, Ccol, Z, Stencil));
     }
     return result == 0;
