@@ -14,6 +14,8 @@
 #include "GLFW/glfw3native.h"
 
 
+class CKGLRasterizerContext;
+
 class CKGLRasterizer : public CKRasterizer
 {
 public:
@@ -42,6 +44,57 @@ public:
     UINT m_AdapterIndex;
 	WNDCLASSEXA m_WndClass;
 };
+
+typedef struct CKGLVertexBufferDesc : public CKVertexBufferDesc
+{
+public:
+    GLuint GLBuffer;
+public:
+    CKGLVertexBufferDesc() { GLBuffer = 0; }
+    ~CKGLVertexBufferDesc() { glDeleteBuffers(1, &GLBuffer); }
+} CKGLVertexBufferDesc;
+
+typedef struct CKGLIndexBufferDesc : public CKIndexBufferDesc
+{
+public:
+    GLuint GLBuffer;
+public:
+    CKGLIndexBufferDesc() { GLBuffer = 0; }
+    ~CKGLIndexBufferDesc() { glDeleteBuffers(1, &GLBuffer); }
+} CKGLIndexBufferDesc;
+
+typedef struct CKGLVertexShaderDesc : public CKVertexShaderDesc
+{
+public:
+    GLuint GLShader;
+    CKGLRasterizerContext *Owner;
+    XArray<BYTE> m_FunctionData;
+
+public:
+    BOOL Create(CKGLRasterizerContext *Ctx, CKVertexShaderDesc *Format);
+    virtual ~CKGLVertexShaderDesc();
+    CKGLVertexShaderDesc()
+    {
+        GLShader = 0;
+        Owner = NULL;
+    }
+} CKGLVertexShaderDesc;
+
+typedef struct CKGLPixelShaderDesc : public CKPixelShaderDesc
+{
+public:
+    GLuint GLShader;
+    CKGLRasterizerContext *Owner;
+    XArray<BYTE> m_FunctionData;
+public:
+    BOOL Create(CKGLRasterizerContext *Ctx, CKGLPixelShaderDesc *Format);
+    virtual ~CKGLPixelShaderDesc();
+    CKGLPixelShaderDesc()
+    {
+        GLShader = 0;
+        Owner = NULL;
+    }
+} CKGLPixelShaderDesc;
 
 class CKGLRasterizerContext : public CKRasterizerContext
 {
@@ -135,7 +188,7 @@ protected:
     void FlushCaches();
     void FlushNonManagedObjects();
     void ReleaseStateBlocks();
-    void ReleaseIndexBuffers();
+    void ReleaseBuffers();
     void ClearStreamCache();
     void ReleaseScreenBackup();
 public:

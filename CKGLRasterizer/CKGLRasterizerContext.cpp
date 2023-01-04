@@ -1,5 +1,48 @@
 #include "CKGLRasterizer.h"
+#define LOGGING 1
+#define STEP 0
+#define LOG_LOADTEXTURE 1
+#define LOG_CREATETEXTURE 1
+#define LOG_DRAWPRIMITIVE 0
+#define LOG_DRAWPRIMITIVEVB 0
+#define LOG_DRAWPRIMITIVEVBIB 0
+#define LOG_SETTEXURESTAGESTATE 1
+#define LOG_FLUSHCACHES 1
+#define LOG_BATCHSTATS 1
 
+#define USE_D3DSTATEBLOCKS 1
+
+#if STEP
+#include <conio.h>
+static bool step_mode = false;
+#endif
+
+#if LOG_BATCHSTATS
+static int directbat = 0;
+static int vbbat = 0;
+static int vbibbat = 0;
+#endif
+
+const char* vertexShader = 
+"#version 330 core\n"
+"layout (location=0) in vec3 xyzw;\n"
+"layout (location=1) in vec4 col;\n"
+"layout (location=2) in vec2 texcoord;\n"
+"out vec4 fragcol;\n"
+"uniform mat4 modv;\n"
+"uniform mat4 proj;\n"
+"void main(){\n"
+"    gl_Position=proj*modv*xyzw;\n"
+"    fragcol=color;\n"
+"}";
+
+const char* fragShader =
+"#version 330 core\n"
+"in vec4 fragcol;\n"
+"out vec4 color;\n"
+"void main(){\n"
+"    color=fragcol;\n"
+"}";
 
 CKGLRasterizerContext::CKGLRasterizerContext()
 {
@@ -7,9 +50,9 @@ CKGLRasterizerContext::CKGLRasterizerContext()
 
 CKGLRasterizerContext::~CKGLRasterizerContext()
 {
-    //glfwDestroyWindow(m_GLFWwindow);
     if (m_Owner->m_FullscreenContext == this)
         m_Owner->m_FullscreenContext = NULL;
+    ReleaseDC((HWND)m_Window, m_DC);
 }
 
 LRESULT WINAPI GL_WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
@@ -31,6 +74,11 @@ LRESULT WINAPI GL_WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
 CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
     CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
+#if (STEP) || (LOGGING)
+    AllocConsole();
+    freopen("CON", "w", stdout);
+    freopen("CON", "w", stderr);
+#endif
     HINSTANCE hInstance = GetModuleHandle(NULL);
     WNDCLASSEXA wcex;
     ZeroMemory(&wcex, sizeof(wcex));
@@ -40,7 +88,6 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     wcex.hInstance = GetModuleHandle(NULL);
     wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
     wcex.lpszClassName = "Core";
- 
     RegisterClassExA(&wcex);
 
     HWND fakeWND = CreateWindowA(
@@ -143,30 +190,17 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     }
     SetWindowTextA((HWND)Window, (char*)glGetString(GL_VERSION));
     ShowWindow((HWND)Window, SW_SHOW);
-    MessageBoxA(NULL, (char*)glGetString(GL_VERSION), (char*)glGetString(GL_VENDOR), NULL);
+    //MessageBoxA(NULL, (char*)glGetString(GL_VERSION), (char*)glGetString(GL_VENDOR), NULL);
+    m_Height = Height;
+    m_Width = Width;
+    m_Bpp = Bpp;
+    m_Fullscreen = Fullscreen;
+    m_RefreshRate = RefreshRate;
+    m_ZBpp = Zbpp;
+    m_StencilBpp = StencilBpp;
+
     if (m_Fullscreen)
         m_Driver->m_Owner->m_FullscreenContext = this;
-    /*if (!glfwInit())
-        return 0;
-    m_GLFWwindow = glfwCreateWindow(Width, Height, "Virtools OpenGL Context", NULL, NULL);
-    if (!m_GLFWwindow)
-    {
-        glfwTerminate();
-        return 0;
-    }
-    m_Window = glfwGetWin32Window(m_GLFWwindow);
-    LONG PrevStyle = GetWindowLongA((HWND)m_Window, GWL_STYLE);
-    SetWindowLongA((HWND)m_Window, -16, PrevStyle | WS_CHILDWINDOW);
-    glfwMakeContextCurrent(m_GLFWwindow);
-    if (glewInit() != GLEW_OK)
-    {
-        return 0;
-    }
-    CKRECT Rect;
-    VxGetWindowRect(Window, &Rect);
-	WIN_HANDLE Parent = VxGetParent(Window);
-	VxScreenToClient(Parent, reinterpret_cast<CKPOINT*>(&Rect));
-	VxScreenToClient(Parent, reinterpret_cast<CKPOINT*>(&Rect.right));*/
     return 1;
 }
 
@@ -177,50 +211,61 @@ CKBOOL CKGLRasterizerContext::Resize(int PosX, int PosY, int Width, int Height, 
 
 CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD Stencil, int RectCount, CKRECT *rects)
 {
-    glClearColor(0.129f, 0.586f, 0.949f, 1.0f);
+    GLbitfield mask = 0;
+    if (!m_TransparentMode && (Flags & CKRST_CTXCLEAR_COLOR) != 0 && m_Bpp)
+            mask = GL_COLOR_BUFFER_BIT;
+    if ((Flags & CKRST_CTXCLEAR_STENCIL) != 0 && m_StencilBpp)
+        mask |= GL_STENCIL_BUFFER_BIT;
+    if ((Flags & CKRST_CTXCLEAR_DEPTH) != 0 && m_ZBpp)
+        mask |= GL_DEPTH_BUFFER_BIT;
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    return 1;
+    return glGetError() == GL_NO_ERROR;
 }
 
 CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 {
-    glBegin(GL_TRIANGLES);
-
-    glColor3f(1.0, 0.0, 0.0);
-    glVertex3f(0.0, 1.0, 0.0);
-
-    glColor3f(0.0, 1.0, 0.0);
-    glVertex3f(-1.0, -1.0, 0.0);
-
-    glColor3f(0.0, 0.0, 1.0);
-    glVertex3f(1.0, -1.0, 0.0);
-
-    glEnd();
-
+#if LOGGING && LOG_BATCHSTATS
+    fprintf(stderr, "batch stats: direct %d, vb %d, vbib %d\r", directbat, vbbat, vbibbat);
+    directbat = 0;
+    vbbat = 0;
+    vbibbat = 0;
+#endif
+#if STEP
+    int x = _getch();
+    if (x == 'z')
+        step_mode = true;
+    else if (x == 'x')
+        step_mode = false;
+#endif
+    glClearColor(0.5, 0.1, 0.3, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
     SwapBuffers(m_DC);
-    /*glfwSwapBuffers(m_GLFWwindow);
-    glfwPollEvents();*/
+
     return 1;
 }
 
 CKBOOL CKGLRasterizerContext::BeginScene()
 {
-    return CKRasterizerContext::BeginScene();
+    glBegin(GL_TRIANGLES);
+    return glGetError() == GL_NO_ERROR;
 }
 
 CKBOOL CKGLRasterizerContext::EndScene()
 {
-    return CKRasterizerContext::EndScene();
+    glEnd();
+    return glGetError() == GL_NO_ERROR;
 }
 
 CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
-    return CKRasterizerContext::SetLight(Light, data);
+    return glGetError() == GL_NO_ERROR;
 }
 
 CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 {
-    return CKRasterizerContext::EnableLight(Light, Enable);
+    glEnable(GL_LIGHTING);
+    return glGetError() == GL_NO_ERROR;
 }
 
 CKBOOL CKGLRasterizerContext::SetMaterial(CKMaterialData *mat)
@@ -230,12 +275,57 @@ CKBOOL CKGLRasterizerContext::SetMaterial(CKMaterialData *mat)
 
 CKBOOL CKGLRasterizerContext::SetViewport(CKViewportData *data)
 {
-    return CKRasterizerContext::SetViewport(data);
+    glViewport(data->ViewX, data->ViewY, data->ViewWidth, data->ViewHeight);
+    assert(glGetError() == GL_NO_ERROR);
+    glDepthRange(data->ViewZMin, data->ViewZMax);
+    return glGetError() == GL_NO_ERROR;
 }
 
 CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat)
 {
-    return CKRasterizerContext::SetTransformMatrix(Type, Mat);
+    CKDWORD UnityMatrixMask = 0;
+    switch (Type)
+    {
+        case VXMATRIX_WORLD:
+            m_WorldMatrix = Mat;
+            UnityMatrixMask = WORLD_TRANSFORM;
+		    Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            m_MatrixUptodate &= ~0U ^ WORLD_TRANSFORM;
+            break;
+        case VXMATRIX_VIEW:
+            m_ViewMatrix = Mat;
+            UnityMatrixMask = VIEW_TRANSFORM;
+            Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            m_MatrixUptodate = 0;
+            break;
+        case VXMATRIX_PROJECTION:
+            m_ProjectionMatrix = Mat;
+            UnityMatrixMask = PROJ_TRANSFORM;
+            m_MatrixUptodate = 0;
+            break;
+        case VXMATRIX_TEXTURE0:
+        case VXMATRIX_TEXTURE1:
+        case VXMATRIX_TEXTURE2:
+        case VXMATRIX_TEXTURE3:
+        case VXMATRIX_TEXTURE4:
+        case VXMATRIX_TEXTURE5:
+        case VXMATRIX_TEXTURE6:
+        case VXMATRIX_TEXTURE7:
+            UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
+            break;
+        default:
+            return FALSE;
+    }
+    if (VxMatrix::Identity() == Mat)
+    {
+        if ((m_UnityMatrixMask & UnityMatrixMask) != 0)
+            return TRUE;
+        m_UnityMatrixMask |= UnityMatrixMask;
+    } else
+    {
+        m_UnityMatrixMask &= ~UnityMatrixMask;
+    }
+    return 1;
 }
 
 CKBOOL CKGLRasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
@@ -250,6 +340,9 @@ CKBOOL CKGLRasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *V
 
 CKBOOL CKGLRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 {
+#if LOGGING && LOG_SETTEXTURE
+    fprintf(stderr, "settexture %d %d\n", Texture, Stage);
+#endif
     return CKRasterizerContext::SetTexture(Texture, Stage);
 }
 
@@ -281,35 +374,100 @@ CKBOOL CKGLRasterizerContext::SetPixelShaderConstant(CKDWORD Register, const voi
 CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
     VxDrawPrimitiveData *data)
 {
-    return CKRasterizerContext::DrawPrimitive(pType, indices, indexcount, data);
+#if LOGGING && LOG_DRAWPRIMITIVE
+    fprintf(stderr, "drawprimitive ib %d\n", indexcount);
+#endif
+#if LOG_BATCHSTATS
+    ++directbat;
+#endif
+    return 1;
 }
 
 CKBOOL CKGLRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
     CKDWORD VertexCount, CKWORD *indices, int indexcount)
 {
-    return CKRasterizerContext::DrawPrimitiveVB(pType, VertexBuffer, StartIndex, VertexCount, indices, indexcount);
+#if LOGGING && LOG_DRAWPRIMITIVEVB
+    fprintf(stderr, "drawprimitive vb %d %d\n", VertexCount, indexcount);
+#endif
+#if STEP
+    if (step_mode)
+        _getch();
+#endif
+#if LOG_BATCHSTATS
+    ++vbbat;
+#endif
+    return 1;
 }
 
 CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
     CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
+#if LOGGING && LOG_DRAWPRIMITIVEVBIB
+    fprintf(stderr, "drawprimitive vbib %d %d\n", VertexCount, Indexcount);
+#endif
+#if STEP
+    if (step_mode)
+        _getch();
+#endif
+#if LOG_BATCHSTATS
+    ++vbibbat;
+#endif
     return CKRasterizerContext::DrawPrimitiveVBIB(pType, VB, IB, MinVIndex, VertexCount, StartIndex, Indexcount);
 }
 
 CKBOOL CKGLRasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
 {
-    return CKRasterizerContext::CreateObject(ObjIndex, Type, DesiredFormat);
+    int result;
+
+    if (ObjIndex >= m_Textures.Size())
+        return 0;
+    switch (Type)
+    {
+        case CKRST_OBJ_TEXTURE:
+            result = CreateTexture(ObjIndex, static_cast<CKTextureDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_SPRITE:
+        {
+            return 0;
+            result = CreateSprite(ObjIndex, static_cast<CKSpriteDesc *>(DesiredFormat));
+            CKSpriteDesc* desc = m_Sprites[ObjIndex];
+            fprintf(stderr, "idx: %d\n", ObjIndex);
+            for (auto it = desc->Textures.Begin(); it != desc->Textures.End(); ++it)
+            {
+                fprintf(stderr, "(%d,%d) WxH: %dx%d, SWxSH: %dx%d\n", it->x, it->y, it->w, it->h, it->sw, it->sh);
+            }
+            fprintf(stderr, "---\n");
+            break;
+        }
+        case CKRST_OBJ_VERTEXBUFFER:
+            result = CreateVertexBuffer(ObjIndex, static_cast<CKVertexBufferDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_INDEXBUFFER:
+            result = CreateIndexBuffer(ObjIndex, static_cast<CKIndexBufferDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_VERTEXSHADER:
+            result =
+                CreateVertexShader(ObjIndex, static_cast<CKVertexShaderDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_PIXELSHADER:
+            result =
+                CreatePixelShader(ObjIndex, static_cast<CKPixelShaderDesc *>(DesiredFormat));
+            break;
+        default:
+            return 0;
+    }
+    return result;
 }
 
 void * CKGLRasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
     CKRST_LOCKFLAGS Lock)
 {
-    return CKRasterizerContext::LockVertexBuffer(VB, StartVertex, VertexCount, Lock);
+    return NULL;
 }
 
 CKBOOL CKGLRasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 {
-    return CKRasterizerContext::UnlockVertexBuffer(VB);
+    return 0;
 }
 
 CKBOOL CKGLRasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
@@ -370,6 +528,7 @@ CKBOOL CKGLRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Desi
 
 CKBOOL CKGLRasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat)
 {
+    
     return 1;
 }
 
@@ -380,12 +539,44 @@ CKBOOL CKGLRasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDe
 
 CKBOOL CKGLRasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat)
 {
+    if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
+        return 0;
+    CKGLVertexBufferDesc* desc = static_cast<CKGLVertexBufferDesc *>(m_VertexBuffers[VB]);
+    delete desc;
+    desc = new CKGLVertexBufferDesc;
+    desc->m_VertexSize = DesiredFormat->m_VertexSize;
+    desc->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
+    desc->m_Flags = DesiredFormat->m_CurrentVCount;
+    desc->m_MaxVertexCount = DesiredFormat->m_CurrentVCount;
+    desc->m_VertexFormat = DesiredFormat->m_VertexFormat;
+
+    GLuint vbo;
+    glGenBuffers(1, &vbo);
+    glBufferData(GL_ARRAY_BUFFER, 
+        DesiredFormat->m_MaxVertexCount * DesiredFormat->m_VertexSize, 
+        nullptr, GL_STATIC_DRAW);
+    desc->GLBuffer = vbo;
+    m_VertexBuffers[VB] = desc;
     return 1;
 }
 
 CKBOOL CKGLRasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat)
-{    return 1;
+{
+    if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
+        return 0;
+    CKGLIndexBufferDesc* desc = static_cast<CKGLIndexBufferDesc *>(m_IndexBuffers[IB]);
+    delete desc;
+    desc = new CKGLIndexBufferDesc;
+    desc->m_Flags = DesiredFormat->m_Flags;
+    desc->m_CurrentICount = DesiredFormat->m_CurrentICount;
+    desc->m_MaxIndexCount = DesiredFormat->m_MaxIndexCount;
 
+    GLuint ibo;
+    glGenBuffers(1, &ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * DesiredFormat->m_MaxIndexCount, nullptr, GL_STATIC_DRAW);
+    desc->GLBuffer = ibo;
+    m_IndexBuffers[IB] = desc;
+    return 1;
 }
 
 void CKGLRasterizerContext::FlushCaches()
@@ -400,8 +591,9 @@ void CKGLRasterizerContext::ReleaseStateBlocks()
 {
 }
 
-void CKGLRasterizerContext::ReleaseIndexBuffers()
+void CKGLRasterizerContext::ReleaseBuffers()
 {
+    
 }
 
 void CKGLRasterizerContext::ClearStreamCache()
