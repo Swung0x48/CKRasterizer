@@ -18,21 +18,15 @@
     <ClInclude Include="CKGLRasterizer.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="CKGLSystemInfo.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="CKGlContext.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CKGLRasterizer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="CKGLSystemInfo.cpp">
+    <ClCompile Include="CKGLRasterizerDriver.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="CKGlContext.cpp">
+    <ClCompile Include="CKGLRasterizerContext.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
