@@ -1,3 +1,6 @@
 [submodule "vendor/CKRasterizerLib"]
 	path = vendor/CKRasterizerLib
 	url = https://github.com/doyaGu/CKRasterizerLib.git
+[submodule "vendor/OpenGL-Registry"]
+	path = vendor/OpenGL-Registry
+	url = https://github.com/KhronosGroup/OpenGL-Registry
