@@ -19,7 +19,7 @@ public:
 CKRasterizer* CKGLRasterizerStart(WIN_HANDLE AppWnd) {
 	CKRasterizer* rst = new CKGLRasterizer;
 	if (!rst)
-		return NULL;
+		return nullptr;
 	if (!rst->Start(AppWnd))
 		delete rst;
 	return rst;

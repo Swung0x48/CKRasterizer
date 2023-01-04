@@ -21,12 +21,12 @@
   <ItemGroup>
     <ClInclude Include="CKGlContext.h" />
     <ClInclude Include="CKGLRasterizer.h" />
-    <ClInclude Include="CKGlSystemInfo.h" />
+    <ClInclude Include="CKGLSystemInfo.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CKGlContext.cpp" />
     <ClCompile Include="CKGLRasterizer.cpp" />
-    <ClCompile Include="CKGlSystemInfo.cpp" />
+    <ClCompile Include="CKGLSystemInfo.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
@@ -104,14 +104,14 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)vendor\glfw\include;$(SolutionDir)vendor\virtools\include;$(SolutionDir)vendor\glew\include;$(SolutionDir)vendor\CKRasterizerLib\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VT21SDK_DIR)Include;$(SolutionDir)vendor\glfw\include;$(SolutionDir)vendor\glew\include;$(SolutionDir)vendor\CKRasterizerLib\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4996</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalLibraryDirectories>$(SolutionDir)vendor\glfw\lib;$(SolutionDir)vendor\CKRasterizerLib\build\src\Debug;$(VT21SDK_DIR)Lib;$(SolutionDir)vendor\glew\lib\Release\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)vendor\CKRasterizerLib\build\src\Debug;$(VT21SDK_DIR)Lib;$(SolutionDir)vendor\glfw\lib;$(SolutionDir)vendor\glew\lib\Release\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3_mt.lib;opengl32.lib;VxMath.lib;CK2.lib;glew32s.lib;CKRasterizerLib.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -134,7 +134,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalLibraryDirectories>$(SolutionDir)vendor\glfw\lib;$(SolutionDir)vendor\CKRasterizerLib\lib\Release;$(SolutionDir)vendor\virtools\lib;$(SolutionDir)vendor\glew\lib\Release\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)vendor\CKRasterizerLib\build\src\Release;$(VT21SDK_DIR)Lib;$(SolutionDir)vendor\glfw\lib;$(SolutionDir)vendor\glew\lib\Release\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3_mt.lib;opengl32.lib;VxMath.lib;CK2.lib;glew32s.lib;CKRasterizerLib.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

@@ -18,7 +18,7 @@
     <ClInclude Include="CKGLRasterizer.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="CKGlSystemInfo.h">
+    <ClInclude Include="CKGLSystemInfo.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="CKGlContext.h">
@@ -29,7 +29,7 @@
     <ClCompile Include="CKGLRasterizer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="CKGlSystemInfo.cpp">
+    <ClCompile Include="CKGLSystemInfo.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="CKGlContext.cpp">
