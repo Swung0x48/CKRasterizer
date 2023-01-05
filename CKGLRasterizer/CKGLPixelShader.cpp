@@ -1,5 +1,11 @@
 #include "CKGLRasterizer.h"
 
+bool CKGLPixelShaderDesc::operator==(const CKPixelShaderDesc & that) const
+{
+    return this->m_Function == that.m_Function &&
+        this->m_FunctionSize == that.m_FunctionSize;
+}
+
 CKDWORD CKGLPixelShaderDesc::Create(CKGLRasterizerContext *Ctx, CKPixelShaderDesc *Format)
 {
     this->Owner = Ctx;

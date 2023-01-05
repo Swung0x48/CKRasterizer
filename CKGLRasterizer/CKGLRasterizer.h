@@ -15,6 +15,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 class CKGLRasterizerContext;
 
@@ -51,7 +52,9 @@ typedef struct CKGLVertexBufferDesc : public CKVertexBufferDesc
 {
 public:
     GLuint GLBuffer;
+    
 public:
+    bool operator==(const CKVertexBufferDesc &) const;
     void Populate(CKVertexBufferDesc* DesiredFormat);
     void Create();
     void Bind();
@@ -64,6 +67,7 @@ typedef struct CKGLIndexBufferDesc : public CKIndexBufferDesc
 public:
     GLuint GLBuffer;
 public:
+    bool operator==(const CKIndexBufferDesc &) const;
     void Populate(CKIndexBufferDesc* DesiredFormat);
     void Create();
     void Bind();
@@ -79,6 +83,7 @@ public:
     XArray<BYTE> m_FunctionData;
 
 public:
+    bool operator==(const CKVertexShaderDesc &) const;
     CKDWORD Create(CKGLRasterizerContext *Ctx, CKVertexShaderDesc *Format);
     virtual ~CKGLVertexShaderDesc();
     CKGLVertexShaderDesc()
@@ -95,6 +100,7 @@ public:
     CKGLRasterizerContext *Owner;
     XArray<BYTE> m_FunctionData;
 public:
+    bool operator==(const CKPixelShaderDesc &) const;
     CKDWORD Create(CKGLRasterizerContext *Ctx, CKPixelShaderDesc *Format);
     virtual ~CKGLPixelShaderDesc();
     CKGLPixelShaderDesc()
@@ -103,6 +109,69 @@ public:
         Owner = NULL;
     }
 } CKGLPixelShaderDesc;
+
+typedef struct GLVertexBufferElement {
+    GLenum type;
+    unsigned int count;
+    GLboolean normalized;
+
+    static unsigned int GetSizeOfType(GLenum type)
+    {
+        switch (type)
+        {
+            case GL_FLOAT: return 4;
+            case GL_UNSIGNED_INT: return 4;
+            case GL_UNSIGNED_BYTE: return 1;
+            default: break;
+        }
+        assert(false);
+        return 0;
+    }
+} GLVertexBufferElement;
+
+class GLVertexBufferLayout
+{
+public:
+    GLVertexBufferLayout() {}
+    template<typename T>
+    void push(unsigned int count)
+    {
+        assert(false);
+    }
+
+    template<>
+    void push<float>(unsigned int count)
+    {
+        elements_.push_back({ GL_FLOAT, count, GL_FALSE });
+        stride_ += GLVertexBufferElement::GetSizeOfType(GL_FLOAT) * count;
+    }
+
+    template<>
+    void push<unsigned int>(unsigned int count)
+    {
+        elements_.push_back({ GL_UNSIGNED_INT, count, GL_FALSE });
+        stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_INT) * count;
+    }
+
+    template<>
+    void push<unsigned char>(unsigned int count)
+    {
+        elements_.push_back({ GL_UNSIGNED_INT, count, GL_FALSE });
+        stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_INT) * count;
+    }
+    inline const std::vector<GLVertexBufferElement>& GetElements() const { return elements_; }
+    inline unsigned int GetStride() const { return stride_; }
+private:
+    std::vector<GLVertexBufferElement> elements_;
+    unsigned int stride_;
+};
+
+class GLVertexArray
+{
+public:
+    GLVertexArray();
+    ~GLVertexArray();
+};
 
 class CKGLRasterizerContext : public CKRasterizerContext
 {
@@ -185,8 +254,6 @@ public:
                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);
 protected:
-    BOOL InternalDrawPrimitive(CKDWORD VB, CKDWORD IB, CKDWORD VShader, CKDWORD PShader);
-    BOOL InternalDrawPrimitiveVAO(CKDWORD VAO, CKDWORD IB, CKDWORD VShader, CKDWORD PShader);
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);

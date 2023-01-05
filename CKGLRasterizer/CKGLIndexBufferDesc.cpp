@@ -1,6 +1,14 @@
 #include "CKGLRasterizer.h"
 
-void CKGLIndexBufferDesc::Populate(CKIndexBufferDesc* DesiredFormat)
+bool CKGLIndexBufferDesc::operator==(const CKIndexBufferDesc & that) const
+{
+    return
+        this->m_Flags == that.m_Flags &&
+        this->m_CurrentICount == that.m_CurrentICount &&
+        this->m_MaxIndexCount == that.m_MaxIndexCount;
+}
+
+void CKGLIndexBufferDesc::Populate(CKIndexBufferDesc *DesiredFormat)
 {
     this->m_Flags = DesiredFormat->m_Flags;          // CKRST_VBFLAGS
     this->m_MaxIndexCount = DesiredFormat->m_MaxIndexCount; // Max number of indices this buffer can contain
