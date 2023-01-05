@@ -4,7 +4,7 @@
 #define LOG_LOADTEXTURE 0
 #define LOG_CREATETEXTURE 0
 #define LOG_CREATEBUFFER 1
-#define LOG_DRAWPRIMITIVE 1
+#define LOG_DRAWPRIMITIVE 0
 #define LOG_DRAWPRIMITIVEVB 0
 #define LOG_DRAWPRIMITIVEVBIB 0
 #define LOG_SETTEXURESTAGESTATE 0
@@ -21,6 +21,25 @@ static int directbat = 0;
 static int vbbat = 0;
 static int vbibbat = 0;
 #endif
+
+void GLClearError()
+{
+    while (glGetError() != GL_NO_ERROR);
+}
+
+bool GLLogCall(const char* function, const char* file, int line)
+{
+    while (GLenum error = glGetError())
+    {
+        std::string str = std::to_string(error) + ": at " + 
+            function + " " + file + ":" + std::to_string(line);
+        MessageBoxA(NULL, str.c_str(), "OpenGL Error", NULL);
+        return false;
+    }
+
+    
+    return true;
+}
 
 const char* vertexShader = 
 "#version 330 core\n"
@@ -191,7 +210,8 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     }
     SetWindowTextA((HWND)Window, (char*)glGetString(GL_VERSION));
     ShowWindow((HWND)Window, SW_SHOW);
-    //MessageBoxA(NULL, (char*)glGetString(GL_VERSION), (char*)glGetString(GL_VENDOR), NULL);
+    MessageBoxA(NULL, (char*)glGetString(GL_VERSION), 
+        (char*)glGetString(GL_VENDOR), NULL);
     m_Height = Height;
     m_Width = Width;
     m_Bpp = Bpp;
@@ -218,13 +238,13 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     CKGLVertexShaderDesc* vs = static_cast<CKGLVertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShader]);
     CKGLPixelShaderDesc* ps = static_cast<CKGLPixelShaderDesc*>(m_PixelShaders[m_CurrentPixelShader]);
     if (m_CurrentProgram != 0)
-        glDeleteProgram(m_CurrentProgram);
+        GLCall(glDeleteProgram(m_CurrentProgram));
     m_CurrentProgram = glCreateProgram();
-    glAttachShader(m_CurrentProgram, vs->GLShader);
-    glAttachShader(m_CurrentProgram, ps->GLShader);
-    glLinkProgram(m_CurrentProgram);
-    glValidateProgram(m_CurrentProgram);
-    glUseProgram(m_CurrentProgram);
+    GLCall(glAttachShader(m_CurrentProgram, vs->GLShader));
+    GLCall(glAttachShader(m_CurrentProgram, ps->GLShader));
+    GLCall(glLinkProgram(m_CurrentProgram));
+    GLCall(glValidateProgram(m_CurrentProgram));
+    GLCall(glUseProgram(m_CurrentProgram));
     return 1;
 }
 
@@ -242,9 +262,9 @@ CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
         mask |= GL_STENCIL_BUFFER_BIT;
     if ((Flags & CKRST_CTXCLEAR_DEPTH) != 0 && m_ZBpp)
         mask |= GL_DEPTH_BUFFER_BIT;
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    return glGetError() == GL_NO_ERROR;
+    GLCall(glClearColor(0.0f, 0.0f, 0.0f, 1.0f));
+    GLCall(glClear(GL_COLOR_BUFFER_BIT));
+    return 1;
 }
 
 CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
@@ -269,14 +289,14 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 
 CKBOOL CKGLRasterizerContext::BeginScene()
 {
-    glBegin(GL_TRIANGLES);
-    return glGetError() == GL_NO_ERROR;
+    //GLCall(glBegin(GL_TRIANGLES));
+    return 1;
 }
 
 CKBOOL CKGLRasterizerContext::EndScene()
 {
-    glEnd();
-    return glGetError() == GL_NO_ERROR;
+    //GLCall(glEnd());
+    return 1;
 }
 
 CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
@@ -433,9 +453,9 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     CKDWORD startIndex = 0;
     void* pbData;
     //CKRSTLoadVertexBuffer(nullptr, vertexFormat, vertexSize, data);
-    glBufferData(GL_ARRAY_BUFFER,
+    GLCall(glBufferData(GL_ARRAY_BUFFER,
         data->VertexCount * vertexSize, 
-        data->PositionPtr, GL_STATIC_DRAW);
+        data->PositionPtr, GL_STATIC_DRAW));
     //if (vbo->m_CurrentVCount + data->VertexCount <= vbo->m_MaxVertexCount)
     //{
     //    do {
@@ -474,44 +494,17 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     //}
     //CKRSTLoadVertexBuffer(static_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
     //glUnmapBuffer(GL_ARRAY_BUFFER);
-    do {
-        error = glGetError();
-        if (error != GL_NO_ERROR)
-            fprintf(stderr, "GL Error: %d\n", error);
-        //assert(error == GL_NO_ERROR);
-    } while (error != GL_NO_ERROR);
+    GLuint va;
+    GLCall(glGenVertexArrays(1, &va));
+    glBindVertexArray(va);
 
     int primitiveCount = indexcount;
-    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, vertexSize, 0);
-    do {
-        error = glGetError();
-        if (error != GL_NO_ERROR)
-            fprintf(stderr, "GL Error: %d\n", error);
-        //assert(error == GL_NO_ERROR);
-    } while (error != GL_NO_ERROR);
-    glEnableVertexAttribArray(0);
-    do {
-        error = glGetError();
-        if (error != GL_NO_ERROR)
-            fprintf(stderr, "GL Error: %d\n", error);
-        //assert(error == GL_NO_ERROR);
-    } while (error != GL_NO_ERROR);
-    glVertexAttribPointer(1, 4, GL_UNSIGNED_INT, GL_FALSE, vertexSize, (void*)(sizeof(GLfloat) * 4));
-    glEnableVertexAttribArray(1);
-    do {
-        error = glGetError();
-        if (error != GL_NO_ERROR)
-            fprintf(stderr, "GL Error: %d\n", error);
-        //assert(error == GL_NO_ERROR);
-    } while (error != GL_NO_ERROR);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, vertexSize, (void*)(sizeof(GLfloat) * 4 + sizeof(GLuint) * 4));
-    glEnableVertexAttribArray(2);
-    do {
-        error = glGetError();
-        if (error != GL_NO_ERROR)
-            fprintf(stderr, "GL Error: %d\n", error);
-        //assert(error == GL_NO_ERROR);
-    } while (error != GL_NO_ERROR);
+    GLCall(glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, vertexSize, 0));
+    GLCall(glEnableVertexAttribArray(0));
+    GLCall(glVertexAttribPointer(1, 4, GL_UNSIGNED_INT, GL_FALSE, vertexSize, (void*)(sizeof(GLfloat) * 4)));
+    GLCall(glEnableVertexAttribArray(1));
+    GLCall(glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, vertexSize, (void*)(sizeof(GLfloat) * 4 + sizeof(GLuint) * 4)));
+    GLCall(glEnableVertexAttribArray(2));
     /*GLenum primitiveType;
     switch (pType)
     {
@@ -533,13 +526,8 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
         default:
             break;
     }*/
-    do {
-        error = glGetError();
-        if (error != GL_NO_ERROR)
-            fprintf(stderr, "GL Error: %d\n", error);
-        //assert(error == GL_NO_ERROR);
-    } while (error != GL_NO_ERROR);
-    glDrawArrays(GL_TRIANGLES, startIndex, primitiveCount);
+    
+    GLCall(glDrawArrays(GL_TRIANGLES, startIndex, primitiveCount));
     
     
     return 1;
@@ -695,7 +683,7 @@ BOOL CKGLRasterizerContext::SetUniformMatrix4fv(std::string name, GLsizei count,
         location = glGetUniformLocation(m_CurrentProgram, name.c_str());
     if (location == 0)
         return 0;
-    glUniformMatrix4fv(location, 1, GL_FALSE, value);
+    GLCall(glUniformMatrix4fv(location, 1, GL_FALSE, value));
     return 1;
 }
 

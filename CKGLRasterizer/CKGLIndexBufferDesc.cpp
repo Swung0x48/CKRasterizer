@@ -17,14 +17,14 @@ void CKGLIndexBufferDesc::Populate(CKIndexBufferDesc *DesiredFormat)
 
 void CKGLIndexBufferDesc::Create()
 {
-    glGenBuffers(1, &GLBuffer);
-    glBindBuffer(GL_ARRAY_BUFFER, GLBuffer);
-    glBufferData(GL_ARRAY_BUFFER,
+    GLCall(glGenBuffers(1, &GLBuffer));
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
+    GLCall(glBufferData(GL_ARRAY_BUFFER,
         2 * m_MaxIndexCount, 
-        nullptr, GL_STATIC_DRAW);
+        nullptr, GL_STATIC_DRAW));
 }
 
 void CKGLIndexBufferDesc::Bind()
 {
-    glBindBuffer(GL_ARRAY_BUFFER, GLBuffer);
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
 }

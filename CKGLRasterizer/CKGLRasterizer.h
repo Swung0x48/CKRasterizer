@@ -17,6 +17,14 @@
 #include <unordered_map>
 #include <vector>
 
+bool GLLogCall(const char* function, const char* file, int line);
+
+void GLClearError();
+
+#define GLCall(x) GLClearError();\
+    x;\
+    GLLogCall(#x, __FILE__, __LINE__);
+
 class CKGLRasterizerContext;
 
 class CKGLRasterizer : public CKRasterizer

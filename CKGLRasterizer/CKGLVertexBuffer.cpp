@@ -19,7 +19,7 @@ void CKGLVertexBufferDesc::Populate(CKVertexBufferDesc *DesiredFormat)
 
 void CKGLVertexBufferDesc::Create()
 {
-    glGenBuffers(1, &GLBuffer);
+    GLCall(glGenBuffers(1, &GLBuffer));
     //glBindBuffer(GL_ARRAY_BUFFER, GLBuffer);
     /*glBufferData(GL_ARRAY_BUFFER,
         m_MaxVertexCount * m_VertexSize, 
@@ -28,5 +28,5 @@ void CKGLVertexBufferDesc::Create()
 
 void CKGLVertexBufferDesc::Bind()
 {
-    glBindBuffer(GL_ARRAY_BUFFER, GLBuffer);
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
 }
