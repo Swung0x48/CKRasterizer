@@ -29,5 +29,17 @@
     <ClCompile Include="CKGLRasterizerContext.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="CKGLVertexShader.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="CKGLPixelShader.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="CKGLVertexBuffer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="CKGLIndexBufferDesc.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

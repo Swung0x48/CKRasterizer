@@ -21,6 +21,7 @@ CKBOOL CKGLRasterizerDriver::InitializeCaps()
 {
     m_Desc = "OpenGL Rasterizer";
     // pretend we have a 640x480 @ 16bpp mode for compatibility reasons
+    m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_CANDOVERTEXBUFFER;
     m_DisplayModes.PushBack({640, 480, 16, 60});
     m_DisplayModes.PushBack({1024, 768, 32, 60});
     m_CapsUpToDate = TRUE;

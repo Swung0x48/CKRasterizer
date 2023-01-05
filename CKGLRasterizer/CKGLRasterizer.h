@@ -13,6 +13,8 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include "GLFW/glfw3native.h"
 
+#include <string>
+#include <unordered_map>
 
 class CKGLRasterizerContext;
 
@@ -50,6 +52,9 @@ typedef struct CKGLVertexBufferDesc : public CKVertexBufferDesc
 public:
     GLuint GLBuffer;
 public:
+    void Populate(CKVertexBufferDesc* DesiredFormat);
+    void Create();
+    void Bind();
     CKGLVertexBufferDesc() { GLBuffer = 0; }
     ~CKGLVertexBufferDesc() { glDeleteBuffers(1, &GLBuffer); }
 } CKGLVertexBufferDesc;
@@ -59,6 +64,9 @@ typedef struct CKGLIndexBufferDesc : public CKIndexBufferDesc
 public:
     GLuint GLBuffer;
 public:
+    void Populate(CKIndexBufferDesc* DesiredFormat);
+    void Create();
+    void Bind();
     CKGLIndexBufferDesc() { GLBuffer = 0; }
     ~CKGLIndexBufferDesc() { glDeleteBuffers(1, &GLBuffer); }
 } CKGLIndexBufferDesc;
@@ -71,7 +79,7 @@ public:
     XArray<BYTE> m_FunctionData;
 
 public:
-    BOOL Create(CKGLRasterizerContext *Ctx, CKVertexShaderDesc *Format);
+    CKDWORD Create(CKGLRasterizerContext *Ctx, CKVertexShaderDesc *Format);
     virtual ~CKGLVertexShaderDesc();
     CKGLVertexShaderDesc()
     {
@@ -87,7 +95,7 @@ public:
     CKGLRasterizerContext *Owner;
     XArray<BYTE> m_FunctionData;
 public:
-    BOOL Create(CKGLRasterizerContext *Ctx, CKGLPixelShaderDesc *Format);
+    CKDWORD Create(CKGLRasterizerContext *Ctx, CKPixelShaderDesc *Format);
     virtual ~CKGLPixelShaderDesc();
     CKGLPixelShaderDesc()
     {
@@ -177,6 +185,9 @@ public:
                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);
 protected:
+    BOOL InternalDrawPrimitive(CKDWORD VB, CKDWORD IB, CKDWORD VShader, CKDWORD PShader);
+    BOOL InternalDrawPrimitiveVAO(CKDWORD VAO, CKDWORD IB, CKDWORD VShader, CKDWORD PShader);
+    BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
     CKBOOL CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat);
@@ -193,6 +204,10 @@ protected:
     void ReleaseScreenBackup();
 public:
     CKGLRasterizer *m_Owner;
-    GLFWwindow* m_GLFWwindow;
+    //GLFWwindow* m_GLFWwindow;
     HDC m_DC;
+    CKDWORD m_CurrentVertexShader = 0;
+    CKDWORD m_CurrentPixelShader = 0;
+    CKDWORD m_CurrentProgram = 0;
+    std::unordered_map<std::string, GLint> m_UniformLocationCache;
 };

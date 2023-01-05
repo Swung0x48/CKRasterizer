@@ -1,16 +1,15 @@
 #include "CKGLRasterizer.h"
 #define LOGGING 1
 #define STEP 0
-#define LOG_LOADTEXTURE 1
-#define LOG_CREATETEXTURE 1
+#define LOG_LOADTEXTURE 0
+#define LOG_CREATETEXTURE 0
+#define LOG_CREATEBUFFER 1
 #define LOG_DRAWPRIMITIVE 0
 #define LOG_DRAWPRIMITIVEVB 0
 #define LOG_DRAWPRIMITIVEVBIB 0
-#define LOG_SETTEXURESTAGESTATE 1
-#define LOG_FLUSHCACHES 1
-#define LOG_BATCHSTATS 1
-
-#define USE_D3DSTATEBLOCKS 1
+#define LOG_SETTEXURESTAGESTATE 0
+#define LOG_FLUSHCACHES 0
+#define LOG_BATCHSTATS 0
 
 #if STEP
 #include <conio.h>
@@ -29,10 +28,11 @@ const char* vertexShader =
 "layout (location=1) in vec4 col;\n"
 "layout (location=2) in vec2 texcoord;\n"
 "out vec4 fragcol;\n"
-"uniform mat4 modv;\n"
+"uniform mat4 world"
+"uniform mat4 view;\n"
 "uniform mat4 proj;\n"
 "void main(){\n"
-"    gl_Position=proj*modv*xyzw;\n"
+"    gl_Position=proj*view*world*xyzw;\n"
 "    fragcol=color;\n"
 "}";
 
@@ -289,18 +289,20 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
         case VXMATRIX_WORLD:
             m_WorldMatrix = Mat;
             UnityMatrixMask = WORLD_TRANSFORM;
-		    Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            SetUniformMatrix4fv("world", 1, GL_FALSE, (float*)&Mat);
             m_MatrixUptodate &= ~0U ^ WORLD_TRANSFORM;
             break;
         case VXMATRIX_VIEW:
             m_ViewMatrix = Mat;
             UnityMatrixMask = VIEW_TRANSFORM;
-            Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            //Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&Mat);
             m_MatrixUptodate = 0;
             break;
         case VXMATRIX_PROJECTION:
             m_ProjectionMatrix = Mat;
             UnityMatrixMask = PROJ_TRANSFORM;
+            SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&Mat);
             m_MatrixUptodate = 0;
             break;
         case VXMATRIX_TEXTURE0:
@@ -380,7 +382,48 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
 #if LOG_BATCHSTATS
     ++directbat;
 #endif
-    return 1;
+    CKBOOL clip = 0;
+    CKDWORD vertexSize;
+    CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
+    if ((data->Flags & CKRST_DP_DOCLIP))
+    {
+        SetRenderState(VXRENDERSTATE_CLIPPING, 1);
+        clip = 1;
+    } else
+    {
+        SetRenderState(VXRENDERSTATE_CLIPPING, 0);
+    }
+    CKDWORD vb_idx = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
+    CKGLVertexBufferDesc *vbo = static_cast<CKGLVertexBufferDesc *>(
+        m_VertexBuffers[vb_idx]);
+    // Why attempting to draw before creating buffer??
+    if (!vbo)
+        return 0;
+    vbo->Bind();
+    CKDWORD startIndex = 0;
+    void* pbData = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+    //CKRSTLoadVertexBuffer(nullptr, vertexFormat, vertexSize, data);
+    if (vbo->m_CurrentVCount + data->VertexCount <= vbo->m_MaxVertexCount)
+    {
+        CKRSTLoadVertexBuffer(static_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
+        startIndex = vbo->m_CurrentVCount;
+        vbo->m_CurrentVCount += data->VertexCount;
+    } else
+    {
+        CKRSTLoadVertexBuffer(static_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
+        vbo->m_CurrentVCount = data->VertexCount;
+    }
+    CKDWORD vs_idx = 0, ps_idx = 1;
+    CKVertexShaderDesc vs_desc;
+    vs_desc.m_Function = (CKDWORD*)vertexShader;
+    vs_desc.m_FunctionSize = strlen(vertexShader);
+    CreateObject(vs_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc);
+    CKPixelShaderDesc ps_desc;
+    ps_desc.m_Function = (CKDWORD*)fragShader;
+    ps_desc.m_FunctionSize = strlen(fragShader);
+    CreateObject(ps_idx, CKRST_OBJ_PIXELSHADER, &ps_desc);
+    // TODO: ib index kinda risky
+    return InternalDrawPrimitive(vb_idx, m_IndexBuffers.Size() + 1, vs_idx, ps_idx);
 }
 
 CKBOOL CKGLRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
@@ -462,7 +505,7 @@ CKBOOL CKGLRasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Ty
 void * CKGLRasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
     CKRST_LOCKFLAGS Lock)
 {
-    return NULL;
+    return nullptr;
 }
 
 CKBOOL CKGLRasterizerContext::UnlockVertexBuffer(CKDWORD VB)
@@ -518,7 +561,56 @@ void * CKGLRasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CK
 
 CKBOOL CKGLRasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
-    return CKRasterizerContext::UnlockIndexBuffer(IB);
+    return CKRasterizerContext::UnlockIndexBuffer(IB); }
+
+BOOL CKGLRasterizerContext::InternalDrawPrimitive(CKDWORD VB, CKDWORD IB, CKDWORD VShader, CKDWORD PShader)
+{
+    if (VB >= m_IndexBuffers.Size() || VShader >= m_VertexShaders.Size() || PShader >= m_PixelShaders.Size())
+        return 0;
+
+    CKGLVertexBufferDesc* vb_desc = static_cast<CKGLVertexBufferDesc *>(m_VertexBuffers[VB]);
+    CKGLIndexBufferDesc* ib_desc = NULL;
+    if (IB < m_IndexBuffers.Size())
+    {
+        ib_desc = static_cast<CKGLIndexBufferDesc *>(m_IndexBuffers[IB]);
+    }
+    if (m_CurrentVertexShader != VShader || m_CurrentPixelShader != PShader)
+    {
+        CKGLVertexShaderDesc* vs_desc = (CKGLVertexShaderDesc*)m_VertexShaders[VShader];
+        CKGLPixelShaderDesc* ps_desc = (CKGLPixelShaderDesc*)m_PixelShaders[PShader];
+        if (m_CurrentProgram != 0)
+            glDeleteProgram(m_CurrentProgram);
+        m_CurrentProgram = glCreateProgram();
+        glAttachShader(m_CurrentProgram, vs_desc->GLShader);
+        glAttachShader(m_CurrentProgram, ps_desc->GLShader);
+        glLinkProgram(m_CurrentProgram);
+        glValidateProgram(m_CurrentProgram);
+        glUseProgram(m_CurrentProgram);
+    }
+
+    
+    return 1;
+}
+
+BOOL CKGLRasterizerContext::InternalDrawPrimitiveVAO(CKDWORD VAO, CKDWORD IB, CKDWORD VShader, CKDWORD PShader)
+{
+    return 0;
+}
+
+BOOL CKGLRasterizerContext::SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose,
+                                                const GLfloat *value)
+{
+    int location = 0;
+    if (auto it = m_UniformLocationCache.find(name); it != m_UniformLocationCache.end())
+        location = it->second;
+    else if (m_CurrentProgram == 0)
+        return 0;
+    else
+        location = glGetUniformLocation(m_CurrentProgram, name.c_str());
+    if (location == 0)
+        return 0;
+    glUniformMatrix4fv(location, 1, GL_FALSE, value);
+    return 1;
 }
 
 CKBOOL CKGLRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat)
@@ -528,35 +620,52 @@ CKBOOL CKGLRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Desi
 
 CKBOOL CKGLRasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat)
 {
-    
-    return 1;
+    if (VShader >= m_VertexShaders.Size())
+        return 0;
+    delete m_VertexShaders[VShader];
+    CKGLVertexShaderDesc* desc = new CKGLVertexShaderDesc;
+    DesiredFormat->m_Function = (CKDWORD*)vertexShader;
+    if (desc->Create(this, DesiredFormat))
+    {
+        m_VertexShaders[VShader] = desc;
+        return 1;
+    }
+    return 0;
 }
 
 CKBOOL CKGLRasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat)
-{    return 1;
-
+{
+    if (PShader >= m_PixelShaders.Size())
+        return 0;
+    delete m_PixelShaders[PShader];
+    CKGLPixelShaderDesc* desc = new CKGLPixelShaderDesc;
+    DesiredFormat->m_Function = (CKDWORD*)fragShader;
+    if (desc->Create(this, DesiredFormat))
+    {
+        m_PixelShaders[PShader] = desc;
+        return 1;
+    }
+    return 0;
 }
 
 CKBOOL CKGLRasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat)
 {
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
         return 0;
-    CKGLVertexBufferDesc* desc = static_cast<CKGLVertexBufferDesc *>(m_VertexBuffers[VB]);
-    delete desc;
-    desc = new CKGLVertexBufferDesc;
-    desc->m_VertexSize = DesiredFormat->m_VertexSize;
-    desc->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
-    desc->m_Flags = DesiredFormat->m_CurrentVCount;
-    desc->m_MaxVertexCount = DesiredFormat->m_CurrentVCount;
-    desc->m_VertexFormat = DesiredFormat->m_VertexFormat;
+    delete m_VertexBuffers[VB];
 
-    GLuint vbo;
-    glGenBuffers(1, &vbo);
-    glBufferData(GL_ARRAY_BUFFER, 
-        DesiredFormat->m_MaxVertexCount * DesiredFormat->m_VertexSize, 
-        nullptr, GL_STATIC_DRAW);
-    desc->GLBuffer = vbo;
+    CKGLVertexBufferDesc* desc = new CKGLVertexBufferDesc;
+    desc->Populate(DesiredFormat);
+    desc->Create();
     m_VertexBuffers[VB] = desc;
+#if LOGGING && LOG_CREATEBUFFER
+    fprintf(stderr, "\tvbo avail:");
+    for (int i = 0; i < m_VertexBuffers.Size(); ++i)
+    {
+        if (m_VertexBuffers[i])
+            fprintf(stderr, " %d", i);
+    }
+#endif
     return 1;
 }
 
@@ -564,17 +673,10 @@ CKBOOL CKGLRasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *D
 {
     if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
         return 0;
-    CKGLIndexBufferDesc* desc = static_cast<CKGLIndexBufferDesc *>(m_IndexBuffers[IB]);
-    delete desc;
-    desc = new CKGLIndexBufferDesc;
-    desc->m_Flags = DesiredFormat->m_Flags;
-    desc->m_CurrentICount = DesiredFormat->m_CurrentICount;
-    desc->m_MaxIndexCount = DesiredFormat->m_MaxIndexCount;
-
-    GLuint ibo;
-    glGenBuffers(1, &ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * DesiredFormat->m_MaxIndexCount, nullptr, GL_STATIC_DRAW);
-    desc->GLBuffer = ibo;
+    delete m_IndexBuffers[IB];
+    CKGLIndexBufferDesc* desc = new CKGLIndexBufferDesc;
+    desc->Populate(DesiredFormat);
+    desc->Create();
     m_IndexBuffers[IB] = desc;
     return 1;
 }
