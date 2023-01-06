@@ -53,7 +53,11 @@ public:
     template<typename T>
     void push(unsigned int count)
     {
-        assert(false);
+        static_assert(
+            std::is_same<T, GLfloat>::value ||
+            std::is_same<T, GLuint>::value || 
+            std::is_same<T, GLubyte>::value,
+            "Type must be in GLfloat, GLuint or GLubyte");
     }
 
     template<>
@@ -91,7 +95,7 @@ public:
             layout.push<GLfloat>(3);
 
         if (fvf & CKRST_VF_DIFFUSE)
-            layout.push<GLuint>(1);
+            layout.push<GLubyte>(4);
 
         if (fvf & CKRST_VF_SPECULAR)
             layout.push<GLuint>(1);
