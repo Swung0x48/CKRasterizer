@@ -15,6 +15,7 @@ void CKGLVertexBufferDesc::Populate(CKVertexBufferDesc *DesiredFormat)
     this->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount; // Max number of vertices this buffer can contain
     this->m_VertexSize = DesiredFormat->m_VertexSize;     // Size in bytes taken by a vertex..
     this->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
+    this->GLLayout = GLVertexBufferLayout::GetLayoutFromFVF(DesiredFormat->m_VertexFormat);
 }
 
 void CKGLVertexBufferDesc::Create()
@@ -24,9 +25,23 @@ void CKGLVertexBufferDesc::Create()
     /*glBufferData(GL_ARRAY_BUFFER,
         m_MaxVertexCount * m_VertexSize, 
         nullptr, GL_STATIC_DRAW);*/
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
+    GLCall(glGenVertexArrays(1, &GLVertexArray));
+    GLCall(glBindVertexArray(GLVertexArray));
+    const auto& elements = GLLayout.GetElements();
+    unsigned int offset = 0;
+    for (unsigned int i = 0; i < elements.size(); ++i)
+    {
+        const auto& element = elements[i];
+        GLCall(glVertexAttribPointer(i, element.count, 
+            element.type, element.normalized, GLLayout.GetStride(), (const GLvoid*)offset));
+        GLCall(glEnableVertexAttribArray(i));
+        offset += element.count * GLVertexBufferElement::GetSizeOfType(element.type);
+    }
 }
 
 void CKGLVertexBufferDesc::Bind()
 {
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
+    GLCall(glBindVertexArray(GLVertexArray));
 }

@@ -289,7 +289,10 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 
 CKBOOL CKGLRasterizerContext::BeginScene()
 {
-    //GLCall(glBegin(GL_TRIANGLES));
+    VxMatrix Mat = VxMatrix::Identity();
+    SetUniformMatrix4fv("world", 1, GL_FALSE, (float*)&Mat);
+    SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&Mat);
+    SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&Mat);
     return 1;
 }
 
@@ -426,14 +429,6 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
 #if LOG_BATCHSTATS
     ++directbat;
 #endif
-    GLenum error;
-    do {
-        error = glGetError();
-        if (error != GL_NO_ERROR)
-            fprintf(stderr, "GL Error: %d\n", error);
-        //assert(error == GL_NO_ERROR);
-    }
-    while (error != GL_NO_ERROR);
     CKBOOL clip = 0;
     CKDWORD vertexSize;
     CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
@@ -458,53 +453,23 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
         data->PositionPtr, GL_STATIC_DRAW));
     //if (vbo->m_CurrentVCount + data->VertexCount <= vbo->m_MaxVertexCount)
     //{
-    //    do {
-    //        error = glGetError();
-    //        assert(error == GL_NO_ERROR);
-    //    }
-    //    while (error != GL_NO_ERROR);
     //    pbData = glMapBufferRange(GL_ARRAY_BUFFER, vertexSize * vbo->m_CurrentVCount,
     //                                vertexSize * data->VertexCount,
     //                                GL_MAP_WRITE_BIT);
     //                                //GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
-    //    do {
-    //        error = glGetError();
-    //        assert(error == GL_NO_ERROR);
-    //    }
-    //    while (error != GL_NO_ERROR);
     //    startIndex = vbo->m_CurrentVCount;
     //    vbo->m_CurrentVCount += data->VertexCount;
     //} else
     //{
-    //    do {
-    //        error = glGetError();
-    //        assert(error == GL_NO_ERROR);
-    //    }
-    //    while (error != GL_NO_ERROR);
     //    pbData = glMapBufferRange(GL_ARRAY_BUFFER, 
     //        0, vertexSize * data->VertexCount,
     //        GL_MAP_WRITE_BIT);
     //        //GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT);
-    //    do {
-    //        error = glGetError();
-    //        assert(error == GL_NO_ERROR);
-    //    }
-    //    while (error != GL_NO_ERROR);
     //    vbo->m_CurrentVCount = data->VertexCount;
     //}
     //CKRSTLoadVertexBuffer(static_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
     //glUnmapBuffer(GL_ARRAY_BUFFER);
-    GLuint va;
-    GLCall(glGenVertexArrays(1, &va));
-    glBindVertexArray(va);
-
     int primitiveCount = indexcount;
-    GLCall(glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, vertexSize, 0));
-    GLCall(glEnableVertexAttribArray(0));
-    GLCall(glVertexAttribPointer(1, 4, GL_UNSIGNED_INT, GL_FALSE, vertexSize, (void*)(sizeof(GLfloat) * 4)));
-    GLCall(glEnableVertexAttribArray(1));
-    GLCall(glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, vertexSize, (void*)(sizeof(GLfloat) * 4 + sizeof(GLuint) * 4)));
-    GLCall(glEnableVertexAttribArray(2));
     /*GLenum primitiveType;
     switch (pType)
     {
@@ -528,8 +493,6 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     }*/
     
     GLCall(glDrawArrays(GL_TRIANGLES, startIndex, primitiveCount));
-    
-    
     return 1;
 }
 
@@ -546,6 +509,8 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Ver
 #if LOG_BATCHSTATS
     ++vbbat;
 #endif
+
+
     return 1;
 }
 
@@ -563,6 +528,13 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
     ++vbibbat;
 #endif
     return CKRasterizerContext::DrawPrimitiveVBIB(pType, VB, IB, MinVIndex, VertexCount, StartIndex, Indexcount);
+}
+
+CKBOOL CKGLRasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc * VB, CKDWORD StartIndex, CKDWORD VertexCount, CKWORD * indices, int indexcount, CKBOOL Clip)
+{
+    int currentICount = 0;
+    //if ()
+    return 0;
 }
 
 CKBOOL CKGLRasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
@@ -680,10 +652,11 @@ BOOL CKGLRasterizerContext::SetUniformMatrix4fv(std::string name, GLsizei count,
     else if (m_CurrentProgram == 0)
         return 0;
     else
+    {
         location = glGetUniformLocation(m_CurrentProgram, name.c_str());
-    if (location == 0)
-        return 0;
-    GLCall(glUniformMatrix4fv(location, 1, GL_FALSE, value));
+        m_UniformLocationCache[name] = location;
+    }
+    GLCall(glUniformMatrix4fv(location, count, transpose, value));
     return 1;
 }
 

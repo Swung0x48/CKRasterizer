@@ -23,9 +23,94 @@ void GLClearError();
 
 #define GLCall(x) GLClearError();\
     x;\
-    GLLogCall(#x, __FILE__, __LINE__);
+    GLLogCall(#x, __FILE__, __LINE__)
 
 class CKGLRasterizerContext;
+
+typedef struct GLVertexBufferElement {
+    GLenum type;
+    unsigned int count;
+    GLboolean normalized;
+
+    static unsigned int GetSizeOfType(GLenum type)
+    {
+        switch (type)
+        {
+            case GL_FLOAT: return 4;
+            case GL_UNSIGNED_INT: return 4;
+            case GL_UNSIGNED_BYTE: return 1;
+            default: break;
+        }
+        assert(false);
+        return 0;
+    }
+} GLVertexBufferElement;
+
+class GLVertexBufferLayout
+{
+public:
+    GLVertexBufferLayout() {}
+    template<typename T>
+    void push(unsigned int count)
+    {
+        assert(false);
+    }
+
+    template<>
+    void push<GLfloat>(unsigned int count)
+    {
+        elements_.push_back({ GL_FLOAT, count, GL_FALSE });
+        stride_ += GLVertexBufferElement::GetSizeOfType(GL_FLOAT) * count;
+    }
+
+    template<>
+    void push<GLuint>(unsigned int count)
+    {
+        elements_.push_back({ GL_UNSIGNED_INT, count, GL_FALSE });
+        stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_INT) * count;
+    }
+
+    template<>
+    void push<GLubyte>(unsigned int count)
+    {
+        elements_.push_back({ GL_UNSIGNED_BYTE, count, GL_FALSE });
+        stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_BYTE) * count;
+    }
+    inline const std::vector<GLVertexBufferElement>& GetElements() const { return elements_; }
+    inline unsigned int GetStride() const { return stride_; }
+    static GLVertexBufferLayout GetLayoutFromFVF(CKDWORD fvf)
+    {
+        GLVertexBufferLayout layout;
+        if (fvf & CKRST_VF_POSITION)
+            layout.push<GLfloat>(3);
+
+        if (fvf & CKRST_VF_RASTERPOS)
+            layout.push<GLfloat>(4);
+
+        if (fvf & CKRST_VF_NORMAL)
+            layout.push<GLfloat>(3);
+
+        if (fvf & CKRST_VF_DIFFUSE)
+            layout.push<GLuint>(1);
+
+        if (fvf & CKRST_VF_SPECULAR)
+            layout.push<GLuint>(1);
+
+        if (fvf & CKRST_VF_TEX1)
+            layout.push<GLfloat>(2);
+
+        if (fvf & CKRST_VF_TEX2)
+        {
+            layout.push<GLfloat>(2);
+            layout.push<GLfloat>(2);
+        }
+
+        return layout;
+    }
+private:
+    std::vector<GLVertexBufferElement> elements_;
+    unsigned int stride_;
+};
 
 class CKGLRasterizer : public CKRasterizer
 {
@@ -60,7 +145,8 @@ typedef struct CKGLVertexBufferDesc : public CKVertexBufferDesc
 {
 public:
     GLuint GLBuffer;
-    
+    GLVertexBufferLayout GLLayout;
+    GLuint GLVertexArray;
 public:
     bool operator==(const CKVertexBufferDesc &) const;
     void Populate(CKVertexBufferDesc* DesiredFormat);
@@ -118,68 +204,6 @@ public:
     }
 } CKGLPixelShaderDesc;
 
-typedef struct GLVertexBufferElement {
-    GLenum type;
-    unsigned int count;
-    GLboolean normalized;
-
-    static unsigned int GetSizeOfType(GLenum type)
-    {
-        switch (type)
-        {
-            case GL_FLOAT: return 4;
-            case GL_UNSIGNED_INT: return 4;
-            case GL_UNSIGNED_BYTE: return 1;
-            default: break;
-        }
-        assert(false);
-        return 0;
-    }
-} GLVertexBufferElement;
-
-class GLVertexBufferLayout
-{
-public:
-    GLVertexBufferLayout() {}
-    template<typename T>
-    void push(unsigned int count)
-    {
-        assert(false);
-    }
-
-    template<>
-    void push<float>(unsigned int count)
-    {
-        elements_.push_back({ GL_FLOAT, count, GL_FALSE });
-        stride_ += GLVertexBufferElement::GetSizeOfType(GL_FLOAT) * count;
-    }
-
-    template<>
-    void push<unsigned int>(unsigned int count)
-    {
-        elements_.push_back({ GL_UNSIGNED_INT, count, GL_FALSE });
-        stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_INT) * count;
-    }
-
-    template<>
-    void push<unsigned char>(unsigned int count)
-    {
-        elements_.push_back({ GL_UNSIGNED_INT, count, GL_FALSE });
-        stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_INT) * count;
-    }
-    inline const std::vector<GLVertexBufferElement>& GetElements() const { return elements_; }
-    inline unsigned int GetStride() const { return stride_; }
-private:
-    std::vector<GLVertexBufferElement> elements_;
-    unsigned int stride_;
-};
-
-class GLVertexArray
-{
-public:
-    GLVertexArray();
-    ~GLVertexArray();
-};
 
 class CKGLRasterizerContext : public CKRasterizerContext
 {
@@ -262,6 +286,8 @@ public:
                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);
 protected:
+    CKBOOL InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc *VB, CKDWORD StartIndex,
+                                   CKDWORD VertexCount, CKWORD *indices, int indexcount, CKBOOL Clip);
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
