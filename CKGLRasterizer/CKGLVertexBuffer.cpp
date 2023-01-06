@@ -1,5 +1,15 @@
 #include "CKGLRasterizer.h"
 
+CKGLVertexBufferDesc::CKGLVertexBufferDesc(CKVertexBufferDesc* DesiredFormat)
+{
+    this->m_Flags = DesiredFormat->m_Flags;          // CKRST_VBFLAGS
+    this->m_VertexFormat = DesiredFormat->m_VertexFormat;   // Vertex format : CKRST_VERTEXFORMAT
+    this->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount; // Max number of vertices this buffer can contain
+    this->m_VertexSize = DesiredFormat->m_VertexSize;     // Size in bytes taken by a vertex..
+    this->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
+    this->GLLayout = GLVertexBufferLayout::GetLayoutFromFVF(DesiredFormat->m_VertexFormat);
+}
+
 bool CKGLVertexBufferDesc::operator==(const CKVertexBufferDesc & that) const
 {
     return this->m_VertexSize == that.m_VertexSize &&
@@ -8,14 +18,9 @@ bool CKGLVertexBufferDesc::operator==(const CKVertexBufferDesc & that) const
         this->m_Flags == that.m_Flags;
 }
 
-void CKGLVertexBufferDesc::Populate(CKVertexBufferDesc *DesiredFormat)
+void CKGLVertexBufferDesc::Populate(void* data, GLsizei buffer_size)
 {
-    this->m_Flags = DesiredFormat->m_Flags;          // CKRST_VBFLAGS
-    this->m_VertexFormat = DesiredFormat->m_VertexFormat;   // Vertex format : CKRST_VERTEXFORMAT
-    this->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount; // Max number of vertices this buffer can contain
-    this->m_VertexSize = DesiredFormat->m_VertexSize;     // Size in bytes taken by a vertex..
-    this->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
-    this->GLLayout = GLVertexBufferLayout::GetLayoutFromFVF(DesiredFormat->m_VertexFormat);
+    GLCall(glBufferData(GL_ARRAY_BUFFER, buffer_size, data, GL_STATIC_DRAW));
 }
 
 void CKGLVertexBufferDesc::Create()

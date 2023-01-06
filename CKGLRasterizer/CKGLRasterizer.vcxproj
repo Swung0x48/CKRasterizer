@@ -131,6 +131,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(SolutionDir)vendor\OpenGL-Registry\api\;$(SolutionDir)vendor\glfw\include\;$(SolutionDir)vendor\glew\include\;$(VT21SDK_DIR)Include;$(SolutionDir)vendor\CKRasterizerLib\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4996</DisableSpecificWarnings>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

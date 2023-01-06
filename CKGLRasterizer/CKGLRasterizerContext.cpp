@@ -1,5 +1,5 @@
 #include "CKGLRasterizer.h"
-#define LOGGING 1
+#define LOGGING 0
 #define STEP 0
 #define LOG_LOADTEXTURE 0
 #define LOG_CREATETEXTURE 0
@@ -71,6 +71,13 @@ CKGLRasterizerContext::~CKGLRasterizerContext()
 {
     if (m_Owner->m_FullscreenContext == this)
         m_Owner->m_FullscreenContext = NULL;
+    m_DirtyRects.Clear();
+    m_PixelShaders.Clear();
+    m_VertexShaders.Clear();
+    m_IndexBuffers.Clear();
+    m_VertexBuffers.Clear();
+    m_Sprites.Clear();
+    m_Textures.Clear();
     ReleaseDC((HWND)m_Window, m_DC);
 }
 
@@ -237,7 +244,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     m_CurrentPixelShader = ps_idx;
     CKGLVertexShaderDesc* vs = static_cast<CKGLVertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShader]);
     CKGLPixelShaderDesc* ps = static_cast<CKGLPixelShaderDesc*>(m_PixelShaders[m_CurrentPixelShader]);
-    if (m_CurrentProgram != 0)
+    if (m_CurrentProgram != INVALID_VALUE)
         GLCall(glDeleteProgram(m_CurrentProgram));
     m_CurrentProgram = glCreateProgram();
     GLCall(glAttachShader(m_CurrentProgram, vs->GLShader));
@@ -289,10 +296,13 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 
 CKBOOL CKGLRasterizerContext::BeginScene()
 {
-    VxMatrix Mat = VxMatrix::Identity();
+    /*VxMatrix Mat = VxMatrix::Identity();
     SetUniformMatrix4fv("world", 1, GL_FALSE, (float*)&Mat);
     SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&Mat);
     SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&Mat);
+    m_WorldMatrix = Mat;
+    m_ViewMatrix = Mat;
+    m_ProjectionMatrix = Mat;*/
     return 1;
 }
 
@@ -440,14 +450,17 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     {
         SetRenderState(VXRENDERSTATE_CLIPPING, 0);
     }
-    CKDWORD vb_idx = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
+    CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
     CKGLVertexBufferDesc *vbo = static_cast<CKGLVertexBufferDesc *>(
-        m_VertexBuffers[vb_idx]);
-    //vbo->Create();
-    vbo->Bind();
-    CKDWORD startIndex = 0;
-    void* pbData;
-    //CKRSTLoadVertexBuffer(nullptr, vertexFormat, vertexSize, data);
+        m_VertexBuffers[VB]);
+    m_CurrentVertexBuffer = VB;
+    CKGLIndexBufferDesc* ibo = nullptr;
+    if (indices)
+    {
+        CKDWORD IB = GetStaticIndexBuffer(indexcount, indices);
+        CKGLIndexBufferDesc* ibo = static_cast<CKGLIndexBufferDesc*>(
+            m_IndexBuffers[IB]);
+    }
     GLCall(glBufferData(GL_ARRAY_BUFFER,
         data->VertexCount * vertexSize, 
         data->PositionPtr, GL_STATIC_DRAW));
@@ -470,30 +483,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     //CKRSTLoadVertexBuffer(static_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
     //glUnmapBuffer(GL_ARRAY_BUFFER);
     int primitiveCount = indexcount;
-    /*GLenum primitiveType;
-    switch (pType)
-    {
-        case VX_LINELIST:
-            primitiveType = GL_LINES_ADJACENCY;
-            primitiveCount /= 2;
-            break;
-        case VX_LINESTRIP:
-            primitiveType = GL_LINE_STRIP_ADJACENCY;
-            primitiveCount--;
-            break;
-        case VX_TRIANGLELIST:
-            primitiveCount /= 3;
-            break;
-        case VX_TRIANGLESTRIP:
-        case VX_TRIANGLEFAN:
-            primitiveCount -= 2;
-            break;
-        default:
-            break;
-    }*/
-    
-    GLCall(glDrawArrays(GL_TRIANGLES, startIndex, primitiveCount));
-    return 1;
+    return InternalDrawPrimitive(pType, vbo, ibo, primitiveCount);
 }
 
 CKBOOL CKGLRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
@@ -530,11 +520,19 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
     return CKRasterizerContext::DrawPrimitiveVBIB(pType, VB, IB, MinVIndex, VertexCount, StartIndex, Indexcount);
 }
 
-CKBOOL CKGLRasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc * VB, CKDWORD StartIndex, CKDWORD VertexCount, CKWORD * indices, int indexcount, CKBOOL Clip)
+CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc * vbo, CKGLIndexBufferDesc * ibo, GLuint count)
 {
-    int currentICount = 0;
-    //if ()
-    return 0;
+    vbo->Bind();
+    
+    // TODO: pType?
+    if (ibo)
+    {
+        ibo->Bind();
+        GLCall(glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_SHORT, nullptr));
+    }
+    else
+        GLCall(glDrawArrays(GL_TRIANGLES, 0, count));
+    return 1;
 }
 
 CKBOOL CKGLRasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
@@ -660,6 +658,63 @@ BOOL CKGLRasterizerContext::SetUniformMatrix4fv(std::string name, GLsizei count,
     return 1;
 }
 
+CKDWORD CKGLRasterizerContext::GetStaticIndexBuffer(CKDWORD Count, GLushort *IndexData)
+{
+    // Use count as index.
+    // Since we're using it as a static buffer, it should be disposable.
+    int index = Count % m_IndexBuffers.Size();
+
+    CKGLIndexBufferDesc* ib = static_cast<CKGLIndexBufferDesc *>(m_IndexBuffers[index]);
+
+    // If valid and meets our need, use it
+    if (ib && ib->m_MaxIndexCount == Count)
+        return index;
+    // ...if not, dispose it
+    delete ib;
+
+    ib = new CKGLIndexBufferDesc;
+    ib->m_MaxIndexCount = Count;
+    ib->m_CurrentICount = 0;
+    ib->Create();
+    ib->Populate(IndexData, Count);
+    m_IndexBuffers[index] = ib;
+    return index;
+}
+
+CKDWORD CKGLRasterizerContext::GetDynamicIndexBuffer(CKDWORD Count, GLushort* IndexData, CKDWORD Index)
+{
+    /*if ((m_Driver->m_3DCaps.CKRasterizerSpecificCaps & CKRST_SPECIFICCAPS_CANDOVERTEXBUFFER) == 0)
+        return 0;
+
+    CKDWORD index = VertexFormat & (CKRST_VF_RASTERPOS | CKRST_VF_NORMAL);
+    index |= (VertexFormat & (CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEXMASK)) >> 3;
+    index >>= 2;
+    index |= AddKey << 7;
+    index += 1;
+    CKIndexBufferDesc *ib = m_IndexBuffers[index];
+    ib->m_MaxIndexCount
+    if (!vb || vb->m_MaxVertexCount < VertexCount)
+    {
+        if (vb)
+        {
+            delete vb;
+            m_VertexBuffers[index] = NULL;
+        }
+
+        CKVertexBufferDesc nvb;
+        nvb.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+        nvb.m_VertexFormat = VertexFormat;
+        nvb.m_VertexSize = VertexSize;
+        nvb.m_MaxVertexCount = (VertexCount + 100 > DEFAULT_VB_SIZE) ? VertexCount + 100 : DEFAULT_VB_SIZE;
+        if (AddKey != 0)
+            nvb.m_Flags |= CKRST_VB_SHARED;
+        CreateObject(index, CKRST_OBJ_INDEXBUFFER, &nvb);
+    }
+
+    return index;*/
+    return 0;
+}
+
 CKBOOL CKGLRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat)
 {
     return 1;
@@ -703,8 +758,7 @@ CKBOOL CKGLRasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc 
         return 0;
     delete m_VertexBuffers[VB];
 
-    CKGLVertexBufferDesc* desc = new CKGLVertexBufferDesc;
-    desc->Populate(DesiredFormat);
+    CKGLVertexBufferDesc* desc = new CKGLVertexBufferDesc(DesiredFormat);
     desc->Create();
     m_VertexBuffers[VB] = desc;
 #if LOGGING && LOG_CREATEBUFFER
@@ -723,8 +777,7 @@ CKBOOL CKGLRasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *D
     if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
         return 0;
     delete m_IndexBuffers[IB];
-    CKGLIndexBufferDesc* desc = new CKGLIndexBufferDesc;
-    desc->Populate(DesiredFormat);
+    CKGLIndexBufferDesc* desc = new CKGLIndexBufferDesc(DesiredFormat);
     desc->Create();
     m_IndexBuffers[IB] = desc;
     return 1;

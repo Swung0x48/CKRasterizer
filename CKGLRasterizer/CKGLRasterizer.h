@@ -149,9 +149,10 @@ public:
     GLuint GLVertexArray;
 public:
     bool operator==(const CKVertexBufferDesc &) const;
-    void Populate(CKVertexBufferDesc* DesiredFormat);
+    void Populate(void* data, GLsizei buffer_size);
     void Create();
     void Bind();
+    explicit CKGLVertexBufferDesc(CKVertexBufferDesc* DesiredFormat);
     CKGLVertexBufferDesc() { GLBuffer = 0; }
     ~CKGLVertexBufferDesc() { glDeleteBuffers(1, &GLBuffer); }
 } CKGLVertexBufferDesc;
@@ -162,9 +163,10 @@ public:
     GLuint GLBuffer;
 public:
     bool operator==(const CKIndexBufferDesc &) const;
-    void Populate(CKIndexBufferDesc* DesiredFormat);
     void Create();
+    void Populate(GLushort* data, GLsizei count);
     void Bind();
+    explicit CKGLIndexBufferDesc(CKIndexBufferDesc* DesiredFormat);
     CKGLIndexBufferDesc() { GLBuffer = 0; }
     ~CKGLIndexBufferDesc() { glDeleteBuffers(1, &GLBuffer); }
 } CKGLIndexBufferDesc;
@@ -286,9 +288,10 @@ public:
                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);
 protected:
-    CKBOOL InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc *VB, CKDWORD StartIndex,
-                                   CKDWORD VertexCount, CKWORD *indices, int indexcount, CKBOOL Clip);
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
+    CKDWORD GetStaticIndexBuffer(CKDWORD Count, GLushort* IndexData);
+    CKDWORD GetDynamicIndexBuffer(CKDWORD Count, GLushort* IndexData, CKDWORD Index);
+    CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc * vbo, CKGLIndexBufferDesc * ibo, GLuint count);
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
     CKBOOL CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat);
@@ -304,11 +307,14 @@ protected:
     void ClearStreamCache();
     void ReleaseScreenBackup();
 public:
+    constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
     CKGLRasterizer *m_Owner;
     //GLFWwindow* m_GLFWwindow;
     HDC m_DC;
-    CKDWORD m_CurrentVertexShader = 0;
-    CKDWORD m_CurrentPixelShader = 0;
-    CKDWORD m_CurrentProgram = 0;
+    CKDWORD m_CurrentVertexShader = INVALID_VALUE;
+    CKDWORD m_CurrentPixelShader = INVALID_VALUE;
+    CKDWORD m_CurrentProgram = INVALID_VALUE;
+    CKDWORD m_CurrentVertexBuffer = INVALID_VALUE;
+    CKDWORD m_CurrentIndexBuffer = INVALID_VALUE;
     std::unordered_map<std::string, GLint> m_UniformLocationCache;
 };
