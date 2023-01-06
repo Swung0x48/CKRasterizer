@@ -69,6 +69,7 @@ CKGLRasterizerContext::CKGLRasterizerContext()
 
 CKGLRasterizerContext::~CKGLRasterizerContext()
 {
+    glDeleteProgram(m_CurrentProgram);
     if (m_Owner->m_FullscreenContext == this)
         m_Owner->m_FullscreenContext = NULL;
     m_DirtyRects.Clear();
@@ -244,8 +245,6 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     m_CurrentPixelShader = ps_idx;
     CKGLVertexShaderDesc* vs = static_cast<CKGLVertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShader]);
     CKGLPixelShaderDesc* ps = static_cast<CKGLPixelShaderDesc*>(m_PixelShaders[m_CurrentPixelShader]);
-    if (m_CurrentProgram != INVALID_VALUE)
-        GLCall(glDeleteProgram(m_CurrentProgram));
     m_CurrentProgram = glCreateProgram();
     GLCall(glAttachShader(m_CurrentProgram, vs->GLShader));
     GLCall(glAttachShader(m_CurrentProgram, ps->GLShader));
