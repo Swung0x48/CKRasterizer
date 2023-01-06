@@ -53,11 +53,7 @@ public:
     template<typename T>
     void push(unsigned int count)
     {
-        static_assert(
-            std::is_same<T, GLfloat>::value ||
-            std::is_same<T, GLuint>::value || 
-            std::is_same<T, GLubyte>::value,
-            "Type must be in GLfloat, GLuint or GLubyte");
+        static_assert(sizeof(T) == 0, "pushing this type haven't been implemented.");
     }
 
     template<>
