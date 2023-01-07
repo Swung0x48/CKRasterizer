@@ -30,11 +30,9 @@ void CKGLVertexBufferDesc::Create()
     for (unsigned int i = 0; i < elements.size(); ++i)
     {
         const auto& element = elements[i];
-        if (element.type == GL_NONE && element.usage == 0)
-            continue;   // Invalid element, skip it. (Probably no such usage at this location)
-        GLCall(glVertexAttribPointer(i, element.count,
+        GLCall(glVertexAttribPointer(element.index, element.count,
             element.type, element.normalized, GLLayout.GetStride(), (const GLvoid*)offset));
-        GLCall(glEnableVertexAttribArray(i));
+        GLCall(glEnableVertexAttribArray(element.index));
         offset += element.count * GLVertexBufferElement::GetSizeOfType(element.type);
     }
 }

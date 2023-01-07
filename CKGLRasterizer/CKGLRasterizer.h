@@ -1,4 +1,6 @@
 #pragma once
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
 #include "CKRasterizer.h"
 #include "XBitArray.h"
 #include <Windows.h>
@@ -28,6 +30,7 @@ void GLClearError();
 class CKGLRasterizerContext;
 
 typedef struct GLVertexBufferElement {
+    GLuint index = ~0U;
     GLenum type = GL_NONE;
     unsigned int count = 0;
     GLboolean normalized = GL_FALSE;
@@ -62,29 +65,28 @@ public:
     template<>
     void push<GLfloat>(unsigned int index, unsigned int count, GLboolean normalized, CKDWORD usage)
     {
-        elements_[index] = { GL_FLOAT, count, normalized, usage};
+        elements_.push_back({ index, GL_FLOAT, count, normalized, usage });
         stride_ += GLVertexBufferElement::GetSizeOfType(GL_FLOAT) * count;
     }
 
     template<>
     void push<GLuint>(unsigned int index, unsigned int count, GLboolean normalized, CKDWORD usage)
     {
-        elements_[index] = { GL_UNSIGNED_INT, count, normalized, usage };
+        elements_.push_back({ index, GL_UNSIGNED_INT, count, normalized, usage });
         stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_INT) * count;
     }
 
     template<>
     void push<GLubyte>(unsigned int index, unsigned int count, GLboolean normalized, CKDWORD usage)
     {
-        elements_[index] = { GL_UNSIGNED_BYTE, count, normalized, usage };
+        elements_.push_back({ index, GL_UNSIGNED_BYTE, count, normalized, usage });
         stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_BYTE) * count;
     }
-    inline const std::vector<GLVertexBufferElement>& GetElements() const { return elements_; }
+    inline const auto& GetElements() const { return elements_; }
     inline unsigned int GetStride() const { return stride_; }
     static GLVertexBufferLayout GetLayoutFromFVF(CKDWORD fvf)
     {
         GLVertexBufferLayout layout;
-        layout.elements_.resize(std::popcount(fvf));
         if (fvf & CKRST_VF_POSITION)
             layout.push<GLfloat>(0, 3, GL_FALSE, CKRST_VF_POSITION);
 
@@ -175,7 +177,7 @@ public:
     void Unlock();
     explicit CKGLVertexBufferDesc(CKVertexBufferDesc* DesiredFormat);
     CKGLVertexBufferDesc() { GLBuffer = 0; }
-    ~CKGLVertexBufferDesc() { glDeleteBuffers(1, &GLBuffer); }
+    ~CKGLVertexBufferDesc() { GLCall(glDeleteBuffers(1, &GLBuffer)); }
 } CKGLVertexBufferDesc;
 
 typedef struct CKGLIndexBufferDesc : public CKIndexBufferDesc
@@ -190,7 +192,7 @@ public:
     void Bind();
     explicit CKGLIndexBufferDesc(CKIndexBufferDesc* DesiredFormat);
     CKGLIndexBufferDesc() { GLBuffer = 0; }
-    ~CKGLIndexBufferDesc() { glDeleteBuffers(1, &GLBuffer); }
+    ~CKGLIndexBufferDesc() { GLCall(glDeleteBuffers(1, &GLBuffer)); }
 } CKGLIndexBufferDesc;
 
 typedef struct CKGLVertexShaderDesc : public CKVertexShaderDesc
