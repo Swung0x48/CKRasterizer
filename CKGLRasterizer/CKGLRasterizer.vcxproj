@@ -22,11 +22,12 @@
     <ClInclude Include="CKGLRasterizer.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CKGLIndexBufferDesc.cpp" />
+    <ClCompile Include="CKGLIndexBuffer.cpp" />
     <ClCompile Include="CKGLPixelShader.cpp" />
     <ClCompile Include="CKGLRasterizer.cpp" />
     <ClCompile Include="CKGLRasterizerContext.cpp" />
     <ClCompile Include="CKGLRasterizerDriver.cpp" />
+    <ClCompile Include="CKGLTexture.cpp" />
     <ClCompile Include="CKGLVertexBuffer.cpp" />
     <ClCompile Include="CKGLVertexShader.cpp" />
   </ItemGroup>

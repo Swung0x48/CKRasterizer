@@ -38,7 +38,10 @@
     <ClCompile Include="CKGLVertexBuffer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="CKGLIndexBufferDesc.cpp">
+    <ClCompile Include="CKGLIndexBuffer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="CKGLTexture.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
