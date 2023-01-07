@@ -28,10 +28,10 @@ void GLClearError();
 class CKGLRasterizerContext;
 
 typedef struct GLVertexBufferElement {
-    GLenum type;
-    unsigned int count;
-    GLboolean normalized;
-    CKDWORD usage;
+    GLenum type = GL_NONE;
+    unsigned int count = 0;
+    GLboolean normalized = GL_FALSE;
+    CKDWORD usage = 0;
 
     static unsigned int GetSizeOfType(GLenum type)
     {
@@ -50,34 +50,33 @@ typedef struct GLVertexBufferElement {
 class GLVertexBufferLayout
 {
 public:
-    GLVertexBufferLayout() {}
+    GLVertexBufferLayout()
+    {
+    }
     template<typename T>
-    void push(unsigned int count, CKDWORD usage)
+    void push(unsigned int index, unsigned int count, GLboolean normalized, CKDWORD usage)
     {
         static_assert(sizeof(T) == 0, "pushing this type haven't been implemented.");
     }
 
     template<>
-    void push<GLfloat>(unsigned int count, CKDWORD usage)
+    void push<GLfloat>(unsigned int index, unsigned int count, GLboolean normalized, CKDWORD usage)
     {
-        elements_.push_back({ GL_FLOAT, count, GL_FALSE, usage});
+        elements_[index] = { GL_FLOAT, count, normalized, usage};
         stride_ += GLVertexBufferElement::GetSizeOfType(GL_FLOAT) * count;
     }
 
     template<>
-    void push<GLuint>(unsigned int count, CKDWORD usage)
+    void push<GLuint>(unsigned int index, unsigned int count, GLboolean normalized, CKDWORD usage)
     {
-        elements_.push_back({ GL_UNSIGNED_INT, count, GL_FALSE, usage });
+        elements_[index] = { GL_UNSIGNED_INT, count, normalized, usage };
         stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_INT) * count;
     }
 
     template<>
-    void push<GLubyte>(unsigned int count, CKDWORD usage)
+    void push<GLubyte>(unsigned int index, unsigned int count, GLboolean normalized, CKDWORD usage)
     {
-        GLboolean normalize = GL_FALSE;
-        if (usage & (CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR))
-            normalize = GL_TRUE;
-        elements_.push_back({ GL_UNSIGNED_BYTE, count, normalize, usage });
+        elements_[index] = { GL_UNSIGNED_BYTE, count, normalized, usage };
         stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_BYTE) * count;
     }
     inline const std::vector<GLVertexBufferElement>& GetElements() const { return elements_; }
@@ -85,28 +84,29 @@ public:
     static GLVertexBufferLayout GetLayoutFromFVF(CKDWORD fvf)
     {
         GLVertexBufferLayout layout;
+        layout.elements_.resize(std::popcount(fvf));
         if (fvf & CKRST_VF_POSITION)
-            layout.push<GLfloat>(3, CKRST_VF_POSITION);
+            layout.push<GLfloat>(0, 3, GL_FALSE, CKRST_VF_POSITION);
 
         if (fvf & CKRST_VF_RASTERPOS)
-            layout.push<GLfloat>(4, CKRST_VF_RASTERPOS);
+            layout.push<GLfloat>(0, 4, GL_FALSE, CKRST_VF_RASTERPOS);
 
         if (fvf & CKRST_VF_NORMAL)
-            layout.push<GLfloat>(3, CKRST_VF_NORMAL);
+            layout.push<GLfloat>(1, 3, GL_FALSE, CKRST_VF_NORMAL);
 
         if (fvf & CKRST_VF_DIFFUSE)
-            layout.push<GLubyte>(4, CKRST_VF_DIFFUSE);
+            layout.push<GLubyte>(2, 4, GL_TRUE, CKRST_VF_DIFFUSE);
 
         if (fvf & CKRST_VF_SPECULAR)
-            layout.push<GLubyte>(4, CKRST_VF_SPECULAR);
+            layout.push<GLubyte>(3, 4, GL_TRUE, CKRST_VF_SPECULAR);
 
         if (fvf & CKRST_VF_TEX1)
-            layout.push<GLfloat>(2, CKRST_VF_TEX1);
+            layout.push<GLfloat>(4, 2, GL_FALSE, CKRST_VF_TEX1);
 
         if (fvf & CKRST_VF_TEX2)
         {
-            layout.push<GLfloat>(2, CKRST_VF_TEX1);
-            layout.push<GLfloat>(2, CKRST_VF_TEX2);
+            layout.push<GLfloat>(4, 2, GL_FALSE, CKRST_VF_TEX1);
+            layout.push<GLfloat>(5, 2, GL_FALSE, CKRST_VF_TEX2);
         }
 
         return layout;

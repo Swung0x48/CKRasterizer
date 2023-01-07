@@ -30,9 +30,11 @@ void CKGLVertexBufferDesc::Create()
     for (unsigned int i = 0; i < elements.size(); ++i)
     {
         const auto& element = elements[i];
-        GLCall(glVertexAttribPointer(CKGLRasterizerContext::get_shader_location(element.usage), element.count,
+        if (element.type == GL_NONE && element.usage == 0)
+            continue;   // Invalid element, skip it. (Probably no such usage at this location)
+        GLCall(glVertexAttribPointer(i, element.count,
             element.type, element.normalized, GLLayout.GetStride(), (const GLvoid*)offset));
-        GLCall(glEnableVertexAttribArray(CKGLRasterizerContext::get_shader_location(element.usage)));
+        GLCall(glEnableVertexAttribArray(i));
         offset += element.count * GLVertexBufferElement::GetSizeOfType(element.type);
     }
 }
