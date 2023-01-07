@@ -18,19 +18,11 @@ bool CKGLVertexBufferDesc::operator==(const CKVertexBufferDesc & that) const
         this->m_Flags == that.m_Flags;
 }
 
-void CKGLVertexBufferDesc::Populate(void* data, GLsizei buffer_size)
-{
-    GLCall(glBufferData(GL_ARRAY_BUFFER, buffer_size, data, GL_STATIC_DRAW));
-}
-
 void CKGLVertexBufferDesc::Create()
 {
     GLCall(glGenBuffers(1, &GLBuffer));
-    //glBindBuffer(GL_ARRAY_BUFFER, GLBuffer);
-    /*glBufferData(GL_ARRAY_BUFFER,
-        m_MaxVertexCount * m_VertexSize, 
-        nullptr, GL_STATIC_DRAW);*/
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
+    GLCall(glNamedBufferStorage(GLBuffer, this->m_MaxVertexCount * this->m_VertexSize, NULL, GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT));
     GLCall(glGenVertexArrays(1, &GLVertexArray));
     GLCall(glBindVertexArray(GLVertexArray));
     const auto& elements = GLLayout.GetElements();
@@ -38,15 +30,35 @@ void CKGLVertexBufferDesc::Create()
     for (unsigned int i = 0; i < elements.size(); ++i)
     {
         const auto& element = elements[i];
-        GLCall(glVertexAttribPointer(i, element.count, 
+        GLCall(glVertexAttribPointer(CKGLRasterizerContext::get_shader_location(element.usage), element.count,
             element.type, element.normalized, GLLayout.GetStride(), (const GLvoid*)offset));
-        GLCall(glEnableVertexAttribArray(i));
+        GLCall(glEnableVertexAttribArray(CKGLRasterizerContext::get_shader_location(element.usage)));
         offset += element.count * GLVertexBufferElement::GetSizeOfType(element.type);
     }
 }
 
-void CKGLVertexBufferDesc::Bind()
+void CKGLVertexBufferDesc::Bind(CKGLRasterizerContext *ctx)
 {
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
     GLCall(glBindVertexArray(GLVertexArray));
+    ctx->set_position_transformed(GLLayout.GetElements().front().usage == CKRST_VF_RASTERPOS);
+}
+
+void *CKGLVertexBufferDesc::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
+{
+    if (!offset && !len)
+    {
+        GLCall(glGetNamedBufferParameteriv(GLBuffer, GL_BUFFER_SIZE, (GLint*)&len));
+    }
+    auto ret = glMapNamedBufferRange(GLBuffer, offset, len, GL_MAP_WRITE_BIT | (overwrite ? GL_MAP_INVALIDATE_RANGE_BIT : 0));
+    GLLogCall("glMapNamedBufferRange", __FILE__, __LINE__);
+    return ret;
+}
+
+void CKGLVertexBufferDesc::Unlock()
+{
+    int locked = 0;
+    GLCall(glGetNamedBufferParameteriv(GLBuffer, GL_BUFFER_MAPPED, &locked));
+    if (!locked) return;
+    GLCall(glUnmapNamedBuffer(GLBuffer));
 }

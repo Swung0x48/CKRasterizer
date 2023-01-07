@@ -21,9 +21,9 @@ bool GLLogCall(const char* function, const char* file, int line);
 
 void GLClearError();
 
-#define GLCall(x) GLClearError();\
+#define GLCall(x) {GLClearError();\
     x;\
-    GLLogCall(#x, __FILE__, __LINE__)
+    GLLogCall(#x, __FILE__, __LINE__);}
 
 class CKGLRasterizerContext;
 
@@ -31,6 +31,7 @@ typedef struct GLVertexBufferElement {
     GLenum type;
     unsigned int count;
     GLboolean normalized;
+    CKDWORD usage;
 
     static unsigned int GetSizeOfType(GLenum type)
     {
@@ -51,29 +52,32 @@ class GLVertexBufferLayout
 public:
     GLVertexBufferLayout() {}
     template<typename T>
-    void push(unsigned int count)
+    void push(unsigned int count, CKDWORD usage)
     {
         static_assert(sizeof(T) == 0, "pushing this type haven't been implemented.");
     }
 
     template<>
-    void push<GLfloat>(unsigned int count)
+    void push<GLfloat>(unsigned int count, CKDWORD usage)
     {
-        elements_.push_back({ GL_FLOAT, count, GL_FALSE });
+        elements_.push_back({ GL_FLOAT, count, GL_FALSE, usage});
         stride_ += GLVertexBufferElement::GetSizeOfType(GL_FLOAT) * count;
     }
 
     template<>
-    void push<GLuint>(unsigned int count)
+    void push<GLuint>(unsigned int count, CKDWORD usage)
     {
-        elements_.push_back({ GL_UNSIGNED_INT, count, GL_FALSE });
+        elements_.push_back({ GL_UNSIGNED_INT, count, GL_FALSE, usage });
         stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_INT) * count;
     }
 
     template<>
-    void push<GLubyte>(unsigned int count)
+    void push<GLubyte>(unsigned int count, CKDWORD usage)
     {
-        elements_.push_back({ GL_UNSIGNED_BYTE, count, GL_FALSE });
+        GLboolean normalize = GL_FALSE;
+        if (usage & (CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR))
+            normalize = GL_TRUE;
+        elements_.push_back({ GL_UNSIGNED_BYTE, count, normalize, usage });
         stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_BYTE) * count;
     }
     inline const std::vector<GLVertexBufferElement>& GetElements() const { return elements_; }
@@ -82,27 +86,27 @@ public:
     {
         GLVertexBufferLayout layout;
         if (fvf & CKRST_VF_POSITION)
-            layout.push<GLfloat>(3);
+            layout.push<GLfloat>(3, CKRST_VF_POSITION);
 
         if (fvf & CKRST_VF_RASTERPOS)
-            layout.push<GLfloat>(4);
+            layout.push<GLfloat>(4, CKRST_VF_RASTERPOS);
 
         if (fvf & CKRST_VF_NORMAL)
-            layout.push<GLfloat>(3);
+            layout.push<GLfloat>(3, CKRST_VF_NORMAL);
 
         if (fvf & CKRST_VF_DIFFUSE)
-            layout.push<GLubyte>(4);
+            layout.push<GLubyte>(4, CKRST_VF_DIFFUSE);
 
         if (fvf & CKRST_VF_SPECULAR)
-            layout.push<GLuint>(1);
+            layout.push<GLubyte>(4, CKRST_VF_SPECULAR);
 
         if (fvf & CKRST_VF_TEX1)
-            layout.push<GLfloat>(2);
+            layout.push<GLfloat>(2, CKRST_VF_TEX1);
 
         if (fvf & CKRST_VF_TEX2)
         {
-            layout.push<GLfloat>(2);
-            layout.push<GLfloat>(2);
+            layout.push<GLfloat>(2, CKRST_VF_TEX1);
+            layout.push<GLfloat>(2, CKRST_VF_TEX2);
         }
 
         return layout;
@@ -141,6 +145,22 @@ public:
 	WNDCLASSEXA m_WndClass;
 };
 
+typedef struct CKGLTextureDesc : public CKTextureDesc
+{
+public:
+    GLuint tex;
+    GLenum glfmt;
+    GLenum gltyp;
+public:
+    CKGLTextureDesc() { tex = 0; glfmt = gltyp = GL_INVALID_ENUM; }
+    CKGLTextureDesc(CKTextureDesc *texdesc);
+    ~CKGLTextureDesc() { GLCall(glDeleteTextures(1, &tex)); }
+
+    void Create();
+    void Bind(CKGLRasterizerContext *ctx);
+    void Load(void *data);
+} CKGLTextureDesc;
+
 typedef struct CKGLVertexBufferDesc : public CKVertexBufferDesc
 {
 public:
@@ -149,9 +169,10 @@ public:
     GLuint GLVertexArray;
 public:
     bool operator==(const CKVertexBufferDesc &) const;
-    void Populate(void* data, GLsizei buffer_size);
     void Create();
-    void Bind();
+    void Bind(CKGLRasterizerContext *ctx);
+    void *Lock(CKDWORD offset, CKDWORD len, bool overwrite);
+    void Unlock();
     explicit CKGLVertexBufferDesc(CKVertexBufferDesc* DesiredFormat);
     CKGLVertexBufferDesc() { GLBuffer = 0; }
     ~CKGLVertexBufferDesc() { glDeleteBuffers(1, &GLBuffer); }
@@ -164,7 +185,8 @@ public:
 public:
     bool operator==(const CKIndexBufferDesc &) const;
     void Create();
-    void Populate(GLushort* data, GLsizei count);
+    void *Lock(CKDWORD offset, CKDWORD len, bool overwrite);
+    void Unlock();
     void Bind();
     explicit CKGLIndexBufferDesc(CKIndexBufferDesc* DesiredFormat);
     CKGLIndexBufferDesc() { GLBuffer = 0; }
@@ -287,11 +309,17 @@ public:
     virtual void *LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount,
                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);
+
+    static unsigned get_shader_location(CKDWORD component);
+    void set_position_transformed(bool transformed);
+
+    CKBOOL _SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value);
+
 protected:
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
     CKDWORD GetStaticIndexBuffer(CKDWORD Count, GLushort* IndexData);
     CKDWORD GetDynamicIndexBuffer(CKDWORD Count, GLushort* IndexData, CKDWORD Index);
-    CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc * vbo, CKGLIndexBufferDesc * ibo, GLuint count);
+    CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc * vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt);
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
     CKBOOL CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat);
@@ -309,8 +337,8 @@ protected:
 public:
     constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
     CKGLRasterizer *m_Owner;
-    //GLFWwindow* m_GLFWwindow;
     HDC m_DC;
+    CKGLIndexBufferDesc *m_IndexBuffer;
     CKDWORD m_CurrentVertexShader = INVALID_VALUE;
     CKDWORD m_CurrentPixelShader = INVALID_VALUE;
     CKDWORD m_CurrentProgram = INVALID_VALUE;
