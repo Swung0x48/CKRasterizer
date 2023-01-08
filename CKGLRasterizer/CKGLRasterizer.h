@@ -1,19 +1,20 @@
 #pragma once
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
+
+#include "GL/glew.h"
 #include "CKRasterizer.h"
 #include "XBitArray.h"
 #include <Windows.h>
 
-#include "GL/glew.h"
 
-#include "GLFW/glfw3.h"
+// #include "GLFW/glfw3.h"
 #include <gl/GL.h>
 //#include "GL/glext.h"
 #include "gl/wglext.h"
 
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include "GLFW/glfw3native.h"
+// #define GLFW_EXPOSE_NATIVE_WIN32
+// #include "GLFW/glfw3native.h"
 
 #include <string>
 #include <unordered_map>
