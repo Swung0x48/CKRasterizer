@@ -42,6 +42,7 @@ void CKGLVertexBufferDesc::Bind(CKGLRasterizerContext *ctx)
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
     GLCall(glBindVertexArray(GLVertexArray));
     ctx->set_position_transformed(GLLayout.GetElements().front().usage == CKRST_VF_RASTERPOS);
+    ctx->set_vertex_has_color(m_VertexFormat & CKRST_VF_DIFFUSE);
 }
 
 void *CKGLVertexBufferDesc::Lock(CKDWORD offset, CKDWORD len, bool overwrite)

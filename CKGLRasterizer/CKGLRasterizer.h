@@ -18,7 +18,12 @@
 
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
+
+#define LSW_SPECULAR_ENABLED 0x0001
+#define LSW_LIGHTING_ENABLED 0x0002
+#define LSW_VRTCOLOR_ENABLED 0x0004
 
 bool GLLogCall(const char* function, const char* file, int line);
 
@@ -313,8 +318,11 @@ public:
                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);
 
-    static unsigned get_shader_location(CKDWORD component);
+    static unsigned get_vertex_attrib_location(CKDWORD component);
+    int get_uniform_location(const char* name);
     void set_position_transformed(bool transformed);
+    void set_vertex_has_color(bool color);
+    void set_title_status(const char* fmt, ...);
 
     CKBOOL _SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value);
 
@@ -348,4 +356,9 @@ public:
     CKDWORD m_CurrentVertexBuffer = INVALID_VALUE;
     CKDWORD m_CurrentIndexBuffer = INVALID_VALUE;
     std::unordered_map<std::string, GLint> m_UniformLocationCache;
+    std::vector<std::pair<bool, CKLightData>> m_lights;
+    VxVector m_viewpos;
+    CKDWORD m_lighting_flags;
+    std::string m_orig_title;
+    CKDWORD m_renderst[VXRENDERSTATE_MAXSTATE];
 };

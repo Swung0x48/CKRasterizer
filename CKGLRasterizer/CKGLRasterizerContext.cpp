@@ -1,5 +1,5 @@
 #include "CKGLRasterizer.h"
-#define LOGGING 1
+#define LOGGING 0
 #define STEP 0
 #define LOG_LOADTEXTURE 0
 #define LOG_CREATETEXTURE 0
@@ -40,63 +40,115 @@ bool GLLogCall(const char* function, const char* file, int line)
     
     return true;
 }
+VxMatrix inv(const VxMatrix &m);
 
 const char* vertexShader = 
 R"(#version 330 core
 layout (location=0) in vec4 xyzw;
-layout (location=1) in vec3 normal; //!!TODO
+layout (location=1) in vec3 normal;
 layout (location=2) in vec4 color;
-layout (location=3) in vec4 spec_color; //!!TODO
+layout (location=3) in vec4 spec_color;
 layout (location=4) in vec2 texcoord;
+out vec3 fpos;
+out vec3 fnormal;
 out vec4 fragcol;
 out vec2 ftexcoord;
 uniform bool is_transformed;
+uniform bool has_color;
 uniform mat4 world;
 uniform mat4 view;
 uniform mat4 proj;
-void main(){
+uniform mat4 tiworld;
+void main()
+{
     vec4 pos = xyzw;
     if (!is_transformed) pos = vec4(xyzw.xyz, 1.0);
     gl_Position = proj * view * world * pos;
-    fragcol.rgba = color.bgra; //convert from D3D color BGRA (ARGB as little endian) -> RGBA
-    ftexcoord = vec2(texcoord.x, 1 - texcoord.y); //TODO: d3d->ogl conversion
+    fpos = vec3(world * pos);
+    fnormal = mat3(tiworld) * normal;
+    if (has_color)
+        fragcol.rgba = color.bgra; //convert from D3D color BGRA (ARGB as little endian) -> RGBA
+    else fragcol = vec4(1., 1., 1., 1.);
+    ftexcoord = vec2(texcoord.x, 1 - texcoord.y);
 })";
 
 const char* fragShader =
 R"(#version 330 core
-in vec4 fragcol;
-in vec2 ftexcoord;
-out vec4 color;
-uniform sampler2D tex; //this will become an array in the future
-struct mat
+const uint LSW_SPECULAR_ENABLED = 0x0001U;
+const uint LSW_LIGHTING_ENABLED = 0x0002U;
+const uint LSW_VRTCOLOR_ENABLED = 0x0004U;
+
+struct mat_t
 {
     vec3 ambi;
     vec3 diff;
     vec3 spcl;
     float spcl_strength;
     vec3 emis;
-}; //!!TODO
-struct dirlight
+};
+struct light_t
 {
+    uint type; //1=point, 2=spot, 3=directional
     vec3 ambi;
     vec3 diff;
     vec3 spcl;
+    //directional
     vec3 dir;
-}; //!!TODO
-struct pointlight
-{
-    vec3 ambi;
-    vec3 diff;
-    vec3 spcl;
+    //point & spot
     vec3 pos;
+    float range;
+    //point
     float a0;
     float a1;
     float a2;
-}; //!!TODO
-void main(){
-    //color=fragcol;
+    //spot (cone)
+    float falloff;
+    float theta;
+    float phi;
+};
+in vec3 fpos;
+in vec3 fnormal;
+in vec4 fragcol;
+in vec2 ftexcoord;
+out vec4 color;
+uniform vec3 vpos; //camera position
+uniform mat_t material;
+uniform uint lighting_switches;
+uniform light_t lights; // will become array in the future
+uniform sampler2D tex; //this will become an array in the future
+//!!TODO: fog
+vec3 light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
+{
+    vec3 ldir = normalize(-l.dir);
+    float diff = max(dot(normal, ldir), 0.);
+    vec3 ret = vec3(0., 0., 0.);
+    vec3 amb = l.ambi * material.ambi;
+    vec3 dif = diff * l.diff * material.diff;
+    ret = amb + dif + material.emis;
+    if (spec_enabled)
+    {
+        vec3 refldir = reflect(-ldir, normal);
+        float specl = pow(max(dot(vdir, refldir), 0.), material.spcl_strength);
+        vec3 spc = l.spcl * material.spcl * specl;
+        ret += spc;
+    }
+    return ret;
+}
+vec4 clamp_color(vec4 c)
+{
+    return clamp(c, vec4(0, 0, 0, 0), vec4(1, 1, 1, 1));
+}
+void main()
+{
     //color=vec4(sin(ftexcoord.x), cos(ftexcoord.y), sin(ftexcoord.y), 1);
-    color = fragcol * texture(tex, ftexcoord);
+    vec3 norm = normalize(fnormal);
+    vec3 vdir = normalize(vpos - fpos);
+    color = vec4(1., 1., 1., 1.);
+    if ((lighting_switches & LSW_VRTCOLOR_ENABLED) != 0U)
+        color = fragcol;
+    if (lights.type == uint(3) && (lighting_switches & LSW_LIGHTING_ENABLED) != 0U)
+        color *= clamp_color(vec4(light_directional(lights, norm, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U), 1.0));
+    color *= texture(tex, ftexcoord);
 })";
 
 CKGLRasterizerContext::CKGLRasterizerContext()
@@ -252,10 +304,11 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     {
         return 0;
     }
-    SetWindowTextA((HWND)Window, (char*)glGetString(GL_VERSION));
+    m_Window = Window;
+    m_orig_title.resize(GetWindowTextLengthA(GetAncestor((HWND)Window, GA_ROOT)) + 1);
+    GetWindowTextA(GetAncestor((HWND)Window, GA_ROOT), m_orig_title.data(), m_orig_title.size());
+    while (m_orig_title.back() == '\0') m_orig_title.pop_back();
     ShowWindow((HWND)Window, SW_SHOW);
-    MessageBoxA(NULL, (char*)glGetString(GL_VERSION), 
-        (char*)glGetString(GL_VENDOR), NULL);
     m_Height = Height;
     m_Width = Width;
     m_Bpp = Bpp;
@@ -268,6 +321,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         m_Driver->m_Owner->m_FullscreenContext = this;
 
     m_IndexBuffer = nullptr;
+    memset(m_renderst, 0xff, sizeof(m_renderst));
 
     // TODO: Shader compilation and binding may be moved elsewhere
     CKDWORD vs_idx = 0, ps_idx = 1;
@@ -289,9 +343,10 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     GLCall(glLinkProgram(m_CurrentProgram));
     GLCall(glValidateProgram(m_CurrentProgram));
     GLCall(glUseProgram(m_CurrentProgram));
-    m_UniformLocationCache["tex"] = glGetUniformLocation(m_CurrentProgram, "tex");
-    GLCall(glUniform1i(m_UniformLocationCache["tex"], 0));
+    GLCall(glUniform1i(get_uniform_location("tex"), 0));
     GLCall(glActiveTexture(GL_TEXTURE0));
+    m_lighting_flags = LSW_LIGHTING_ENABLED | LSW_VRTCOLOR_ENABLED;
+    GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
     return 1;
 }
 
@@ -304,11 +359,14 @@ CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
 {
     GLbitfield mask = 0;
     if (!m_TransparentMode && (Flags & CKRST_CTXCLEAR_COLOR) != 0 && m_Bpp)
-            mask = GL_COLOR_BUFFER_BIT;
+        mask = GL_COLOR_BUFFER_BIT;
     if ((Flags & CKRST_CTXCLEAR_STENCIL) != 0 && m_StencilBpp)
         mask |= GL_STENCIL_BUFFER_BIT;
     if ((Flags & CKRST_CTXCLEAR_DEPTH) != 0 && m_ZBpp)
+    {
+        GLCall(glDepthMask(true));
         mask |= GL_DEPTH_BUFFER_BIT;
+    }
     GLCall(glClearColor(0.0f, 0.0f, 0.0f, 1.0f));
     GLCall(glClearDepth(Z));
     GLCall(glClearStencil(Stencil));
@@ -320,6 +378,9 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 {
 #if LOGGING && LOG_BATCHSTATS
     fprintf(stderr, "batch stats: direct %d, vb %d, vbib %d\r", directbat, vbbat, vbibbat);
+#endif
+#if LOG_BATCHSTATS
+    set_title_status("OpenGL %s | batch stats: direct %d, vb %d, vbib %d", glGetString(GL_VERSION), directbat, vbbat, vbibbat);
     directbat = 0;
     vbbat = 0;
     vbibbat = 0;
@@ -356,28 +417,47 @@ CKBOOL CKGLRasterizerContext::EndScene()
 
 CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
-    return glGetError() == GL_NO_ERROR;
+    if (Light >= m_lights.size())
+        m_lights.resize(Light + 1);
+    m_lights[Light].second = *data;
+    return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 {
-    //glEnable(GL_LIGHTING);
-    assert(glGetError() == GL_NO_ERROR);
-    return glGetError() == GL_NO_ERROR;
+    if (Light >= m_lights.size())
+        return FALSE;
+    m_lights[Light].first = Enable;
+    //!!FIXME: this implementation is temporary, AND WRONG.
+    //only for directional light testing for now.
+    auto lit = &m_lights[Light].second;
+    if (m_lights[Light].second.Type == VX_LIGHTDIREC)
+    {
+        glUniform1ui(get_uniform_location("lights.type"), 3);
+        glUniform3fv(get_uniform_location("lights.ambi"), 1, lit->Ambient.col);
+        glUniform3fv(get_uniform_location("lights.diff"), 1, lit->Diffuse.col);
+        glUniform3fv(get_uniform_location("lights.spcl"), 1, lit->Specular.col);
+        glUniform3fv(get_uniform_location("lights.dir"), 1, lit->Direction.v);
+    }
+    return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::SetMaterial(CKMaterialData *mat)
 {
-    return CKRasterizerContext::SetMaterial(mat);
+    //ignore alpha
+    glUniform3fv(get_uniform_location("material.ambi"), 1, mat->Ambient.col);
+    glUniform3fv(get_uniform_location("material.diff"), 1, mat->Diffuse.col);
+    glUniform3fv(get_uniform_location("material.spcl"), 1, mat->Specular.col);
+    glUniform3fv(get_uniform_location("material.emis"), 1, mat->Emissive.col);
+    glUniform1f(get_uniform_location("material.spcl_strength"), mat->SpecularPower);
+    return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::SetViewport(CKViewportData *data)
 {
-    
-    //glViewport(data->ViewX, data->ViewY, data->ViewWidth, data->ViewHeight);
-    //assert(glGetError() == GL_NO_ERROR);
-    //glDepthRange(data->ViewZMin, data->ViewZMax);
-    return glGetError() == GL_NO_ERROR;
+    GLCall(glViewport(data->ViewX, data->ViewY, data->ViewWidth, data->ViewHeight));
+    GLCall(glDepthRangef(data->ViewZMin, data->ViewZMax));
+    return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat)
@@ -386,24 +466,38 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
     switch (Type)
     {
         case VXMATRIX_WORLD:
+        {
             m_WorldMatrix = Mat;
             UnityMatrixMask = WORLD_TRANSFORM;
             SetUniformMatrix4fv("world", 1, GL_FALSE, (float*)&Mat);
+            VxMatrix im,tim;
+            Vx3DTransposeMatrix(tim, Mat); //row-major to column-major conversion madness
+            im = inv(tim);
+            SetUniformMatrix4fv("tiworld", 1, GL_TRUE, (float*)&im);
             m_MatrixUptodate &= ~0U ^ WORLD_TRANSFORM;
             break;
+        }
         case VXMATRIX_VIEW:
+        {
             m_ViewMatrix = Mat;
             UnityMatrixMask = VIEW_TRANSFORM;
             //Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
             SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&Mat);
             m_MatrixUptodate = 0;
+            VxMatrix t;
+            Vx3DInverseMatrix(t, Mat);
+            m_viewpos = VxVector(t[3][0], t[3][1], t[3][2]);
+            GLCall(glUniform3fv(get_uniform_location("vpos"), 1, (float*)&m_viewpos));
             break;
+        }
         case VXMATRIX_PROJECTION:
+        {
             m_ProjectionMatrix = Mat;
             UnityMatrixMask = PROJ_TRANSFORM;
             SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&Mat);
             m_MatrixUptodate = 0;
             break;
+        }
         case VXMATRIX_TEXTURE0:
         case VXMATRIX_TEXTURE1:
         case VXMATRIX_TEXTURE2:
@@ -431,10 +525,9 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
 
 CKBOOL CKGLRasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
-    static CKDWORD oldst[VXRENDERSTATE_MAXSTATE] = {~0U};
-    if (oldst[State] != Value)
+    if (m_renderst[State] != Value)
     {
-        oldst[State] = Value;
+        m_renderst[State] = Value;
         return _SetRenderState(State, Value);
     }
     return TRUE;
@@ -466,9 +559,28 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         }
         return GL_INVALID_ENUM;
     };
+    auto update_depth_switches = [this]() {
+        if (m_renderst[VXRENDERSTATE_ZENABLE] || m_renderst[VXRENDERSTATE_ZWRITEENABLE])
+        {
+            GLCall(glEnable(GL_DEPTH_TEST));
+        }
+        else
+        {
+            GLCall(glDisable(GL_DEPTH_TEST));
+        }
+    };
+    auto send_light_switches = [this]() {
+        GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
+    };
+    auto toggle_flag = [](CKDWORD *flags, CKDWORD flag, bool enabled) {
+        if (enabled) *flags |= flag;
+        else *flags &= ~0U ^ flag;
+    };
     switch (State)
     {
         case VXRENDERSTATE_ZENABLE:
+            //Double check against Direct3D behavior here.
+            //Microsoft's documentation is confusing.
             if (Value)
             {
                 if (previous_zfunc != GL_INVALID_ENUM)
@@ -476,12 +588,11 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
             }
             else
                 GLCall(glDepthFunc(GL_ALWAYS))
+            update_depth_switches();
             return TRUE;
         case VXRENDERSTATE_ZWRITEENABLE:
-            if (Value)
-                GLCall(glEnable(GL_DEPTH_TEST))
-            else
-                GLCall(glDisable(GL_DEPTH_TEST))
+            GLCall(glDepthMask(Value));
+            update_depth_switches();
             return TRUE;
         case VXRENDERSTATE_ZFUNC:
             switch (Value)
@@ -558,6 +669,40 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
             prev_cull = cull_combo;
             return TRUE;
         }
+        case VXRENDERSTATE_SPECULARENABLE:
+        {
+            toggle_flag(&m_lighting_flags, LSW_SPECULAR_ENABLED, Value);
+            send_light_switches();
+            return TRUE;
+        }
+        case VXRENDERSTATE_LIGHTING:
+        {
+            toggle_flag(&m_lighting_flags, LSW_LIGHTING_ENABLED, Value);
+            send_light_switches();
+            return TRUE;
+        }
+        case VXRENDERSTATE_COLORVERTEX:
+        {
+            toggle_flag(&m_lighting_flags, LSW_VRTCOLOR_ENABLED, Value);
+            send_light_switches();
+            return TRUE;
+        }
+        //case VXRENDERSTATE_DITHERENABLE:
+        //case VXRENDERSTATE_TEXTUREPERSPECTIVE:
+        //case VXRENDERSTATE_NORMALIZENORMALS:
+        //case VXRENDERSTATE_AMBIENT:
+        //case VXRENDERSTATE_ALPHAFUNC:
+        //case VXRENDERSTATE_ALPHATESTENABLE:
+        //case VXRENDERSTATE_SHADEMODE:
+        //case VXRENDERSTATE_FILLMODE:
+        //case VXRENDERSTATE_CLIPPING:
+        //case VXRENDERSTATE_FOGENABLE:
+        //case VXRENDERSTATE_FOGCOLOR:
+        //case VXRENDERSTATE_FOGSTART:
+        //case VXRENDERSTATE_FOGEND:
+        //case VXRENDERSTATE_FOGDENSITY:
+        default:
+            return FALSE;
     }
 }
 
@@ -585,7 +730,41 @@ CKBOOL CKGLRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 
 CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
-    return CKRasterizerContext::SetTextureStageState(Stage, Tss, Value);
+    //Currently, we ignore the Stage parameter (we only support 1 stage as of yet)
+    auto vxaddrmode2glwrap = [](VXTEXTURE_ADDRESSMODE am) -> GLenum
+    {
+        switch (am)
+        {
+            case VXTEXTURE_ADDRESSWRAP: return GL_REPEAT;
+            case VXTEXTURE_ADDRESSMIRROR: return GL_MIRRORED_REPEAT;
+            case VXTEXTURE_ADDRESSCLAMP: return GL_CLAMP_TO_EDGE;
+            case VXTEXTURE_ADDRESSBORDER: return GL_CLAMP_TO_BORDER;
+            case VXTEXTURE_ADDRESSMIRRORONCE: return GL_MIRROR_CLAMP_TO_EDGE;
+            default: return GL_INVALID_ENUM;
+        }
+    };
+    switch (Tss)
+    {
+        case CKRST_TSS_ADDRESS:
+            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
+            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
+            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
+            break;
+        case CKRST_TSS_ADDRESSU:
+            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
+            break;
+        case CKRST_TSS_ADDRESSV:
+            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
+            break;
+        case CKRST_TSS_BORDERCOLOR:
+        {
+            VxColor c(Value);
+            GLCall(glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, (float*)&c.col));
+            break;
+        }
+        default:
+            return FALSE;
+    }
 }
 
 CKBOOL CKGLRasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
@@ -884,7 +1063,16 @@ CKBOOL CKGLRasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
     return CKRasterizerContext::UnlockIndexBuffer(IB); }
 
-unsigned CKGLRasterizerContext::get_shader_location(CKDWORD component) {
+int CKGLRasterizerContext::get_uniform_location(const char *name)
+{
+    if (!m_CurrentProgram) return ~0;
+    if (m_UniformLocationCache.find(name) == m_UniformLocationCache.end())
+        m_UniformLocationCache[name] = glGetUniformLocation(m_CurrentProgram, name);
+    return m_UniformLocationCache[name];
+}
+
+unsigned CKGLRasterizerContext::get_vertex_attrib_location(CKDWORD component)
+{
     const static std::unordered_map<CKDWORD, unsigned> loc = {
         {CKRST_VF_POSITION, 0},
         {CKRST_VF_RASTERPOS, 0},
@@ -897,27 +1085,34 @@ unsigned CKGLRasterizerContext::get_shader_location(CKDWORD component) {
 }
 
 void CKGLRasterizerContext::set_position_transformed(bool transformed) {
-    if (m_UniformLocationCache.find("is_transformed") == m_UniformLocationCache.end())
-        m_UniformLocationCache["is_transformed"] = glGetUniformLocation(m_CurrentProgram, "is_transformed");
-    glUniform1i(m_UniformLocationCache["is_transformed"], transformed);
+    glUniform1i(get_uniform_location("is_transformed"), transformed);
+}
+
+void CKGLRasterizerContext::set_vertex_has_color(bool color) {
+    glUniform1i(get_uniform_location("has_color"), color); }
+
+void CKGLRasterizerContext::set_title_status(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    va_list argsx;
+    va_copy(argsx, args);
+    std::string ts;
+    ts.resize(vsnprintf(NULL, 0, fmt, argsx) + 1);
+    va_end(argsx);
+    vsnprintf(ts.data(), ts.size(), fmt, args);
+    va_end(args);
+
+    ts = m_orig_title + " | " + ts;
+    SetWindowTextA(GetAncestor((HWND)m_Window, GA_ROOT), ts.c_str());
 }
 
 
 BOOL CKGLRasterizerContext::SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose,
                                                 const GLfloat *value)
 {
-    int location = 0;
-    if (auto it = m_UniformLocationCache.find(name); it != m_UniformLocationCache.end())
-        location = it->second;
-    else if (m_CurrentProgram == 0)
-        return 0;
-    else
-    {
-        location = glGetUniformLocation(m_CurrentProgram, name.c_str());
-        m_UniformLocationCache[name] = location;
-    }
-    GLCall(glUniformMatrix4fv(location, count, transpose, value));
-    return 1;
+    GLCall(glUniformMatrix4fv(get_uniform_location(name.c_str()), count, transpose, value));
+    return TRUE;
 }
 
 CKDWORD CKGLRasterizerContext::GetStaticIndexBuffer(CKDWORD Count, GLushort *IndexData)
@@ -1079,4 +1274,52 @@ void CKGLRasterizerContext::ClearStreamCache()
 
 void CKGLRasterizerContext::ReleaseScreenBackup()
 {
+}
+
+VxMatrix inv(const VxMatrix &_m)
+{
+    //taken from https://stackoverflow.com/questions/1148309/inverting-a-4x4-matrix
+    float (*m)[4] = (float(*)[4])&_m;
+    float A2323 = m[2][2] * m[3][3] - m[2][3] * m[3][2] ;
+    float A1323 = m[2][1] * m[3][3] - m[2][3] * m[3][1] ;
+    float A1223 = m[2][1] * m[3][2] - m[2][2] * m[3][1] ;
+    float A0323 = m[2][0] * m[3][3] - m[2][3] * m[3][0] ;
+    float A0223 = m[2][0] * m[3][2] - m[2][2] * m[3][0] ;
+    float A0123 = m[2][0] * m[3][1] - m[2][1] * m[3][0] ;
+    float A2313 = m[1][2] * m[3][3] - m[1][3] * m[3][2] ;
+    float A1313 = m[1][1] * m[3][3] - m[1][3] * m[3][1] ;
+    float A1213 = m[1][1] * m[3][2] - m[1][2] * m[3][1] ;
+    float A2312 = m[1][2] * m[2][3] - m[1][3] * m[2][2] ;
+    float A1312 = m[1][1] * m[2][3] - m[1][3] * m[2][1] ;
+    float A1212 = m[1][1] * m[2][2] - m[1][2] * m[2][1] ;
+    float A0313 = m[1][0] * m[3][3] - m[1][3] * m[3][0] ;
+    float A0213 = m[1][0] * m[3][2] - m[1][2] * m[3][0] ;
+    float A0312 = m[1][0] * m[2][3] - m[1][3] * m[2][0] ;
+    float A0212 = m[1][0] * m[2][2] - m[1][2] * m[2][0] ;
+    float A0113 = m[1][0] * m[3][1] - m[1][1] * m[3][0] ;
+    float A0112 = m[1][0] * m[2][1] - m[1][1] * m[2][0] ;
+
+    float det = m[0][0] * ( m[1][1] * A2323 - m[1][2] * A1323 + m[1][3] * A1223 )
+        - m[0][1] * ( m[1][0] * A2323 - m[1][2] * A0323 + m[1][3] * A0223 )
+        + m[0][2] * ( m[1][0] * A1323 - m[1][1] * A0323 + m[1][3] * A0123 )
+        - m[0][3] * ( m[1][0] * A1223 - m[1][1] * A0223 + m[1][2] * A0123 ) ;
+    det = 1 / det;
+    float ret[4][4];
+    ret[0][0] = det *   ( m[1][1] * A2323 - m[1][2] * A1323 + m[1][3] * A1223 );
+    ret[0][1] = det * - ( m[0][1] * A2323 - m[0][2] * A1323 + m[0][3] * A1223 );
+    ret[0][2] = det *   ( m[0][1] * A2313 - m[0][2] * A1313 + m[0][3] * A1213 );
+    ret[0][3] = det * - ( m[0][1] * A2312 - m[0][2] * A1312 + m[0][3] * A1212 );
+    ret[1][0] = det * - ( m[1][0] * A2323 - m[1][2] * A0323 + m[1][3] * A0223 );
+    ret[1][1] = det *   ( m[0][0] * A2323 - m[0][2] * A0323 + m[0][3] * A0223 );
+    ret[1][2] = det * - ( m[0][0] * A2313 - m[0][2] * A0313 + m[0][3] * A0213 );
+    ret[1][3] = det *   ( m[0][0] * A2312 - m[0][2] * A0312 + m[0][3] * A0212 );
+    ret[2][0] = det *   ( m[1][0] * A1323 - m[1][1] * A0323 + m[1][3] * A0123 );
+    ret[2][1] = det * - ( m[0][0] * A1323 - m[0][1] * A0323 + m[0][3] * A0123 );
+    ret[2][2] = det *   ( m[0][0] * A1313 - m[0][1] * A0313 + m[0][3] * A0113 );
+    ret[2][3] = det * - ( m[0][0] * A1312 - m[0][1] * A0312 + m[0][3] * A0112 );
+    ret[3][0] = det * - ( m[1][0] * A1223 - m[1][1] * A0223 + m[1][2] * A0123 );
+    ret[3][1] = det *   ( m[0][0] * A1223 - m[0][1] * A0223 + m[0][2] * A0123 );
+    ret[3][2] = det * - ( m[0][0] * A1213 - m[0][1] * A0213 + m[0][2] * A0113 );
+
+    return VxMatrix(ret);
 }
