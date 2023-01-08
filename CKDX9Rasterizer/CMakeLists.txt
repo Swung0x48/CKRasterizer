@@ -10,27 +10,23 @@ set(CMAKE_MODULE_PATH
 
 set(CMAKE_INSTALL_PREFIX Install)
 
-find_package(DirectX9)
+find_package(DirectX9 REQUIRED)
 
-if(${DIRECTX9_FOUND})
-    include_directories(${VIRTOOLS_SDK_PATH}/Include)
+include_directories(${VIRTOOLS_SDK_PATH}/Include)
 
-    set(CKRASTERIZER_LIB_DIR ${CMAKE_CURRENT_LIST_DIR}/../vendor/CKRasterizerLib)
-    set(CKRASTERIZER_LIB_BUILD_DIR CKRasterizerLib.out)
-    add_subdirectory(${CKRASTERIZER_LIB_DIR} ${CKRASTERIZER_LIB_BUILD_DIR})
-    include_directories(${CKRASTERIZER_LIB_DIR}/include)
+set(CKRASTERIZER_LIB_DIR ${CMAKE_CURRENT_LIST_DIR}/../vendor/CKRasterizerLib)
+set(CKRASTERIZER_LIB_BUILD_DIR CKRasterizerLib.out)
+add_subdirectory(${CKRASTERIZER_LIB_DIR} ${CKRASTERIZER_LIB_BUILD_DIR})
+include_directories(${CKRASTERIZER_LIB_DIR}/include)
 
-    file(GLOB CKDX9_RASTERIZER_SRC
-        "*.h"
-        "*.cpp"
-    )
+file(GLOB CKDX9_RASTERIZER_SRC
+    "*.h"
+    "*.cpp"
+)
 
-    message(STATUS "DIRECTX9_INCLUDE_DIRS=${DIRECTX9_INCLUDE_DIRS}")
-    message(STATUS "DIRECTX9_ROOT_DIR=${DIRECTX9_ROOT_DIR}")
-    include_directories(${DIRECTX9_INCLUDE_DIRS})
-    add_library(${PROJECT_NAME} SHARED ${CKDX9_RASTERIZER_SRC})
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${DIRECTX9_LIBRARIES})
-    target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
-else()
-    message(SEND_ERROR "DirectX 9 SDK not found, skipping generation for CKDX9Rasterizer.")
-endif()
+message(STATUS "DIRECTX9_INCLUDE_DIRS=${DIRECTX9_INCLUDE_DIRS}")
+message(STATUS "DIRECTX9_ROOT_DIR=${DIRECTX9_ROOT_DIR}")
+include_directories(${DIRECTX9_INCLUDE_DIRS})
+add_library(${PROJECT_NAME} SHARED ${CKDX9_RASTERIZER_SRC})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${DIRECTX9_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
