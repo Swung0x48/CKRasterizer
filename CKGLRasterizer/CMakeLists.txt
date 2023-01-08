@@ -17,9 +17,11 @@ include_directories(${GLEW_INCLUDE_DIRS})
 include_directories(${VIRTOOLS_SDK_PATH}/Include)
 include_directories(${CMAKE_CURRENT_LIST_DIR}/../vendor/OpenGL-Registry/api)
 
-set(CKRASTERIZER_LIB_DIR ${CMAKE_CURRENT_LIST_DIR}/../vendor/CKRasterizerLib)
-set(CKRASTERIZER_LIB_BUILD_DIR CKRasterizerLib.out)
-add_subdirectory(${CKRASTERIZER_LIB_DIR} ${CKRASTERIZER_LIB_BUILD_DIR})
+if (NOT TARGET CKRasterizerLib)
+    set(CKRASTERIZER_LIB_DIR ${CMAKE_CURRENT_LIST_DIR}/../vendor/CKRasterizerLib)
+    set(CKRASTERIZER_LIB_BUILD_DIR CKRasterizerLib.out)
+    add_subdirectory(${CKRASTERIZER_LIB_DIR} ${CKRASTERIZER_LIB_BUILD_DIR})
+endif()
 include_directories(${CKRASTERIZER_LIB_DIR}/include)
 
 file(GLOB CKGL_RASTERIZER_SRC

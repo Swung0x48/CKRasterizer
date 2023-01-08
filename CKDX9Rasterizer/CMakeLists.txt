@@ -14,9 +14,12 @@ find_package(DirectX9 REQUIRED)
 
 include_directories(${VIRTOOLS_SDK_PATH}/Include)
 
-set(CKRASTERIZER_LIB_DIR ${CMAKE_CURRENT_LIST_DIR}/../vendor/CKRasterizerLib)
-set(CKRASTERIZER_LIB_BUILD_DIR CKRasterizerLib.out)
-add_subdirectory(${CKRASTERIZER_LIB_DIR} ${CKRASTERIZER_LIB_BUILD_DIR})
+if (NOT TARGET CKRasterizerLib)
+    set(CKRASTERIZER_LIB_DIR ${CMAKE_CURRENT_LIST_DIR}/../vendor/CKRasterizerLib)
+    set(CKRASTERIZER_LIB_BUILD_DIR CKRasterizerLib.out)
+    add_subdirectory(${CKRASTERIZER_LIB_DIR} ${CKRASTERIZER_LIB_BUILD_DIR})
+endif() 
+
 include_directories(${CKRASTERIZER_LIB_DIR}/include)
 
 file(GLOB CKDX9_RASTERIZER_SRC
