@@ -1065,7 +1065,7 @@ CKBOOL CKGLRasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 
 int CKGLRasterizerContext::get_uniform_location(const char *name)
 {
-    if (!m_CurrentProgram) return ~0;
+    if (m_CurrentProgram == INVALID_VALUE) return ~0;
     if (m_UniformLocationCache.find(name) == m_UniformLocationCache.end())
         m_UniformLocationCache[name] = glGetUniformLocation(m_CurrentProgram, name);
     return m_UniformLocationCache[name];
