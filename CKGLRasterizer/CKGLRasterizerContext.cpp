@@ -265,9 +265,20 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     GLCall(glUseProgram(m_CurrentProgram));
     GLCall(glUniform1i(get_uniform_location("tex"), 0));
     GLCall(glActiveTexture(GL_TEXTURE0));
+
     m_lighting_flags = LSW_LIGHTING_ENABLED | LSW_VRTCOLOR_ENABLED;
     GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
-    return 1;
+    {
+        CKTextureDesc blank;
+        blank.Format.Width = 1;
+        blank.Format.Height = 1;
+        CKDWORD white = ~0U;
+        CreateTexture(0, &blank);
+        CKGLTextureDesc* blanktex = static_cast<CKGLTextureDesc*>(m_Textures[0]);
+        blanktex->Bind(this);
+        blanktex->Load(&white);
+    }
+    return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::Resize(int PosX, int PosY, int Width, int Height, CKDWORD Flags)
