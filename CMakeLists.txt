@@ -12,8 +12,8 @@ if (CMAKE_SIZEOF_VOID_P EQUAL 8)
 	message(FATAL_ERROR "64-bit Virtools isn't real (yet).")
 endif()
 
-option(BUILD_DX9_RASTERIZER ON)
-option(BUILD_GL_RASTERIZER ON)
+option(BUILD_DX9_RASTERIZER "Build Direct3D 9 Rasterizer" ON)
+option(BUILD_GL_RASTERIZER "Build OpenGL 3.x Rasterizer" ON)
 
 if(BUILD_DX9_RASTERIZER)
 	add_subdirectory(CKDX9Rasterizer)
