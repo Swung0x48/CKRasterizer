@@ -34,3 +34,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE opengl32.lib)
 target_link_libraries(${PROJECT_NAME} PRIVATE GLEW::glew_s)
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
 target_compile_definitions(${PROJECT_NAME} PRIVATE GLEW_STATIC)
+if(DEFINED BALLANCE_DIR)
+	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND "${CMAKE_COMMAND}" -E
+		copy "$<TARGET_FILE:${PROJECT_NAME}>"
+		"${BALLANCE_DIR}/RenderEngines/$<TARGET_FILE_NAME:${PROJECT_NAME}>")
+	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND "${CMAKE_COMMAND}" -E
+		copy "$<TARGET_PDB_FILE:${PROJECT_NAME}>"
+		"${BALLANCE_DIR}/RenderEngines/$<TARGET_PDB_FILE_NAME:${PROJECT_NAME}>")
+endif()
