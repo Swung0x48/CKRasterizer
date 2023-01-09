@@ -59,7 +59,7 @@ typedef struct GLVertexBufferElement {
 class GLVertexBufferLayout
 {
 public:
-    GLVertexBufferLayout()
+    GLVertexBufferLayout() : stride_(0)
     {
     }
     template<typename T>
