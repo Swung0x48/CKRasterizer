@@ -393,8 +393,9 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
         {
             m_WorldMatrix = Mat;
             UnityMatrixMask = WORLD_TRANSFORM;
+            Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
             SetUniformMatrix4fv("world", 1, GL_FALSE, (float*)&Mat);
-            VxMatrix im,tim;
+            VxMatrix im, tim;
             Vx3DTransposeMatrix(tim, Mat); //row-major to column-major conversion madness
             im = inv(tim);
 
@@ -406,7 +407,7 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
         {
             m_ViewMatrix = Mat;
             UnityMatrixMask = VIEW_TRANSFORM;
-            //Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
             SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&Mat);
             m_MatrixUptodate = 0;
             VxMatrix t;
@@ -674,18 +675,18 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
             GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
             GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
-            break;
+            return TRUE;
         case CKRST_TSS_ADDRESSU:
             GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
-            break;
+            return TRUE;
         case CKRST_TSS_ADDRESSV:
             GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
-            break;
+            return TRUE;
         case CKRST_TSS_BORDERCOLOR:
         {
             VxColor c(Value);
             GLCall(glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, (float*)&c.col));
-            break;
+            return TRUE;
         }
         default:
             return FALSE;

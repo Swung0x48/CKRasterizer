@@ -349,7 +349,7 @@ public:
     constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
     CKGLRasterizer *m_Owner;
     HDC m_DC;
-    CKGLIndexBufferDesc *m_IndexBuffer;
+    CKGLIndexBufferDesc *m_IndexBuffer = nullptr;
     CKDWORD m_CurrentVertexShader = INVALID_VALUE;
     CKDWORD m_CurrentPixelShader = INVALID_VALUE;
     CKDWORD m_CurrentProgram = INVALID_VALUE;
