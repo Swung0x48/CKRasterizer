@@ -8,16 +8,20 @@ if (NOT ${MSVC})
 	message(FATAL_ERROR "MSVC is required to build this project.")
 endif()
 
-if(NOT DEFINED CMAKE_GENERATOR_PLATFORM)
-	message(FATAL_ERROR "Please specify a platform. (-A / -DCMAKE_GENERATOR_PLATFORM)")
+if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+	message(FATAL_ERROR "64-bit Virtools isn't real (yet).")
 endif()
 
-if (NOT ${CMAKE_GENERATOR_PLATFORM} MATCHES "Win32")
-	message(FATAL_ERROR "64-bit/ARM Virtools isn't real (yet).")
+option(BUILD_DX9_RASTERIZER ON)
+option(BUILD_GL_RASTERIZER ON)
+
+if(BUILD_DX9_RASTERIZER)
+	add_subdirectory(CKDX9Rasterizer)
 endif()
 
-add_subdirectory(CKDX9Rasterizer)
-add_subdirectory(CKGLRasterizer)
+if(BUILD_GL_RASTERIZER)
+	add_subdirectory(CKGLRasterizer)
+endif()
 
 if(NOT DEFINED BALLANCE_DIR)
 	message(NOTICE "Set BALLANCE_DIR to automatically copy the rasterizer to its RenderEngines directory after build.")
