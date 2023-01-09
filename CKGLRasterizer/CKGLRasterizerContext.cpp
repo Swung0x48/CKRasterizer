@@ -319,13 +319,6 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 
 CKBOOL CKGLRasterizerContext::BeginScene()
 {
-    /*VxMatrix Mat = VxMatrix::Identity();
-    SetUniformMatrix4fv("world", 1, GL_FALSE, (float*)&Mat);
-    SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&Mat);
-    SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&Mat);
-    m_WorldMatrix = Mat;
-    m_ViewMatrix = Mat;
-    m_ProjectionMatrix = Mat;*/
     return 1;
 }
 
@@ -393,7 +386,8 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
             VxMatrix im,tim;
             Vx3DTransposeMatrix(tim, Mat); //row-major to column-major conversion madness
             im = inv(tim);
-            SetUniformMatrix4fv("tiworld", 1, GL_TRUE, (float*)&im);
+
+            SetUniformMatrix4fv("tiworld", 1, GL_FALSE, (float*)&im);
             m_MatrixUptodate &= ~0U ^ WORLD_TRANSFORM;
             break;
         }
@@ -1240,6 +1234,7 @@ VxMatrix inv(const VxMatrix &_m)
     ret[3][0] = det * - ( m[1][0] * A1223 - m[1][1] * A0223 + m[1][2] * A0123 );
     ret[3][1] = det *   ( m[0][0] * A1223 - m[0][1] * A0223 + m[0][2] * A0123 );
     ret[3][2] = det * - ( m[0][0] * A1213 - m[0][1] * A0213 + m[0][2] * A0113 );
+    ret[3][3] = det *   ( m[0][0] * A1212 - m[0][1] * A0212 + m[0][2] * A0112 );
 
     return VxMatrix(ret);
 }
