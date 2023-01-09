@@ -29,7 +29,7 @@ file(GLOB CKGL_RASTERIZER_SRC
     "*.cpp"
 )
 
-add_library(${PROJECT_NAME} SHARED ${CKGL_RASTERIZER_SRC})
+add_library(${PROJECT_NAME} SHARED ${CKGL_RASTERIZER_SRC} shaders.rc)
 target_link_libraries(${PROJECT_NAME} PRIVATE opengl32.lib)
 target_link_libraries(${PROJECT_NAME} PRIVATE GLEW::glew_s)
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)

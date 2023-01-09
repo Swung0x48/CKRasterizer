@@ -40,116 +40,36 @@ bool GLLogCall(const char* function, const char* file, int line)
     
     return true;
 }
+
 VxMatrix inv(const VxMatrix &m);
 
-const char* vertexShader = 
-R"(#version 330 core
-layout (location=0) in vec4 xyzw;
-layout (location=1) in vec3 normal;
-layout (location=2) in vec4 color;
-layout (location=3) in vec4 spec_color;
-layout (location=4) in vec2 texcoord;
-out vec3 fpos;
-out vec3 fnormal;
-out vec4 fragcol;
-out vec2 ftexcoord;
-uniform bool is_transformed;
-uniform bool has_color;
-uniform mat4 world;
-uniform mat4 view;
-uniform mat4 proj;
-uniform mat4 tiworld;
-void main()
-{
-    vec4 pos = xyzw;
-    if (!is_transformed) pos = vec4(xyzw.xyz, 1.0);
-    gl_Position = proj * view * world * pos;
-    fpos = vec3(world * pos);
-    fnormal = mat3(tiworld) * normal;
-    if (has_color)
-        fragcol.rgba = color.bgra; //convert from D3D color BGRA (ARGB as little endian) -> RGBA
-    else fragcol = vec4(1., 1., 1., 1.);
-    ftexcoord = vec2(texcoord.x, 1 - texcoord.y);
-})";
+static HMODULE self_module = nullptr;
 
-const char* fragShader =
-R"(#version 330 core
-const uint LSW_SPECULAR_ENABLED = 0x0001U;
-const uint LSW_LIGHTING_ENABLED = 0x0002U;
-const uint LSW_VRTCOLOR_ENABLED = 0x0004U;
-
-struct mat_t
+static HMODULE get_self_module()
 {
-    vec3 ambi;
-    vec3 diff;
-    vec3 spcl;
-    float spcl_strength;
-    vec3 emis;
-};
-struct light_t
-{
-    uint type; //1=point, 2=spot, 3=directional
-    vec3 ambi;
-    vec3 diff;
-    vec3 spcl;
-    //directional
-    vec3 dir;
-    //point & spot
-    vec3 pos;
-    float range;
-    //point
-    float a0;
-    float a1;
-    float a2;
-    //spot (cone)
-    float falloff;
-    float theta;
-    float phi;
-};
-in vec3 fpos;
-in vec3 fnormal;
-in vec4 fragcol;
-in vec2 ftexcoord;
-out vec4 color;
-uniform vec3 vpos; //camera position
-uniform mat_t material;
-uniform uint lighting_switches;
-uniform light_t lights; // will become array in the future
-uniform sampler2D tex; //this will become an array in the future
-//!!TODO: fog
-vec3 light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
-{
-    vec3 ldir = normalize(-l.dir);
-    float diff = max(dot(normal, ldir), 0.);
-    vec3 ret = vec3(0., 0., 0.);
-    vec3 amb = l.ambi * material.ambi;
-    vec3 dif = diff * l.diff * material.diff;
-    ret = amb + dif + material.emis;
-    if (spec_enabled)
+    if (!self_module)
     {
-        vec3 refldir = reflect(-ldir, normal);
-        float specl = pow(max(dot(vdir, refldir), 0.), material.spcl_strength);
-        vec3 spc = l.spcl * material.spcl * specl;
-        ret += spc;
+        GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            (char*)&self_module, &self_module);
     }
-    return ret;
+    return self_module;
 }
-vec4 clamp_color(vec4 c)
+
+CKDWORD get_resource_size(const char* type, const char* name)
 {
-    return clamp(c, vec4(0, 0, 0, 0), vec4(1, 1, 1, 1));
+    HRSRC rsc = FindResourceA(get_self_module(), name, type);
+    if (!rsc) return 0;
+    return SizeofResource(get_self_module(), rsc);
 }
-void main()
+
+void* get_resource_data(const char* type, const char* name)
 {
-    //color=vec4(sin(ftexcoord.x), cos(ftexcoord.y), sin(ftexcoord.y), 1);
-    vec3 norm = normalize(fnormal);
-    vec3 vdir = normalize(vpos - fpos);
-    color = vec4(1., 1., 1., 1.);
-    if ((lighting_switches & LSW_VRTCOLOR_ENABLED) != 0U)
-        color = fragcol;
-    if (lights.type == uint(3) && (lighting_switches & LSW_LIGHTING_ENABLED) != 0U)
-        color *= clamp_color(vec4(light_directional(lights, norm, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U), 1.0));
-    color *= texture(tex, ftexcoord);
-})";
+    HRSRC rsc = FindResourceA(get_self_module(), name, type);
+    if (!rsc) return nullptr;
+    HGLOBAL hrdat = LoadResource(get_self_module(), rsc);
+    if (!hrdat) return nullptr;
+    return LockResource(hrdat);
+}
 
 CKGLRasterizerContext::CKGLRasterizerContext()
 {
@@ -326,12 +246,12 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     // TODO: Shader compilation and binding may be moved elsewhere
     CKDWORD vs_idx = 0, ps_idx = 1;
     CKVertexShaderDesc vs_desc;
-    vs_desc.m_Function = (CKDWORD*)vertexShader;
-    vs_desc.m_FunctionSize = strlen(vertexShader);
+    vs_desc.m_Function = (CKDWORD*)get_resource_data("CKGLR_VERT_SHADER", "BUILTIN_VERTEX_SHADER");
+    vs_desc.m_FunctionSize = get_resource_size("CKGLR_VERT_SHADER", "BUILTIN_VERTEX_SHADER");
     CreateObject(vs_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc);
     CKPixelShaderDesc ps_desc;
-    ps_desc.m_Function = (CKDWORD*)fragShader;
-    ps_desc.m_FunctionSize = strlen(fragShader);
+    ps_desc.m_Function = (CKDWORD*)get_resource_data("CKGLR_FRAG_SHADER", "BUILTIN_FRAGMENT_SHADER");
+    ps_desc.m_FunctionSize = get_resource_size("CKGLR_FRAG_SHADER", "BUILTIN_FRAGMENT_SHADER");
     CreateObject(ps_idx, CKRST_OBJ_PIXELSHADER, &ps_desc);
     m_CurrentVertexShader = vs_idx;
     m_CurrentPixelShader = ps_idx;
@@ -1194,8 +1114,8 @@ CKBOOL CKGLRasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShader
         return 0;
     delete m_VertexShaders[VShader];
     CKGLVertexShaderDesc* desc = new CKGLVertexShaderDesc;
-    DesiredFormat->m_Function = (CKDWORD*)vertexShader;
-    DesiredFormat->m_FunctionSize = strlen(vertexShader);
+    desc->m_Function = DesiredFormat->m_Function;
+    desc->m_FunctionSize  = DesiredFormat->m_FunctionSize;
     if (desc->Create(this, DesiredFormat))
     {
         m_VertexShaders[VShader] = desc;
@@ -1210,8 +1130,8 @@ CKBOOL CKGLRasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDe
         return 0;
     delete m_PixelShaders[PShader];
     CKGLPixelShaderDesc* desc = new CKGLPixelShaderDesc;
-    DesiredFormat->m_Function = (CKDWORD*)fragShader;
-    DesiredFormat->m_FunctionSize = strlen(fragShader);
+    desc->m_Function = DesiredFormat->m_Function;
+    desc->m_FunctionSize  = DesiredFormat->m_FunctionSize;
     if (desc->Create(this, DesiredFormat))
     {
         m_PixelShaders[PShader] = desc;
