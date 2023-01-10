@@ -1,3 +1,5 @@
+#include "CKGLVertexBuffer.h"
+
 #include "CKGLRasterizer.h"
 
 CKGLVertexBufferDesc::CKGLVertexBufferDesc(CKVertexBufferDesc* DesiredFormat)
