@@ -7,16 +7,22 @@
 #include "XBitArray.h"
 #include <Windows.h>
 
-
-// #include "GLFW/glfw3.h"
 #include <gl/GL.h>
-//#include "GL/glext.h"
 #include "gl/wglext.h"
 
-// #define GLFW_EXPOSE_NATIVE_WIN32
-// #include "GLFW/glfw3native.h"
+#define ENABLE_TRACY 0
+
+#if ENABLE_TRACY
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyOpenGL.hpp"
+#else
+#define TracyGpuZone(_)
+#define TracyGpuContext
+#define TracyPlot(_, __)
+#define TracyGpuCollect
+#define FrameMark
+#define ZoneScopedN(_)
+#endif
 
 #include <string>
 #include <unordered_map>
