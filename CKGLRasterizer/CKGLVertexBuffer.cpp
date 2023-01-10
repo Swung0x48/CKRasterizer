@@ -39,6 +39,7 @@ void CKGLVertexBufferDesc::Create()
 
 void CKGLVertexBufferDesc::Bind(CKGLRasterizerContext *ctx)
 {
+    ZoneScopedN(__FUNCTION__);
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
     GLCall(glBindVertexArray(GLVertexArray));
     ctx->set_position_transformed(GLLayout.GetElements().front().usage == CKRST_VF_RASTERPOS);
@@ -47,12 +48,17 @@ void CKGLVertexBufferDesc::Bind(CKGLRasterizerContext *ctx)
 
 void *CKGLVertexBufferDesc::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
 {
+    ZoneScopedN(__FUNCTION__);
     if (!offset && !len)
     {
         GLCall(glGetNamedBufferParameteriv(GLBuffer, GL_BUFFER_SIZE, (GLint*)&len));
     }
-    auto ret = glMapNamedBufferRange(GLBuffer, offset, len, GL_MAP_WRITE_BIT | (overwrite ? GL_MAP_INVALIDATE_RANGE_BIT : 0));
-    GLLogCall("glMapNamedBufferRange", __FILE__, __LINE__);
+    void* ret = nullptr;
+    {
+        TracyGpuZone(GLZoneName(x));
+        ret = glMapNamedBufferRange(GLBuffer, offset, len, GL_MAP_WRITE_BIT | (overwrite ? GL_MAP_INVALIDATE_RANGE_BIT : 0));
+        GLLogCall("glMapNamedBufferRange", __FILE__, __LINE__);
+    }
     return ret;
 }
 

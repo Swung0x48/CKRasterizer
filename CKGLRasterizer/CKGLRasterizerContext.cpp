@@ -229,6 +229,8 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     {
         return 0;
     }
+    TracyGpuContext;
+
     m_Window = Window;
     m_orig_title.resize(GetWindowTextLengthA(GetAncestor((HWND)Window, GA_ROOT)) + 1);
     GetWindowTextA(GetAncestor((HWND)Window, GA_ROOT), m_orig_title.data(), m_orig_title.size());
@@ -333,6 +335,9 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 #endif
 #if LOG_BATCHSTATS
     set_title_status("OpenGL %s | batch stats: direct %d, vb %d, vbib %d", glGetString(GL_VERSION), directbat, vbbat, vbibbat);
+    TracyPlot("DirectBatch", (int64_t)directbat);
+    TracyPlot("VB", (int64_t)vbbat);
+    TracyPlot("VBIB", (int64_t)vbibbat);
     directbat = 0;
     vbbat = 0;
     vbibbat = 0;
@@ -345,12 +350,14 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
         step_mode = false;
 #endif
     SwapBuffers(m_DC);
+    TracyGpuCollect;
 
     return 1;
 }
 
 CKBOOL CKGLRasterizerContext::BeginScene()
 {
+    FrameMark;
     return 1;
 }
 
@@ -361,6 +368,7 @@ CKBOOL CKGLRasterizerContext::EndScene()
 
 CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
+    ZoneScopedN(__FUNCTION__);
     if (Light >= m_lights.size())
         m_lights.resize(Light + 1);
     m_lights[Light].second = *data;
@@ -369,6 +377,7 @@ CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 
 CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 {
+    ZoneScopedN(__FUNCTION__);
     if (Light >= m_lights.size())
         return FALSE;
     m_lights[Light].first = Enable;
@@ -377,28 +386,30 @@ CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
     auto lit = &m_lights[Light].second;
     if (m_lights[Light].second.Type == VX_LIGHTDIREC)
     {
-        glUniform1ui(get_uniform_location("lights.type"), 3);
-        glUniform3fv(get_uniform_location("lights.ambi"), 1, lit->Ambient.col);
-        glUniform3fv(get_uniform_location("lights.diff"), 1, lit->Diffuse.col);
-        glUniform3fv(get_uniform_location("lights.spcl"), 1, lit->Specular.col);
-        glUniform3fv(get_uniform_location("lights.dir"), 1, lit->Direction.v);
+        GLCall(glUniform1ui(get_uniform_location("lights.type"), 3));
+        GLCall(glUniform3fv(get_uniform_location("lights.ambi"), 1, lit->Ambient.col));
+        GLCall(glUniform3fv(get_uniform_location("lights.diff"), 1, lit->Diffuse.col));
+        GLCall(glUniform3fv(get_uniform_location("lights.spcl"), 1, lit->Specular.col));
+        GLCall(glUniform3fv(get_uniform_location("lights.dir"), 1, lit->Direction.v));
     }
     return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::SetMaterial(CKMaterialData *mat)
 {
+    ZoneScopedN(__FUNCTION__);
     //ignore alpha
-    glUniform3fv(get_uniform_location("material.ambi"), 1, mat->Ambient.col);
-    glUniform3fv(get_uniform_location("material.diff"), 1, mat->Diffuse.col);
-    glUniform3fv(get_uniform_location("material.spcl"), 1, mat->Specular.col);
-    glUniform3fv(get_uniform_location("material.emis"), 1, mat->Emissive.col);
-    glUniform1f(get_uniform_location("material.spcl_strength"), mat->SpecularPower);
+    GLCall(glUniform3fv(get_uniform_location("material.ambi"), 1, mat->Ambient.col));
+    GLCall(glUniform3fv(get_uniform_location("material.diff"), 1, mat->Diffuse.col));
+    GLCall(glUniform3fv(get_uniform_location("material.spcl"), 1, mat->Specular.col));
+    GLCall(glUniform3fv(get_uniform_location("material.emis"), 1, mat->Emissive.col));
+    GLCall(glUniform1f(get_uniform_location("material.spcl_strength"), mat->SpecularPower));
     return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::SetViewport(CKViewportData *data)
 {
+    ZoneScopedN(__FUNCTION__);
     GLCall(glViewport(data->ViewX, data->ViewY, data->ViewWidth, data->ViewHeight));
     GLCall(glDepthRangef(data->ViewZMin, data->ViewZMax));
     GLCall(glDepthRangef(0, 1));
@@ -415,6 +426,7 @@ CKBOOL CKGLRasterizerContext::SetViewport(CKViewportData *data)
 
 CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat)
 {
+    ZoneScopedN(__FUNCTION__);
     CKDWORD UnityMatrixMask = 0;
     switch (Type)
     {
@@ -485,6 +497,7 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
 
 CKBOOL CKGLRasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
+    ZoneScopedN(__FUNCTION__);
     if (m_renderst[State] != Value)
     {
         m_renderst[State] = Value;
@@ -722,6 +735,7 @@ CKBOOL CKGLRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 #if LOGGING && LOG_SETTEXTURE
     fprintf(stderr, "settexture %d %d\n", Texture, Stage);
 #endif
+    ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
     CKGLTextureDesc *desc = static_cast<CKGLTextureDesc *>(m_Textures[Texture]);
@@ -736,6 +750,7 @@ CKBOOL CKGLRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 
 CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
+    ZoneScopedN(__FUNCTION__);
     //Currently, we ignore the Stage parameter (we only support 1 stage as of yet)
     auto vxaddrmode2glwrap = [](VXTEXTURE_ADDRESSMODE am) -> GLenum
     {
@@ -802,6 +817,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
 #if LOG_BATCHSTATS
     ++directbat;
 #endif
+    ZoneScopedN(__FUNCTION__);
     CKBOOL clip = 0;
     CKDWORD vertexSize;
     CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
@@ -831,7 +847,10 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
         pbData = vbo->Lock(0, vertexSize * data->VertexCount, true);
         vbo->m_CurrentVCount = data->VertexCount;
     }
-    CKRSTLoadVertexBuffer(static_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
+    {
+        ZoneScopedN("CKRSTLoadVertexBuffer");
+        CKRSTLoadVertexBuffer(static_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
+    }
     vbo->Unlock();
     return InternalDrawPrimitive(pType, vbo, vbase, data->VertexCount, indices, indexcount);
 }
@@ -848,6 +867,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Ver
 #endif
 #if LOG_BATCHSTATS
     ++vbbat;
+    ZoneScopedN(__FUNCTION__);
 #endif
     return InternalDrawPrimitive(pType, static_cast<CKGLVertexBufferDesc*>(m_VertexBuffers[VertexBuffer]),
         StartIndex, VertexCount, indices, indexcount);
@@ -866,11 +886,13 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
 #if LOG_BATCHSTATS
     ++vbibbat;
 #endif
+    ZoneScopedN(__FUNCTION__);
     return CKRasterizerContext::DrawPrimitiveVBIB(pType, VB, IB, MinVIndex, VertexCount, StartIndex, Indexcount);
 }
 
 CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc *vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt)
 {
+    ZoneScopedN(__FUNCTION__);
     if (!vbo) return FALSE;
     vbo->Bind(this);
 
@@ -943,6 +965,7 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
 
 CKBOOL CKGLRasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
 {
+    ZoneScopedN(__FUNCTION__);
     int result;
 
     if (ObjIndex >= m_Textures.Size())
@@ -988,6 +1011,7 @@ CKBOOL CKGLRasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Ty
 void * CKGLRasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
     CKRST_LOCKFLAGS Lock)
 {
+    ZoneScopedN(__FUNCTION__);
     if (VB >= m_VertexBuffers.Size()) return NULL;
     CKGLVertexBufferDesc *vbo = static_cast<CKGLVertexBufferDesc*>(m_VertexBuffers[VB]);
     if (!vbo) return NULL;
@@ -996,6 +1020,7 @@ void * CKGLRasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, 
 
 CKBOOL CKGLRasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 {
+    ZoneScopedN(__FUNCTION__);
     if (VB >= m_VertexBuffers.Size()) return FALSE;
     CKGLVertexBufferDesc *vbo = static_cast<CKGLVertexBufferDesc*>(m_VertexBuffers[VB]);
     if (!vbo) return FALSE;
@@ -1005,6 +1030,7 @@ CKBOOL CKGLRasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 
 CKBOOL CKGLRasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
 {
+    ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
     CKGLTextureDesc *desc = static_cast<CKGLTextureDesc *>(m_Textures[Texture]);
@@ -1077,6 +1103,7 @@ CKBOOL CKGLRasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 
 int CKGLRasterizerContext::get_uniform_location(const char *name)
 {
+    ZoneScopedN(__FUNCTION__);
     if (m_CurrentProgram == INVALID_VALUE) return ~0;
     if (m_UniformLocationCache.find(name) == m_UniformLocationCache.end())
         m_UniformLocationCache[name] = glGetUniformLocation(m_CurrentProgram, name);
@@ -1097,11 +1124,11 @@ unsigned CKGLRasterizerContext::get_vertex_attrib_location(CKDWORD component)
 }
 
 void CKGLRasterizerContext::set_position_transformed(bool transformed) {
-    glUniform1i(get_uniform_location("is_transformed"), transformed);
+    GLCall(glUniform1i(get_uniform_location("is_transformed"), transformed));
 }
 
 void CKGLRasterizerContext::set_vertex_has_color(bool color) {
-    glUniform1i(get_uniform_location("has_color"), color); }
+    GLCall(glUniform1i(get_uniform_location("has_color"), color)); }
 
 void CKGLRasterizerContext::set_title_status(const char *fmt, ...)
 {
@@ -1129,6 +1156,7 @@ BOOL CKGLRasterizerContext::SetUniformMatrix4fv(std::string name, GLsizei count,
 
 CKDWORD CKGLRasterizerContext::GetStaticIndexBuffer(CKDWORD Count, GLushort *IndexData)
 {
+    ZoneScopedN(__FUNCTION__);
     // Use count as index.
     // Since we're using it as a static buffer, it should be disposable.
     int index = Count % m_IndexBuffers.Size();
@@ -1186,6 +1214,7 @@ CKDWORD CKGLRasterizerContext::GetDynamicIndexBuffer(CKDWORD Count, GLushort* In
 
 CKBOOL CKGLRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat)
 {
+    ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
     if (m_Textures[Texture])
@@ -1202,6 +1231,7 @@ CKBOOL CKGLRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Desi
 
 CKBOOL CKGLRasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat)
 {
+    ZoneScopedN(__FUNCTION__);
     if (VShader >= m_VertexShaders.Size() || !DesiredFormat)
         return 0;
     delete m_VertexShaders[VShader];
@@ -1218,6 +1248,7 @@ CKBOOL CKGLRasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShader
 
 CKBOOL CKGLRasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat)
 {
+    ZoneScopedN(__FUNCTION__);
     if (PShader >= m_PixelShaders.Size() || !DesiredFormat)
         return 0;
     delete m_PixelShaders[PShader];
@@ -1234,6 +1265,7 @@ CKBOOL CKGLRasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDe
 
 CKBOOL CKGLRasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat)
 {
+    ZoneScopedN(__FUNCTION__);
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
         return 0;
     delete m_VertexBuffers[VB];
@@ -1254,6 +1286,7 @@ CKBOOL CKGLRasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc 
 
 CKBOOL CKGLRasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat)
 {
+    ZoneScopedN(__FUNCTION__);
     if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
         return 0;
     delete m_IndexBuffers[IB];
@@ -1290,6 +1323,7 @@ void CKGLRasterizerContext::ReleaseScreenBackup()
 
 VxMatrix inv(const VxMatrix &_m)
 {
+    ZoneScopedN(__FUNCTION__);
     //taken from https://stackoverflow.com/questions/1148309/inverting-a-4x4-matrix
     float (*m)[4] = (float(*)[4])&_m;
     float A2323 = m[2][2] * m[3][3] - m[2][3] * m[3][2] ;

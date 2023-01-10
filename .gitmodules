@@ -4,3 +4,6 @@
 [submodule "vendor/OpenGL-Registry"]
 	path = vendor/OpenGL-Registry
 	url = https://github.com/KhronosGroup/OpenGL-Registry
+[submodule "vendor/tracy"]
+	path = vendor/tracy
+	url = https://github.com/wolfpld/tracy.git

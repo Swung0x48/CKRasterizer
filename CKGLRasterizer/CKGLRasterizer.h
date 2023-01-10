@@ -15,6 +15,8 @@
 
 // #define GLFW_EXPOSE_NATIVE_WIN32
 // #include "GLFW/glfw3native.h"
+#include "tracy/Tracy.hpp"
+#include "tracy/TracyOpenGL.hpp"
 
 #include <string>
 #include <unordered_map>
@@ -29,8 +31,11 @@ bool GLLogCall(const char* function, const char* file, int line);
 
 void GLClearError();
 
-#define GLCall(x) {GLClearError();\
-    x;\
+#define GLZoneName(x) (#x " @ " __FUNCTION__)
+
+#define GLCall(x) {GLClearError(); \
+    {TracyGpuZone(GLZoneName(x));\
+    x;}\
     GLLogCall(#x, __FILE__, __LINE__);}
 
 class CKGLRasterizerContext;
