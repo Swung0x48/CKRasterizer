@@ -22,7 +22,10 @@ void CKGLVertexBufferDesc::Create()
 {
     GLCall(glGenBuffers(1, &GLBuffer));
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
-    GLCall(glNamedBufferStorage(GLBuffer, this->m_MaxVertexCount * this->m_VertexSize, NULL, GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT));
+    GLenum flags = GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT;
+    if (!(m_Flags & CKRST_VB_WRITEONLY)) //virtools header says this bit is always set, but just in case...
+        flags |= GL_MAP_READ_BIT;
+    GLCall(glNamedBufferStorage(GLBuffer, this->m_MaxVertexCount * this->m_VertexSize, NULL, flags));
     GLCall(glGenVertexArrays(1, &GLVertexArray));
     GLCall(glBindVertexArray(GLVertexArray));
     const auto& elements = GLLayout.GetElements();
@@ -35,6 +38,7 @@ void CKGLVertexBufferDesc::Create()
         GLCall(glEnableVertexAttribArray(element.index));
         offset += element.count * GLVertexBufferElement::GetSizeOfType(element.type);
     }
+    m_Flags &= CKRST_VB_VALID;
 }
 
 void CKGLVertexBufferDesc::Bind(CKGLRasterizerContext *ctx)
