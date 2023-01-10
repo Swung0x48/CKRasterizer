@@ -361,4 +361,5 @@ public:
     CKDWORD m_lighting_flags;
     std::string m_orig_title;
     CKDWORD m_renderst[VXRENDERSTATE_MAXSTATE];
+    CKDWORD m_alpha_test_flags;
 };

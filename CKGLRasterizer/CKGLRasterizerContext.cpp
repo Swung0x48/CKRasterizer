@@ -272,6 +272,8 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
 
     m_lighting_flags = LSW_LIGHTING_ENABLED | LSW_VRTCOLOR_ENABLED;
     GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
+    m_alpha_test_flags = 8; //alpha test off, alpha function always
+    GLCall(glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags));
     {
         CKTextureDesc blank;
         blank.Format.Width = 1;
@@ -631,12 +633,27 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
             send_light_switches();
             return TRUE;
         }
+        case VXRENDERSTATE_ALPHAFUNC:
+        {
+            m_alpha_test_flags = (m_alpha_test_flags & 0x80) | Value;
+            GLCall(glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags));
+            return TRUE;
+        }
+        case VXRENDERSTATE_ALPHATESTENABLE:
+        {
+            toggle_flag(&m_alpha_test_flags, 0x80, Value);
+            GLCall(glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags));
+            return TRUE;
+        }
+        case VXRENDERSTATE_ALPHAREF:
+        {
+            GLCall(glUniform1f(get_uniform_location("alpha_thresh"), Value / 255.));
+            return TRUE;
+        }
         //case VXRENDERSTATE_DITHERENABLE:
         //case VXRENDERSTATE_TEXTUREPERSPECTIVE:
         //case VXRENDERSTATE_NORMALIZENORMALS:
         //case VXRENDERSTATE_AMBIENT:
-        //case VXRENDERSTATE_ALPHAFUNC:
-        //case VXRENDERSTATE_ALPHATESTENABLE:
         //case VXRENDERSTATE_SHADEMODE:
         //case VXRENDERSTATE_FILLMODE:
         //case VXRENDERSTATE_CLIPPING:

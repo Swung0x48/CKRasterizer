@@ -36,6 +36,8 @@ in vec3 fnormal;
 in vec4 fragcol;
 in vec2 ftexcoord;
 out vec4 color;
+uniform float alpha_thresh;
+uniform uint alphatest_flags;
 uniform vec3 vpos; //camera position
 uniform mat_t material;
 uniform uint lighting_switches;
@@ -59,6 +61,20 @@ vec3 light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
     }
     return ret;
 }
+bool alpha_test(float in_alpha)
+{
+    switch(alphatest_flags & 0xFU)
+    {
+        case 1: return false;
+        case 2: return in_alpha <  alpha_thresh;
+        case 3: return in_alpha == alpha_thresh;
+        case 4: return in_alpha <= alpha_thresh;
+        case 5: return in_alpha >  alpha_thresh;
+        case 6: return in_alpha != alpha_thresh;
+        case 7: return in_alpha >= alpha_thresh;
+        default: return true;
+    }
+}
 vec4 clamp_color(vec4 c)
 {
     return clamp(c, vec4(0, 0, 0, 0), vec4(1, 1, 1, 1));
@@ -74,4 +90,6 @@ void main()
     if (lights.type == uint(3) && (lighting_switches & LSW_LIGHTING_ENABLED) != 0U)
         color *= clamp_color(vec4(light_directional(lights, norm, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U), 1.0));
     color *= texture(tex, ftexcoord);
+    if ((alphatest_flags & 0x80U) != 0U && !alpha_test(color.a))
+        discard;
 }
