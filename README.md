@@ -4,13 +4,15 @@
 
 ## Build instructions
 
-1. Generate build files
+1. Get glew binaries and extract the `lib` directory into `vendor/glew`.
+
+2. Generate build files
 
 ```
 cmake .. -DVIRTOOLS_SDK_PATH=<path to virtools sdk> -DCMAKE_BUILD_TYPE=Release -A Win32
 ```
 
-2. Build
+3. Build
 
 ```
 cmake --build . --config Release
