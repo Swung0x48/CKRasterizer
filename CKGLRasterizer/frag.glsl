@@ -70,13 +70,13 @@ bool alpha_test(float in_alpha)
 {
     switch(alphatest_flags & 0xFU)
     {
-        case 1: return false;
-        case 2: return in_alpha <  alpha_thresh;
-        case 3: return in_alpha == alpha_thresh;
-        case 4: return in_alpha <= alpha_thresh;
-        case 5: return in_alpha >  alpha_thresh;
-        case 6: return in_alpha != alpha_thresh;
-        case 7: return in_alpha >= alpha_thresh;
+        case 1U: return false;
+        case 2U: return in_alpha <  alpha_thresh;
+        case 3U: return in_alpha == alpha_thresh;
+        case 4U: return in_alpha <= alpha_thresh;
+        case 5U: return in_alpha >  alpha_thresh;
+        case 6U: return in_alpha != alpha_thresh;
+        case 7U: return in_alpha >= alpha_thresh;
         default: return true;
     }
 }
@@ -88,9 +88,9 @@ float fog_factor(float dist, uint mode)
 {
     switch(mode)
     {
-        case 1: return 1. / exp(dist * fog_parameters.z);
-        case 2: return 1. / exp(pow(dist * fog_parameters.z, 2));
-        case 3: return (fog_parameters.y - dist) / (fog_parameters.y - fog_parameters.x);
+        case 1U: return 1. / exp(dist * fog_parameters.z);
+        case 2U: return 1. / exp(pow(dist * fog_parameters.z, 2));
+        case 3U: return (fog_parameters.y - dist) / (fog_parameters.y - fog_parameters.x);
         default: return 1.;
     }
 }
