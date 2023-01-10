@@ -11,6 +11,10 @@
 #define LOG_FLUSHCACHES 0
 #define LOG_BATCHSTATS 1
 
+//index buffer implementation is buggy
+//messes up RenderDoc and glNamedMappedBufferRange
+#define USE_INDEX_BUFFER 1
+
 #if STEP
 #include <conio.h>
 static bool step_mode = false;
@@ -278,6 +282,11 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         blanktex->Bind(this);
         blanktex->Load(&white);
     }
+
+    SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&VxMatrix::Identity());
+    SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&VxMatrix::Identity());
+    SetUniformMatrix4fv("world", 1, GL_FALSE, (float*)&VxMatrix::Identity());
+    SetUniformMatrix4fv("tiworld", 1, GL_FALSE, (float*)&VxMatrix::Identity());
     return TRUE;
 }
 
@@ -381,6 +390,15 @@ CKBOOL CKGLRasterizerContext::SetViewport(CKViewportData *data)
 {
     GLCall(glViewport(data->ViewX, data->ViewY, data->ViewWidth, data->ViewHeight));
     GLCall(glDepthRangef(data->ViewZMin, data->ViewZMax));
+    GLCall(glDepthRangef(0, 1));
+    VxMatrix _m = VxMatrix::Identity();
+    float (*m)[4] = (float(*)[4])&_m;
+    m[0][0] = 2. / data->ViewWidth;
+    m[1][1] = 2. / data->ViewHeight;
+    m[2][2] = 0;
+    m[3][0] = -(-2. * data->ViewX + data->ViewWidth) / data->ViewWidth;
+    m[3][1] =  (-2. * data->ViewY + data->ViewHeight) / data->ViewHeight;
+    SetUniformMatrix4fv("mvp2d", 1, GL_FALSE, (float*)m);
     return TRUE;
 }
 
@@ -794,6 +812,7 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
     if (!vbo) return FALSE;
     vbo->Bind(this);
 
+#if USE_INDEX_BUFFER
     int ibbase = 0;
     if (idx)
     {
@@ -807,7 +826,6 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
             m_IndexBuffer->Create();
         }
         m_IndexBuffer->Bind();
-        //m_IndexBuffer->m_CurrentICount = 0;
         if (icnt + m_IndexBuffer->m_CurrentICount <= m_IndexBuffer->m_MaxIndexCount)
         {
             pdata = m_IndexBuffer->Lock(2 * m_IndexBuffer->m_CurrentICount, 2 * icnt, false);
@@ -824,6 +842,7 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
         }
         m_IndexBuffer->Unlock();
     }
+#endif
 
     GLenum glpt = GL_NONE;
     switch (pType)
@@ -848,7 +867,12 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
     }
     if (idx)
     {
+#if USE_INDEX_BUFFER
         GLCall(glDrawElementsBaseVertex(glpt, icnt, GL_UNSIGNED_SHORT, (void*)ibbase, vbase));
+#else
+        GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
+        GLCall(glDrawElementsBaseVertex(glpt, icnt, GL_UNSIGNED_SHORT, idx, vbase));
+#endif
     }
     else
         GLCall(glDrawArrays(glpt, vbase, vcnt));

@@ -21,7 +21,7 @@ void CKGLIndexBufferDesc::Create()
 {
     GLCall(glGenBuffers(1, &GLBuffer));
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, GLBuffer));
-    GLCall(glNamedBufferStorage(GLBuffer, 2 * m_MaxIndexCount, nullptr, GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT));
+    GLCall(glBufferStorage(GL_ELEMENT_ARRAY_BUFFER, 2 * m_MaxIndexCount, nullptr, GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT));
 }
 
 void CKGLIndexBufferDesc::Bind()
@@ -33,7 +33,10 @@ void *CKGLIndexBufferDesc::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
 {
     if (!offset && !len)
     {
-        GLCall(glGetNamedBufferParameteriv(GLBuffer, GL_BUFFER_SIZE, (GLint*)&len));
+        //GLCall(glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, (GLint*)&len));
+        auto ret = glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
+        GLLogCall("glMapBuffer", __FILE__, __LINE__);
+        return ret;
     }
     auto ret = glMapBufferRange(GL_ELEMENT_ARRAY_BUFFER, offset, len, GL_MAP_WRITE_BIT | (overwrite ? GL_MAP_INVALIDATE_RANGE_BIT : 0));
     GLLogCall("glMapBufferRange", __FILE__, __LINE__);
@@ -43,7 +46,7 @@ void *CKGLIndexBufferDesc::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
 void CKGLIndexBufferDesc::Unlock()
 {
     int locked = 0;
-    GLCall(glGetNamedBufferParameteriv(GLBuffer, GL_BUFFER_MAPPED, &locked));
+    GLCall(glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_MAPPED, &locked));
     if (!locked) return;
-    GLCall(glUnmapNamedBuffer(GLBuffer));
+    GLCall(glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER));
 }

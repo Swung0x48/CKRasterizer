@@ -10,6 +10,7 @@ out vec4 fragcol;
 out vec2 ftexcoord;
 uniform bool is_transformed;
 uniform bool has_color;
+uniform mat4 mvp2d;
 uniform mat4 world;
 uniform mat4 view;
 uniform mat4 proj;
@@ -17,8 +18,16 @@ uniform mat4 tiworld;
 void main()
 {
     vec4 pos = xyzw;
-    if (!is_transformed) pos = vec4(xyzw.xyz, 1.0);
-    gl_Position = proj * view * world * pos;
+    if (is_transformed)
+    {
+        pos = vec4(xyzw.x, -xyzw.y, xyzw.w, 1.0);
+        gl_Position = mvp2d * pos;
+    }
+    else
+    {
+        pos = vec4(xyzw.xyz, 1.0);
+        gl_Position = proj * view * world * pos;
+    }
     fpos = vec3(world * pos);
     fnormal = mat3(tiworld) * normal;
     if (has_color)
