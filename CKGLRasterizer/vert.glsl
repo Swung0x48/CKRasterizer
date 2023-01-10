@@ -15,6 +15,7 @@ uniform mat4 world;
 uniform mat4 view;
 uniform mat4 proj;
 uniform mat4 tiworld;
+
 void main()
 {
     vec4 pos = xyzw;

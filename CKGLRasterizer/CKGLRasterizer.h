@@ -362,4 +362,6 @@ public:
     std::string m_orig_title;
     CKDWORD m_renderst[VXRENDERSTATE_MAXSTATE];
     CKDWORD m_alpha_test_flags;
+    CKDWORD m_fog_flags;
+    float m_fog_parameters[3];
 };

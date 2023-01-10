@@ -31,6 +31,7 @@ struct light_t
     float theta;
     float phi;
 };
+
 in vec3 fpos;
 in vec3 fnormal;
 in vec4 fragcol;
@@ -38,12 +39,16 @@ in vec2 ftexcoord;
 out vec4 color;
 uniform float alpha_thresh;
 uniform uint alphatest_flags;
+uniform uint fog_flags;
+uniform vec4 fog_color;
+uniform vec3 fog_parameters; //start, end, density
 uniform vec3 vpos; //camera position
+uniform vec2 depth_range; //near-far plane distances for fog calculation
 uniform mat_t material;
 uniform uint lighting_switches;
 uniform light_t lights; // will become array in the future
 uniform sampler2D tex; //this will become an array in the future
-//!!TODO: fog
+
 vec3 light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
 {
     vec3 ldir = normalize(-l.dir);
@@ -79,11 +84,33 @@ vec4 clamp_color(vec4 c)
 {
     return clamp(c, vec4(0, 0, 0, 0), vec4(1, 1, 1, 1));
 }
+float fog_factor(float dist, uint mode)
+{
+    switch(mode)
+    {
+        case 1: return 1. / exp(dist * fog_parameters.z);
+        case 2: return 1. / exp(pow(dist * fog_parameters.z, 2));
+        case 3: return (fog_parameters.y - dist) / (fog_parameters.y - fog_parameters.x);
+        default: return 1.;
+    }
+}
 void main()
 {
-    //color=vec4(sin(ftexcoord.x), cos(ftexcoord.y), sin(ftexcoord.y), 1);
     vec3 norm = normalize(fnormal);
     vec3 vdir = normalize(vpos - fpos);
+
+    float ffactor = 1.;
+    if ((fog_flags & 0x80U) != 0U)
+    {
+        float fvdepth = clamp(length(vpos - fpos) / (depth_range.y - depth_range.x), 0, 1);
+        float ffactor = fog_factor(fvdepth, fog_flags & 0x08U);
+        if (ffactor < 1. / 512)
+        {
+            color = fog_color;
+            return;
+        }
+    }
+
     color = vec4(1., 1., 1., 1.);
     if ((lighting_switches & LSW_VRTCOLOR_ENABLED) != 0U)
         color = fragcol;
@@ -92,4 +119,5 @@ void main()
     color *= texture(tex, ftexcoord);
     if ((alphatest_flags & 0x80U) != 0U && !alpha_test(color.a))
         discard;
+    color = mix(fog_color, color, ffactor);
 }

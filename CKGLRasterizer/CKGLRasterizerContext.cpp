@@ -1,4 +1,5 @@
 #include "CKGLRasterizer.h"
+
 #define LOGGING 0
 #define STEP 0
 #define LOG_LOADTEXTURE 0
@@ -274,6 +275,15 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
     m_alpha_test_flags = 8; //alpha test off, alpha function always
     GLCall(glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags));
+    //m_fog_flags = 0; //fog off, fog type none. We do not support vertex fog.
+    m_fog_flags = 1; //fog off, fog type exponential. certain crappy game doesn't init this flag
+    VxColor init_fog_color = VxColor();
+    m_fog_parameters[0] = 0.;
+    m_fog_parameters[1] = 1.;
+    m_fog_parameters[2] = 1.;
+    GLCall(glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags));
+    GLCall(glUniform4fv(get_uniform_location("fog_color"), 1, (float*)&init_fog_color.col));
+    GLCall(glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters));
     {
         CKTextureDesc blank;
         blank.Format.Width = 1;
@@ -346,7 +356,6 @@ CKBOOL CKGLRasterizerContext::BeginScene()
 
 CKBOOL CKGLRasterizerContext::EndScene()
 {
-    //GLCall(glEnd());
     return 1;
 }
 
@@ -441,6 +450,11 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
             m_ProjectionMatrix = Mat;
             UnityMatrixMask = PROJ_TRANSFORM;
             SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&Mat);
+            float (*m)[4] = (float(*)[4])&Mat;
+            float A = m[2][2];
+            float B = m[3][2];
+            float zp[2] = {-B / A, B / (1 - A)}; //for eye-distance fog calculation
+            GLCall(glUniform2fv(get_uniform_location("depth_range"), 1, (float*)&zp));
             m_MatrixUptodate = 0;
             break;
         }
@@ -650,6 +664,42 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
             GLCall(glUniform1f(get_uniform_location("alpha_thresh"), Value / 255.));
             return TRUE;
         }
+        case VXRENDERSTATE_FOGENABLE:
+        {
+            toggle_flag(&m_fog_flags, 0x80, Value);
+            GLCall(glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags));
+            return TRUE;
+        }
+        case VXRENDERSTATE_FOGCOLOR:
+        {
+            VxColor col(Value);
+            GLCall(glUniform4fv(get_uniform_location("fog_color"), 1, (float*)&col.col));
+            return TRUE;
+        }
+        case VXRENDERSTATE_FOGPIXELMODE:
+        {
+            m_fog_flags = (m_fog_flags & 0x80) | Value;
+            GLCall(glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags));
+            return TRUE;
+        }
+        case VXRENDERSTATE_FOGSTART:
+        {
+            m_fog_parameters[0] = reinterpret_cast<float&>(Value);
+            GLCall(glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters));
+            return TRUE;
+        }
+        case VXRENDERSTATE_FOGEND:
+        {
+            m_fog_parameters[1] = reinterpret_cast<float&>(Value);
+            GLCall(glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters));
+            return TRUE;
+        }
+        case VXRENDERSTATE_FOGDENSITY:
+        {
+            m_fog_parameters[2] = reinterpret_cast<float&>(Value);
+            GLCall(glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters));
+            return TRUE;
+        }
         //case VXRENDERSTATE_DITHERENABLE:
         //case VXRENDERSTATE_TEXTUREPERSPECTIVE:
         //case VXRENDERSTATE_NORMALIZENORMALS:
@@ -657,11 +707,6 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         //case VXRENDERSTATE_SHADEMODE:
         //case VXRENDERSTATE_FILLMODE:
         //case VXRENDERSTATE_CLIPPING:
-        //case VXRENDERSTATE_FOGENABLE:
-        //case VXRENDERSTATE_FOGCOLOR:
-        //case VXRENDERSTATE_FOGSTART:
-        //case VXRENDERSTATE_FOGEND:
-        //case VXRENDERSTATE_FOGDENSITY:
         default:
             return FALSE;
     }
