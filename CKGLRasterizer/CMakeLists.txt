@@ -40,6 +40,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE GLEW::glew_s)
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)
 target_compile_definitions(${PROJECT_NAME} PRIVATE GLEW_STATIC)
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+            $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
+            $<$<C_COMPILER_ID:MSVC>:_CRT_NONSTDC_NO_WARNINGS>
+            )
 if(DEFINED BALLANCE_DIR)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND "${CMAKE_COMMAND}" -E
 		copy "$<TARGET_FILE:${PROJECT_NAME}>"
