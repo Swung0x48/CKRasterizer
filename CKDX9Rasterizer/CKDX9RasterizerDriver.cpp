@@ -1,5 +1,7 @@
 #include "CKDX9Rasterizer.h"
 #include <intrin.h>
+#include <CKContext.h>
+#include <CKRenderManager.h>
 
 static const D3DFORMAT AdapterFormats[] = {
     D3DFMT_A8R8G8B8,
@@ -64,6 +66,7 @@ CKDX9RasterizerDriver::~CKDX9RasterizerDriver()
 
 CKRasterizerContext* CKDX9RasterizerDriver::CreateContext()
 {
+    rst_ckctx->GetRenderManager()->SetRenderOptions("UseIndexBuffers", 1);
     CKDX9RasterizerContext* context = new CKDX9RasterizerContext();
     context->m_Driver = this;
     context->m_Owner = static_cast<CKDX9Rasterizer *>(m_Owner);

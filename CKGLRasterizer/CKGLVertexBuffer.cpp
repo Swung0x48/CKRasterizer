@@ -60,7 +60,7 @@ void CKGLVertexBuffer::Create()
         offset += element.count * GLVertexBufferElement::GetSizeOfType(element.type);
     }
 #endif
-    m_Flags &= CKRST_VB_VALID;
+    m_Flags |= CKRST_VB_VALID;
 }
 
 void CKGLVertexBuffer::Bind(CKGLRasterizerContext *ctx)

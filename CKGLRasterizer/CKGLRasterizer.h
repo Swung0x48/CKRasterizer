@@ -24,6 +24,8 @@
 
 class CKGLRasterizerContext;
 
+extern CKContext *rst_ckctx;
+
 class CKGLRasterizer : public CKRasterizer
 {
 public:

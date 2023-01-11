@@ -22,6 +22,7 @@ void CKGLIndexBufferDesc::Create()
     GLCall(glGenBuffers(1, &GLBuffer));
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, GLBuffer));
     GLCall(glBufferStorage(GL_ELEMENT_ARRAY_BUFFER, 2 * m_MaxIndexCount, nullptr, GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT));
+    m_Flags |= CKRST_VB_VALID;
 }
 
 void CKGLIndexBufferDesc::Bind()

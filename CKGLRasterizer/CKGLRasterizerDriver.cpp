@@ -1,4 +1,6 @@
 #include "CKGLRasterizer.h"
+#include <CKContext.h>
+#include <CKRenderManager.h>
 
 CKGLRasterizerDriver::CKGLRasterizerDriver(CKGLRasterizer *rst)
 {
@@ -10,6 +12,7 @@ CKGLRasterizerDriver::~CKGLRasterizerDriver()
 }
 
 CKRasterizerContext *CKGLRasterizerDriver::CreateContext() {
+    rst_ckctx->GetRenderManager()->SetRenderOptions("UseIndexBuffers", 1);
     CKGLRasterizerContext* context = new CKGLRasterizerContext;
     context->m_Driver = this;
     context->m_Owner = static_cast<CKGLRasterizer *>(m_Owner);

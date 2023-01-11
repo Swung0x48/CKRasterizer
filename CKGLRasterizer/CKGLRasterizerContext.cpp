@@ -908,7 +908,49 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
     ++vbibbat;
 #endif
     ZoneScopedN(__FUNCTION__);
-    return CKRasterizerContext::DrawPrimitiveVBIB(pType, VB, IB, MinVIndex, VertexCount, StartIndex, Indexcount);
+
+    if (VB >= m_VertexBuffers.Size()) return NULL;
+    CKGLVertexBuffer *vbo = static_cast<CKGLVertexBuffer*>(m_VertexBuffers[VB]);
+    if (!vbo) return NULL;
+
+    if (IB >= m_IndexBuffers.Size()) return NULL;
+    CKGLIndexBufferDesc *ibo = static_cast<CKGLIndexBufferDesc*>(m_IndexBuffers[VB]);
+    if (!ibo) return NULL;
+
+    vbo->Bind(this);
+#if USE_SEPARATE_ATTRIBUTE
+    if (m_current_vf != vbo->m_VertexFormat)
+    {
+        get_vertex_format((CKRST_VERTEXFORMAT)vbo->m_VertexFormat)->select();
+        m_current_vf = vbo->m_VertexFormat;
+    }
+    vbo->bind_to_array();
+#endif
+    ibo->Bind();
+
+    GLenum glpt = GL_NONE;
+    switch (pType)
+    {
+        case VX_LINELIST:
+            glpt = GL_LINES;
+            break;
+        case VX_LINESTRIP:
+            glpt = GL_LINE_STRIP;
+            break;
+        case VX_TRIANGLELIST:
+            glpt = GL_TRIANGLES;
+            break;
+        case VX_TRIANGLESTRIP:
+            glpt = GL_TRIANGLE_STRIP;
+            break;
+        case VX_TRIANGLEFAN:
+            glpt = GL_TRIANGLE_FAN;
+            break;
+        default:
+            break;
+    }
+    GLCall(glDrawElements(glpt, Indexcount, GL_UNSIGNED_SHORT, (void*)StartIndex));
+    return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBuffer *vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt, bool vbbound)
@@ -1124,12 +1166,19 @@ CKBOOL CKGLRasterizerContext::GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane &
 
 void * CKGLRasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
 {
-    return CKRasterizerContext::LockIndexBuffer(IB, StartIndex, IndexCount, Lock);
+    if (IB >= m_IndexBuffers.Size()) return NULL;
+    CKGLIndexBufferDesc *ibo = static_cast<CKGLIndexBufferDesc*>(m_IndexBuffers[IB]);
+    if (!ibo) return NULL;
+    return ibo->Lock(StartIndex * 2, IndexCount * 2, (Lock & CKRST_LOCK_NOOVERWRITE) == 0);
 }
 
 CKBOOL CKGLRasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
-    return CKRasterizerContext::UnlockIndexBuffer(IB); }
+    if (IB >= m_IndexBuffers.Size()) return NULL;
+    CKGLIndexBufferDesc *ibo = static_cast<CKGLIndexBufferDesc*>(m_IndexBuffers[IB]);
+    if (!ibo) return NULL;
+    return TRUE;
+}
 
 int CKGLRasterizerContext::get_uniform_location(const char *name)
 {
