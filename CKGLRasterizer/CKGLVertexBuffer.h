@@ -11,6 +11,8 @@
 
 #include "CKGLRasterizerCommon.h"
 
+#define USE_SEPARATE_ATTRIBUTE 1 //requires OpenGL 4.3
+
 class CKGLRasterizerContext;
 
 typedef struct GLVertexBufferElement {
@@ -102,6 +104,18 @@ private:
     unsigned int stride_;
 };
 
+class CKGLVertexFormat
+{
+private:
+    GLuint GLVertexArray;
+
+public:
+    CKGLVertexFormat(CKRST_VERTEXFORMAT vf);
+    ~CKGLVertexFormat();
+
+    void select();
+};
+
 typedef struct CKGLVertexBuffer : public CKVertexBufferDesc
 {
 private:
@@ -116,6 +130,7 @@ public:
     bool operator==(const CKVertexBufferDesc &) const;
     void Create();
     void Bind(CKGLRasterizerContext *ctx);
+    void bind_to_array();
     void *Lock(CKDWORD offset, CKDWORD len, bool overwrite);
     void Unlock();
     explicit CKGLVertexBuffer(CKVertexBufferDesc* DesiredFormat);

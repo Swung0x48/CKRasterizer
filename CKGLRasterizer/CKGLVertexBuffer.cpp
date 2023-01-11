@@ -9,11 +9,16 @@ CKGLVertexBuffer::CKGLVertexBuffer(CKVertexBufferDesc* DesiredFormat)
     this->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount; // Max number of vertices this buffer can contain
     this->m_VertexSize = DesiredFormat->m_VertexSize;     // Size in bytes taken by a vertex..
     this->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
+#if !USE_SEPARATE_ATTRIBUTE
     this->GLLayout = GLVertexBufferLayout::GetLayoutFromFVF(DesiredFormat->m_VertexFormat);
+#endif
 }
 CKGLVertexBuffer::~CKGLVertexBuffer()
 {
     GLCall(glDeleteBuffers(1, &GLBuffer));
+#if !USE_SEPARATE_ATTRIBUTE
+    GLCall(glDeleteVertexArrays(1, &GLVertexArray));
+#endif
     VirtualFree(client_side_locked_data, 0, MEM_RELEASE);
     client_side_data = nullptr;
     if (client_side_locked_data)
@@ -41,6 +46,7 @@ void CKGLVertexBuffer::Create()
     }
     else
         GLCall(glNamedBufferStorage(GLBuffer, this->m_MaxVertexCount * this->m_VertexSize, NULL, flags));
+#if !USE_SEPARATE_ATTRIBUTE
     GLCall(glGenVertexArrays(1, &GLVertexArray));
     GLCall(glBindVertexArray(GLVertexArray));
     const auto& elements = GLLayout.GetElements();
@@ -53,6 +59,7 @@ void CKGLVertexBuffer::Create()
         GLCall(glEnableVertexAttribArray(element.index));
         offset += element.count * GLVertexBufferElement::GetSizeOfType(element.type);
     }
+#endif
     m_Flags &= CKRST_VB_VALID;
 }
 
@@ -60,9 +67,16 @@ void CKGLVertexBuffer::Bind(CKGLRasterizerContext *ctx)
 {
     ZoneScopedN(__FUNCTION__);
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
+#if !USE_SEPARATE_ATTRIBUTE
     GLCall(glBindVertexArray(GLVertexArray));
+#endif
     ctx->set_position_transformed(m_VertexFormat & CKRST_VF_RASTERPOS);
     ctx->set_vertex_has_color(m_VertexFormat & CKRST_VF_DIFFUSE);
+}
+
+void CKGLVertexBuffer::bind_to_array()
+{
+    GLCall(glBindVertexBuffer(0, GLBuffer, 0, m_VertexSize));
 }
 
 void *CKGLVertexBuffer::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
@@ -120,4 +134,32 @@ void CKGLVertexBuffer::Unlock()
     GLCall(glGetNamedBufferParameteriv(GLBuffer, GL_BUFFER_MAPPED, &locked));
     if (!locked) return;
     GLCall(glUnmapNamedBuffer(GLBuffer));
+}
+
+CKGLVertexFormat::CKGLVertexFormat(CKRST_VERTEXFORMAT vf)
+{
+    GLCall(glGenVertexArrays(1, &GLVertexArray));
+    GLCall(glBindVertexArray(GLVertexArray));
+    auto GLLayout = GLVertexBufferLayout::GetLayoutFromFVF(vf);
+    const auto& elements = GLLayout.GetElements();
+    unsigned int offset = 0;
+    for (unsigned int i = 0; i < elements.size(); ++i)
+    {
+        const auto& element = elements[i];
+        GLCall(glVertexAttribFormat(element.index, element.count,
+            element.type, element.normalized, offset));
+        GLCall(glVertexAttribBinding(element.index, 0));
+        GLCall(glEnableVertexAttribArray(element.index));
+        offset += element.count * GLVertexBufferElement::GetSizeOfType(element.type);
+    }
+}
+
+CKGLVertexFormat::~CKGLVertexFormat()
+{
+    GLCall(glDeleteVertexArrays(1, &GLVertexArray));
+}
+
+void CKGLVertexFormat::select()
+{
+    GLCall(glBindVertexArray(GLVertexArray));
 }

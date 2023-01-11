@@ -38,7 +38,6 @@ bool GLLogCall(const char* function, const char* file, int line)
 {
     while (GLenum error = glGetError())
     {
-        DebugBreak();
         std::string str = std::to_string(error) + ": at " + 
             function + " " + file + ":" + std::to_string(line);
         MessageBoxA(NULL, str.c_str(), "OpenGL Error", NULL);
@@ -918,6 +917,15 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
     if (!vbo) return FALSE;
     if (!vbbound) vbo->Bind(this);
 
+#if USE_SEPARATE_ATTRIBUTE
+    if (m_current_vf != vbo->m_VertexFormat)
+    {
+        get_vertex_format((CKRST_VERTEXFORMAT)vbo->m_VertexFormat)->select();
+        m_current_vf = vbo->m_VertexFormat;
+    }
+    vbo->bind_to_array();
+#endif
+
 #if USE_INDEX_BUFFER
     int ibbase = 0;
     if (idx)
@@ -1130,6 +1138,13 @@ int CKGLRasterizerContext::get_uniform_location(const char *name)
     if (m_UniformLocationCache.find(name) == m_UniformLocationCache.end())
         m_UniformLocationCache[name] = glGetUniformLocation(m_CurrentProgram, name);
     return m_UniformLocationCache[name];
+}
+
+CKGLVertexFormat *CKGLRasterizerContext::get_vertex_format(CKRST_VERTEXFORMAT vf)
+{
+    if (m_vertfmts.find(vf) == m_vertfmts.end())
+        m_vertfmts[vf] = new CKGLVertexFormat(vf);
+    return m_vertfmts[vf];
 }
 
 unsigned CKGLRasterizerContext::get_vertex_attrib_location(CKDWORD component)

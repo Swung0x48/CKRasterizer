@@ -210,6 +210,8 @@ public:
 
     static unsigned get_vertex_attrib_location(CKDWORD component);
     int get_uniform_location(const char* name);
+    CKGLVertexFormat* get_vertex_format(CKRST_VERTEXFORMAT vf);
+
     void set_position_transformed(bool transformed);
     void set_vertex_has_color(bool color);
     void set_title_status(const char* fmt, ...);
@@ -258,4 +260,6 @@ private:
     float m_fog_parameters[3];
     std::unordered_map<std::pair<CKDWORD, CKDWORD>, CKGLVertexBuffer*, pair_hash> m_dynvbo;
     DWORD m_direct_draw_counter = 0;
+    std::unordered_map<CKDWORD, CKGLVertexFormat*> m_vertfmts;
+    CKDWORD m_current_vf = ~0U;
 };
