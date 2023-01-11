@@ -1101,9 +1101,9 @@ BOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB
             break;
     }
 
-    m_Device->GetIndices(&indexBufferDesc->DxBuffer);
+    m_Device->SetIndices(indexBufferDesc->DxBuffer);
 
-	return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, 0, 0, VertexCount, StartIndex, Indexcount));
+	return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, MinVIndex, 0, VertexCount, StartIndex, Indexcount));
 }
 
 BOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void* DesiredFormat)
@@ -2244,15 +2244,15 @@ BOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc* De
     if (FAILED(m_Device->CreateIndexBuffer(2 * DesiredFormat->m_MaxIndexCount, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT,
                                            &buffer, NULL)))
         return 0;
-    if (DesiredFormat == m_IndexBuffer[IB])
+    if (DesiredFormat == m_IndexBuffers[IB])
     {
         CKDX9IndexBufferDesc *desc = static_cast<CKDX9IndexBufferDesc *>(DesiredFormat);
         desc->DxBuffer = buffer;
         desc->m_Flags |= 1;
         return 1;
     }
-    if (m_IndexBuffer[IB])
-        delete m_IndexBuffer[IB];
+    if (m_IndexBuffers[IB])
+        delete m_IndexBuffers[IB];
     CKDX9IndexBufferDesc *desc = new CKDX9IndexBufferDesc;
     if (!desc)
         return 0;
@@ -2261,7 +2261,7 @@ BOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc* De
     desc->m_Flags = DesiredFormat->m_Flags;
     desc->DxBuffer = buffer;
     desc->m_Flags |= 1;
-    m_IndexBuffer[IB] = desc;
+    m_IndexBuffers[IB] = desc;
     return 1;
 }
 

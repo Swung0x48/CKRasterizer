@@ -2,132 +2,29 @@
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 
-#include "GL/glew.h"
 #include "CKRasterizer.h"
 #include "XBitArray.h"
 #include <Windows.h>
 
-
-// #include "GLFW/glfw3.h"
+#include <GL/glew.h>
 #include <gl/GL.h>
-//#include "GL/glext.h"
-#include "gl/wglext.h"
-
-// #define GLFW_EXPOSE_NATIVE_WIN32
-// #include "GLFW/glfw3native.h"
-#include "tracy/Tracy.hpp"
-#include "tracy/TracyOpenGL.hpp"
+#include <gl/wglext.h>
 
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "CKGLRasterizerCommon.h"
+#include "CKGLVertexBuffer.h"
+
 #define LSW_SPECULAR_ENABLED 0x0001
 #define LSW_LIGHTING_ENABLED 0x0002
 #define LSW_VRTCOLOR_ENABLED 0x0004
 
-bool GLLogCall(const char* function, const char* file, int line);
-
-void GLClearError();
-
-#define GLZoneName(x) (#x " @ " __FUNCTION__)
-
-#define GLCall(x) {GLClearError(); \
-    {TracyGpuZone(GLZoneName(x));\
-    x;}\
-    GLLogCall(#x, __FILE__, __LINE__);}
-
 class CKGLRasterizerContext;
 
-typedef struct GLVertexBufferElement {
-    GLuint index = ~0U;
-    GLenum type = GL_NONE;
-    unsigned int count = 0;
-    GLboolean normalized = GL_FALSE;
-    CKDWORD usage = 0;
-
-    static unsigned int GetSizeOfType(GLenum type)
-    {
-        switch (type)
-        {
-            case GL_FLOAT: return 4;
-            case GL_UNSIGNED_INT: return 4;
-            case GL_UNSIGNED_BYTE: return 1;
-            default: break;
-        }
-        assert(false);
-        return 0;
-    }
-} GLVertexBufferElement;
-
-class GLVertexBufferLayout
-{
-public:
-    GLVertexBufferLayout() : stride_(0)
-    {
-    }
-    template<typename T>
-    void push(unsigned int index, unsigned int count, GLboolean normalized, CKDWORD usage)
-    {
-        static_assert(sizeof(T) == 0, "pushing this type haven't been implemented.");
-    }
-
-    template<>
-    void push<GLfloat>(unsigned int index, unsigned int count, GLboolean normalized, CKDWORD usage)
-    {
-        elements_.push_back({ index, GL_FLOAT, count, normalized, usage });
-        stride_ += GLVertexBufferElement::GetSizeOfType(GL_FLOAT) * count;
-    }
-
-    template<>
-    void push<GLuint>(unsigned int index, unsigned int count, GLboolean normalized, CKDWORD usage)
-    {
-        elements_.push_back({ index, GL_UNSIGNED_INT, count, normalized, usage });
-        stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_INT) * count;
-    }
-
-    template<>
-    void push<GLubyte>(unsigned int index, unsigned int count, GLboolean normalized, CKDWORD usage)
-    {
-        elements_.push_back({ index, GL_UNSIGNED_BYTE, count, normalized, usage });
-        stride_ += GLVertexBufferElement::GetSizeOfType(GL_UNSIGNED_BYTE) * count;
-    }
-    inline const auto& GetElements() const { return elements_; }
-    inline unsigned int GetStride() const { return stride_; }
-    static GLVertexBufferLayout GetLayoutFromFVF(CKDWORD fvf)
-    {
-        GLVertexBufferLayout layout;
-        if (fvf & CKRST_VF_POSITION)
-            layout.push<GLfloat>(0, 3, GL_FALSE, CKRST_VF_POSITION);
-
-        if (fvf & CKRST_VF_RASTERPOS)
-            layout.push<GLfloat>(0, 4, GL_FALSE, CKRST_VF_RASTERPOS);
-
-        if (fvf & CKRST_VF_NORMAL)
-            layout.push<GLfloat>(1, 3, GL_FALSE, CKRST_VF_NORMAL);
-
-        if (fvf & CKRST_VF_DIFFUSE)
-            layout.push<GLubyte>(2, 4, GL_TRUE, CKRST_VF_DIFFUSE);
-
-        if (fvf & CKRST_VF_SPECULAR)
-            layout.push<GLubyte>(3, 4, GL_TRUE, CKRST_VF_SPECULAR);
-
-        if (fvf & CKRST_VF_TEX1)
-            layout.push<GLfloat>(4, 2, GL_FALSE, CKRST_VF_TEX1);
-
-        if (fvf & CKRST_VF_TEX2)
-        {
-            layout.push<GLfloat>(4, 2, GL_FALSE, CKRST_VF_TEX1);
-            layout.push<GLfloat>(5, 2, GL_FALSE, CKRST_VF_TEX2);
-        }
-
-        return layout;
-    }
-private:
-    std::vector<GLVertexBufferElement> elements_;
-    unsigned int stride_;
-};
+extern CKContext *rst_ckctx;
 
 class CKGLRasterizer : public CKRasterizer
 {
@@ -174,22 +71,12 @@ public:
     void Load(void *data);
 } CKGLTextureDesc;
 
-typedef struct CKGLVertexBufferDesc : public CKVertexBufferDesc
+struct pair_hash
 {
-public:
-    GLuint GLBuffer;
-    GLVertexBufferLayout GLLayout;
-    GLuint GLVertexArray;
-public:
-    bool operator==(const CKVertexBufferDesc &) const;
-    void Create();
-    void Bind(CKGLRasterizerContext *ctx);
-    void *Lock(CKDWORD offset, CKDWORD len, bool overwrite);
-    void Unlock();
-    explicit CKGLVertexBufferDesc(CKVertexBufferDesc* DesiredFormat);
-    CKGLVertexBufferDesc() { GLBuffer = 0; }
-    ~CKGLVertexBufferDesc() { GLCall(glDeleteBuffers(1, &GLBuffer)); }
-} CKGLVertexBufferDesc;
+    template<class S, class T>
+    std::size_t operator() (const std::pair<S, T> &p) const
+    { return std::hash<S>()(p.first) ^ std::hash<T>()(p.second); }
+};
 
 typedef struct CKGLIndexBufferDesc : public CKIndexBufferDesc
 {
@@ -325,6 +212,8 @@ public:
 
     static unsigned get_vertex_attrib_location(CKDWORD component);
     int get_uniform_location(const char* name);
+    CKGLVertexFormat* get_vertex_format(CKRST_VERTEXFORMAT vf);
+
     void set_position_transformed(bool transformed);
     void set_vertex_has_color(bool color);
     void set_title_status(const char* fmt, ...);
@@ -335,7 +224,7 @@ protected:
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
     CKDWORD GetStaticIndexBuffer(CKDWORD Count, GLushort* IndexData);
     CKDWORD GetDynamicIndexBuffer(CKDWORD Count, GLushort* IndexData, CKDWORD Index);
-    CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc * vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt);
+    CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBuffer * vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt, bool vbbound = false);
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
     CKBOOL CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat);
@@ -350,15 +239,17 @@ protected:
     void ReleaseBuffers();
     void ClearStreamCache();
     void ReleaseScreenBackup();
+
 public:
-    constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
     CKGLRasterizer *m_Owner;
+
+private:
+    constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
     HDC m_DC;
     CKGLIndexBufferDesc *m_IndexBuffer = nullptr;
     CKDWORD m_CurrentVertexShader = INVALID_VALUE;
     CKDWORD m_CurrentPixelShader = INVALID_VALUE;
     CKDWORD m_CurrentProgram = INVALID_VALUE;
-    CKDWORD m_CurrentVertexBuffer = INVALID_VALUE;
     CKDWORD m_CurrentIndexBuffer = INVALID_VALUE;
     std::unordered_map<std::string, GLint> m_UniformLocationCache;
     std::vector<std::pair<bool, CKLightData>> m_lights;
@@ -369,4 +260,8 @@ public:
     CKDWORD m_alpha_test_flags;
     CKDWORD m_fog_flags;
     float m_fog_parameters[3];
+    std::unordered_map<std::pair<CKDWORD, CKDWORD>, CKGLVertexBuffer*, pair_hash> m_dynvbo;
+    DWORD m_direct_draw_counter = 0;
+    std::unordered_map<CKDWORD, CKGLVertexFormat*> m_vertfmts;
+    CKDWORD m_current_vf = ~0U;
 };

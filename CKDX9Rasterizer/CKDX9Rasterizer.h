@@ -43,6 +43,8 @@ void D3DFormatToTextureDesc(D3DFORMAT ddpf, CKTextureDesc *desc);
 
 //------
 
+extern CKContext *rst_ckctx;
+
 class CKDX9RasterizerDriver;
 class CKDX9RasterizerContext;
 class CKDX9Rasterizer;
