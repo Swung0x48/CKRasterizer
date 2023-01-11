@@ -11,6 +11,14 @@ CKGLVertexBufferDesc::CKGLVertexBufferDesc(CKVertexBufferDesc* DesiredFormat)
     this->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
     this->GLLayout = GLVertexBufferLayout::GetLayoutFromFVF(DesiredFormat->m_VertexFormat);
 }
+CKGLVertexBufferDesc::~CKGLVertexBufferDesc()
+{
+    GLCall(glDeleteBuffers(1, &GLBuffer));
+    VirtualFree(client_side_locked_data, 0, MEM_RELEASE);
+    client_side_data = nullptr;
+    if (client_side_locked_data)
+        client_side_locked_data = nullptr;
+}
 
 bool CKGLVertexBufferDesc::operator==(const CKVertexBufferDesc & that) const
 {
@@ -27,7 +35,12 @@ void CKGLVertexBufferDesc::Create()
     GLenum flags = GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT;
     if (!(m_Flags & CKRST_VB_WRITEONLY)) //virtools header says this bit is always set, but just in case...
         flags |= GL_MAP_READ_BIT;
-    GLCall(glNamedBufferStorage(GLBuffer, this->m_MaxVertexCount * this->m_VertexSize, NULL, flags));
+    if (!(m_Flags & CKRST_VB_DYNAMIC))
+    {
+        client_side_data = VirtualAlloc(nullptr, m_VertexSize * m_MaxVertexCount, MEM_RESERVE | MEM_COMMIT | MEM_WRITE_WATCH, PAGE_READWRITE);
+    }
+    else
+        GLCall(glNamedBufferStorage(GLBuffer, this->m_MaxVertexCount * this->m_VertexSize, NULL, flags));
     GLCall(glGenVertexArrays(1, &GLVertexArray));
     GLCall(glBindVertexArray(GLVertexArray));
     const auto& elements = GLLayout.GetElements();
@@ -57,7 +70,16 @@ void *CKGLVertexBufferDesc::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
     ZoneScopedN(__FUNCTION__);
     if (!offset && !len)
     {
-        GLCall(glGetNamedBufferParameteriv(GLBuffer, GL_BUFFER_SIZE, (GLint*)&len));
+        len = m_MaxVertexCount * m_VertexSize;
+    }
+    if (client_side_data)
+    {
+        lock_offset = offset;
+        lock_length = len;
+        if (offset == 0 && len == m_MaxVertexCount * m_VertexSize)
+            return client_side_data;
+        client_side_locked_data = VirtualAlloc(nullptr, len, MEM_RESERVE | MEM_COMMIT | MEM_WRITE_WATCH, PAGE_READWRITE);
+        return client_side_locked_data;
     }
     void* ret = nullptr;
     {
@@ -70,6 +92,30 @@ void *CKGLVertexBufferDesc::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
 
 void CKGLVertexBufferDesc::Unlock()
 {
+    if (client_side_data)
+    {
+        size_t x[8], c = 8; DWORD _g;
+        if (!client_side_locked_data) //the entire buffer locked
+        {
+            GetWriteWatch(WRITE_WATCH_FLAG_RESET, client_side_data, lock_length, (void**)&x, (ULONG_PTR*)&c, &_g);
+            if (c > 0)
+                GLCall(glNamedBufferData(GLBuffer, m_VertexSize * m_MaxVertexCount, client_side_data, GL_STATIC_DRAW));
+        }
+        else
+        {
+            GetWriteWatch(WRITE_WATCH_FLAG_RESET, client_side_locked_data, lock_length, (void**)&x, (ULONG_PTR*)&c, &_g);
+            if (c > 0)
+            {
+                memcpy((uint8_t*)client_side_data + lock_offset, client_side_locked_data, lock_length);
+                GLCall(glNamedBufferData(GLBuffer, m_VertexSize * m_MaxVertexCount, client_side_data, GL_STATIC_DRAW));
+            }
+            VirtualFree(client_side_locked_data, 0, MEM_RELEASE);
+            client_side_locked_data = nullptr;
+        }
+        lock_offset = ~0U;
+        lock_length = 0;
+        return;
+    }
     int locked = 0;
     GLCall(glGetNamedBufferParameteriv(GLBuffer, GL_BUFFER_MAPPED, &locked));
     if (!locked) return;

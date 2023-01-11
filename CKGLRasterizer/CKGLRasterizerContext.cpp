@@ -16,6 +16,8 @@
 //messes up RenderDoc and glNamedMappedBufferRange
 #define USE_INDEX_BUFFER 1
 
+#define DYNAMIC_VBO_COUNT 64
+
 #if STEP
 #include <conio.h>
 static bool step_mode = false;
@@ -829,10 +831,24 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     {
         SetRenderState(VXRENDERSTATE_CLIPPING, 0);
     }
-    CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
-    CKGLVertexBufferDesc *vbo = static_cast<CKGLVertexBufferDesc *>(
-        m_VertexBuffers[VB]);
-    m_CurrentVertexBuffer = VB;
+    CKGLVertexBufferDesc *vbo = nullptr;
+    auto vboid = std::make_pair(vertexFormat, DWORD(m_direct_draw_counter));
+    if (++m_direct_draw_counter > DYNAMIC_VBO_COUNT) m_direct_draw_counter = 0;
+    if (m_dynvbo.find(vboid) == m_dynvbo.end() ||
+        m_dynvbo[vboid]->m_MaxVertexCount < data->VertexCount)
+    {
+        if (m_dynvbo[vboid])
+            delete m_dynvbo[vboid];
+        CKVertexBufferDesc vbd;
+        vbd.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+        vbd.m_VertexFormat = vertexFormat;
+        vbd.m_VertexSize = vertexSize;
+        vbd.m_MaxVertexCount = (data->VertexCount + 100 > DEFAULT_VB_SIZE) ? data->VertexCount + 100 : DEFAULT_VB_SIZE;
+        CKGLVertexBufferDesc *vb = new CKGLVertexBufferDesc(&vbd);
+        vb->Create();
+        m_dynvbo[vboid] = vb;
+    }
+    vbo = m_dynvbo[vboid];
     vbo->Bind(this);
     void *pbData = nullptr;
     CKDWORD vbase = 0;

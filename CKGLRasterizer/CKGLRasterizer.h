@@ -69,6 +69,13 @@ public:
     void Load(void *data);
 } CKGLTextureDesc;
 
+struct pair_hash
+{
+    template<class S, class T>
+    std::size_t operator() (const std::pair<S, T> &p) const
+    { return std::hash<S>()(p.first) ^ std::hash<T>()(p.second); }
+};
+
 typedef struct CKGLIndexBufferDesc : public CKIndexBufferDesc
 {
 public:
@@ -228,15 +235,17 @@ protected:
     void ReleaseBuffers();
     void ClearStreamCache();
     void ReleaseScreenBackup();
+
 public:
-    constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
     CKGLRasterizer *m_Owner;
+
+private:
+    constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
     HDC m_DC;
     CKGLIndexBufferDesc *m_IndexBuffer = nullptr;
     CKDWORD m_CurrentVertexShader = INVALID_VALUE;
     CKDWORD m_CurrentPixelShader = INVALID_VALUE;
     CKDWORD m_CurrentProgram = INVALID_VALUE;
-    CKDWORD m_CurrentVertexBuffer = INVALID_VALUE;
     CKDWORD m_CurrentIndexBuffer = INVALID_VALUE;
     std::unordered_map<std::string, GLint> m_UniformLocationCache;
     std::vector<std::pair<bool, CKLightData>> m_lights;
@@ -247,4 +256,6 @@ public:
     CKDWORD m_alpha_test_flags;
     CKDWORD m_fog_flags;
     float m_fog_parameters[3];
+    std::unordered_map<std::pair<CKDWORD, CKDWORD>, CKGLVertexBufferDesc*, pair_hash> m_dynvbo;
+    DWORD m_direct_draw_counter = 0;
 };

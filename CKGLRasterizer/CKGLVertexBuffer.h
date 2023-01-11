@@ -8,7 +8,6 @@
 
 #include <GL/glew.h>
 #include <gl/GL.h>
-#include <gl/wglext.h>
 
 #include "CKGLRasterizerCommon.h"
 
@@ -105,10 +104,14 @@ private:
 
 typedef struct CKGLVertexBufferDesc : public CKVertexBufferDesc
 {
-public:
+private:
     GLuint GLBuffer;
     GLVertexBufferLayout GLLayout;
     GLuint GLVertexArray;
+    void *client_side_data = nullptr;
+    void *client_side_locked_data = nullptr;
+    CKDWORD lock_offset;
+    CKDWORD lock_length;
 public:
     bool operator==(const CKVertexBufferDesc &) const;
     void Create();
@@ -117,6 +120,6 @@ public:
     void Unlock();
     explicit CKGLVertexBufferDesc(CKVertexBufferDesc* DesiredFormat);
     CKGLVertexBufferDesc() { GLBuffer = 0; }
-    ~CKGLVertexBufferDesc() { GLCall(glDeleteBuffers(1, &GLBuffer)); }
+    ~CKGLVertexBufferDesc();
 } CKGLVertexBufferDesc;
 #endif
