@@ -22,6 +22,8 @@
 #define LSW_LIGHTING_ENABLED 0x0002
 #define LSW_VRTCOLOR_ENABLED 0x0004
 
+LRESULT WINAPI GL_WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
+
 class CKGLRasterizerContext;
 
 extern CKContext *rst_ckctx;
@@ -40,6 +42,7 @@ public:
 	WNDCLASSEXA m_WndClass;
 };
 
+
 class CKGLRasterizerDriver: public CKRasterizerDriver
 {
 public:
@@ -52,7 +55,11 @@ public:
 public:
     CKBOOL m_Inited;
     UINT m_AdapterIndex;
+    DISPLAY_DEVICEA m_Adapter;
 	WNDCLASSEXA m_WndClass;
+    HWND m_HWND;
+    HDC m_DC;
+    HGLRC m_RC;
 };
 
 typedef struct CKGLTextureDesc : public CKTextureDesc
@@ -242,10 +249,11 @@ protected:
 
 public:
     CKGLRasterizer *m_Owner;
-
+    HDC m_DC;
+    HGLRC m_RC;
+    HWND m_HWND;
 private:
     constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
-    HDC m_DC;
     CKGLIndexBufferDesc *m_IndexBuffer = nullptr;
     CKDWORD m_CurrentVertexShader = INVALID_VALUE;
     CKDWORD m_CurrentPixelShader = INVALID_VALUE;

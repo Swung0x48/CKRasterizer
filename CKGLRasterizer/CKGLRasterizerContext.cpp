@@ -144,7 +144,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         1, 1,                       // width, height
         NULL, NULL,                 // parent window, menu
         hInstance, NULL);           // instance, param
- 
+    
     HDC fakeDC = GetDC(fakeWND);        // Device Context
     PIXELFORMATDESCRIPTOR fakePFD;
     ZeroMemory(&fakePFD, sizeof(fakePFD));
@@ -164,8 +164,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     if (SetPixelFormat(fakeDC, fakePFDID, &fakePFD) == false) {
         return 0;
     }
-    HGLRC fakeRC = wglCreateContext(fakeDC);    // Rendering Contex
- 
+    HGLRC fakeRC = wglCreateContext(fakeDC);    // Rendering Context
     if (fakeRC == NULL) {
         return 0;
     }
@@ -174,6 +173,9 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         return 0;
     }
 
+    m_DC = fakeDC;
+    m_RC = fakeRC;
+    m_HWND = fakeWND;
     PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = nullptr;
     wglChoosePixelFormatARB = reinterpret_cast<PFNWGLCHOOSEPIXELFORMATARBPROC>(wglGetProcAddress("wglChoosePixelFormatARB"));
     if (wglChoosePixelFormatARB == nullptr) {
@@ -219,16 +221,18 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
         0
     };
-    m_DC = DC;
-     
+
     HGLRC RC = wglCreateContextAttribsARB(DC, NULL, contextAttribs);
     if (RC == NULL) {
         return 0;
     }
     wglMakeCurrent(NULL, NULL);
-    wglDeleteContext(fakeRC);
-    ReleaseDC(fakeWND, fakeDC);
-    DestroyWindow(fakeWND);
+    wglDeleteContext(m_RC);
+    ReleaseDC(m_HWND, m_DC);
+    DestroyWindow(m_HWND);
+    m_DC = DC;
+    m_RC = RC;
+    m_Window = Window;
     if (!wglMakeCurrent(DC, RC)) {
         return 0;
     }
