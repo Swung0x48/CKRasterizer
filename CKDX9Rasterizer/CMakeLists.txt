@@ -8,7 +8,10 @@ set(CMAKE_MODULE_PATH
   "${CMAKE_CURRENT_LIST_DIR}/../buildsystems/cmake"
 )
 
-set(CMAKE_INSTALL_PREFIX Install)
+option(TRACY_ENABLE "" ON)
+if (NOT TARGET Tracy::TracyClient)
+    add_subdirectory (${CMAKE_CURRENT_LIST_DIR}/../vendor/tracy tracy.out)
+endif()
 
 find_package(DirectX9 REQUIRED)
 
@@ -33,6 +36,7 @@ include_directories(${DIRECTX9_INCLUDE_DIRS})
 add_library(${PROJECT_NAME} SHARED ${CKDX9_RASTERIZER_SRC})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${DIRECTX9_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
+target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)
 if(DEFINED BALLANCE_DIR)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND "${CMAKE_COMMAND}" -E
 		copy "$<TARGET_FILE:${PROJECT_NAME}>"

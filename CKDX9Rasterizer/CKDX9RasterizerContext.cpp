@@ -409,6 +409,7 @@ BOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
 
 BOOL CKDX9RasterizerContext::BeginScene()
 {
+    FrameMark;
     if (m_SceneBegined)
         return 1;
     HRESULT hr = m_Device->BeginScene();
@@ -981,6 +982,7 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
 #if LOG_BATCHSTATS
     ++directbat;
 #endif
+    ZoneScopedN(__FUNCTION__);
     if (!m_SceneBegined)
         BeginScene();
     CKBOOL clip = 0;
@@ -1006,7 +1008,7 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
     //vertexBufferDesc->m_CurrentVCount = 0; // TODO: get rid of this
     if (vertexBufferDesc->m_CurrentVCount + data->VertexCount <= vertexBufferDesc->m_MaxVertexCount)
     {
-
+        ZoneScopedN("Lock");
         hr = vertexBufferDesc->DxBuffer->Lock(vertexSize * vertexBufferDesc->m_CurrentVCount,
                                               vertexSize * data->VertexCount, &ppbData,
                                          D3DLOCK_NOOVERWRITE);
@@ -1014,6 +1016,7 @@ BOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD* indices,
         vertexBufferDesc->m_CurrentVCount += data->VertexCount;
     } else
     {
+        ZoneScopedN("Lock");
         hr = vertexBufferDesc->DxBuffer->Lock(0, vertexSize * data->VertexCount, &ppbData, D3DLOCK_DISCARD);
         vertexBufferDesc->m_CurrentVCount = data->VertexCount;
     }
@@ -1038,6 +1041,7 @@ BOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Vert
 #if LOG_BATCHSTATS
     ++vbbat;
 #endif
+    ZoneScopedN(__FUNCTION__);
     if (VertexBuffer >= m_VertexBuffers.Size())
         return 0;
     CKVertexBufferDesc* vertexBufferDesc = m_VertexBuffers[VertexBuffer];
@@ -1061,6 +1065,7 @@ BOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB
 #if LOG_BATCHSTATS
     ++vbibbat;
 #endif
+    ZoneScopedN(__FUNCTION__);
     if (VB >= m_VertexBuffers.Size())
         return FALSE;
 
@@ -2001,6 +2006,7 @@ void CKDX9RasterizerContext::UpdateDirectXData()
 BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc* VB,
 	CKDWORD StartIndex, CKDWORD VertexCount, WORD* indices, int indexcount, BOOL Clip)
 {
+    ZoneScopedN(__FUNCTION__);
     int ibstart = 0;
     if (indices)
     {
@@ -2035,11 +2041,13 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
         //desc->m_CurrentICount = 0; // TODO: get rid of this
         if (indexcount + desc->m_CurrentICount <= desc->m_MaxIndexCount)
         {
+            ZoneScopedN("Lock");
             hr = desc->DxBuffer->Lock(2 * desc->m_CurrentICount, 2 * indexcount, &pbData, D3DLOCK_NOOVERWRITE);
             ibstart = desc->m_CurrentICount;
             desc->m_CurrentICount += indexcount;
         } else
         {
+            ZoneScopedN("Lock");
             hr = desc->DxBuffer->Lock(0, 2 * indexcount, &pbData, D3DLOCK_DISCARD);
             desc->m_CurrentICount = indexcount;
         }
@@ -2083,6 +2091,7 @@ BOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX
 
 void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize)
 {
+    ZoneScopedN(__FUNCTION__);
     // TODO: Utilize cache
     HRESULT hr;
     if (Buffer != m_CurrentVertexBufferCache || m_CurrentVertexSizeCache != VSize)

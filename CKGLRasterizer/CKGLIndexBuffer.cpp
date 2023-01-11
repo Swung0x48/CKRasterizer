@@ -31,6 +31,7 @@ void CKGLIndexBufferDesc::Bind()
 
 void *CKGLIndexBufferDesc::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
 {
+    ZoneScopedN(__FUNCTION__);
     if (!offset && !len)
     {
         //GLCall(glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, (GLint*)&len));

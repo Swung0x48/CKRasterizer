@@ -15,6 +15,8 @@
 typedef void TexFromFile;
 // Ensure we are using correct DirectDraw version
 #define NBTEMPZBUFFER 256
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
 
 #define _NOD3DX
 
@@ -29,6 +31,7 @@ typedef void TexFromFile;
 
 #include "CKRasterizer.h"
 #include "XBitArray.h"
+#include "tracy/Tracy.hpp"
 
 //---Implemented in CKDX9PixelFormatUtils.cpp :
 

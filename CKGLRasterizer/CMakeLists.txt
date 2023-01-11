@@ -9,7 +9,9 @@ set(CMAKE_MODULE_PATH
 )
 
 option(TRACY_ENABLE "" ON)
-add_subdirectory (${CMAKE_CURRENT_LIST_DIR}/../vendor/tracy tracy.out)
+if (NOT TARGET Tracy::TracyClient)
+    add_subdirectory (${CMAKE_CURRENT_LIST_DIR}/../vendor/tracy tracy.out)
+endif()
 
 set(GLEW_ROOT ${CMAKE_CURRENT_LIST_DIR}/../vendor/glew)
 list(APPEND CMAKE_PREFIX_PATH ${GLEW_ROOT})

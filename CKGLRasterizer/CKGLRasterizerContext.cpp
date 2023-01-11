@@ -838,12 +838,16 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     CKDWORD vbase = 0;
     if (vbo->m_CurrentVCount + data->VertexCount <= vbo->m_MaxVertexCount)
     {
+        TracyPlot("Lock offset", (int64_t)vertexSize * vbo->m_CurrentVCount);
+        TracyPlot("Lock len", (int64_t)vertexSize * data->VertexCount);
         pbData = vbo->Lock(vertexSize * vbo->m_CurrentVCount,
                            vertexSize * data->VertexCount, false);
         vbase = vbo->m_CurrentVCount;
         vbo->m_CurrentVCount += data->VertexCount;
     } else
     {
+        TracyPlot("Lock offset", 0ll);
+        TracyPlot("Lock len", (int64_t)vertexSize * data->VertexCount);
         pbData = vbo->Lock(0, vertexSize * data->VertexCount, true);
         vbo->m_CurrentVCount = data->VertexCount;
     }
