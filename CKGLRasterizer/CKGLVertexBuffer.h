@@ -102,7 +102,7 @@ private:
     unsigned int stride_;
 };
 
-typedef struct CKGLVertexBufferDesc : public CKVertexBufferDesc
+typedef struct CKGLVertexBuffer : public CKVertexBufferDesc
 {
 private:
     GLuint GLBuffer;
@@ -118,8 +118,8 @@ public:
     void Bind(CKGLRasterizerContext *ctx);
     void *Lock(CKDWORD offset, CKDWORD len, bool overwrite);
     void Unlock();
-    explicit CKGLVertexBufferDesc(CKVertexBufferDesc* DesiredFormat);
-    CKGLVertexBufferDesc() { GLBuffer = 0; }
-    ~CKGLVertexBufferDesc();
-} CKGLVertexBufferDesc;
+    explicit CKGLVertexBuffer(CKVertexBufferDesc* DesiredFormat);
+    CKGLVertexBuffer() { GLBuffer = 0; }
+    ~CKGLVertexBuffer();
+} CKGLVertexBuffer;
 #endif

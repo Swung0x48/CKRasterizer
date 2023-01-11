@@ -2,7 +2,7 @@
 
 #include "CKGLRasterizer.h"
 
-CKGLVertexBufferDesc::CKGLVertexBufferDesc(CKVertexBufferDesc* DesiredFormat)
+CKGLVertexBuffer::CKGLVertexBuffer(CKVertexBufferDesc* DesiredFormat)
 {
     this->m_Flags = DesiredFormat->m_Flags;          // CKRST_VBFLAGS
     this->m_VertexFormat = DesiredFormat->m_VertexFormat;   // Vertex format : CKRST_VERTEXFORMAT
@@ -11,7 +11,7 @@ CKGLVertexBufferDesc::CKGLVertexBufferDesc(CKVertexBufferDesc* DesiredFormat)
     this->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
     this->GLLayout = GLVertexBufferLayout::GetLayoutFromFVF(DesiredFormat->m_VertexFormat);
 }
-CKGLVertexBufferDesc::~CKGLVertexBufferDesc()
+CKGLVertexBuffer::~CKGLVertexBuffer()
 {
     GLCall(glDeleteBuffers(1, &GLBuffer));
     VirtualFree(client_side_locked_data, 0, MEM_RELEASE);
@@ -20,7 +20,7 @@ CKGLVertexBufferDesc::~CKGLVertexBufferDesc()
         client_side_locked_data = nullptr;
 }
 
-bool CKGLVertexBufferDesc::operator==(const CKVertexBufferDesc & that) const
+bool CKGLVertexBuffer::operator==(const CKVertexBufferDesc & that) const
 {
     return this->m_VertexSize == that.m_VertexSize &&
         this->m_VertexFormat == that.m_VertexFormat &&
@@ -28,7 +28,7 @@ bool CKGLVertexBufferDesc::operator==(const CKVertexBufferDesc & that) const
         this->m_Flags == that.m_Flags;
 }
 
-void CKGLVertexBufferDesc::Create()
+void CKGLVertexBuffer::Create()
 {
     GLCall(glGenBuffers(1, &GLBuffer));
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
@@ -56,16 +56,16 @@ void CKGLVertexBufferDesc::Create()
     m_Flags &= CKRST_VB_VALID;
 }
 
-void CKGLVertexBufferDesc::Bind(CKGLRasterizerContext *ctx)
+void CKGLVertexBuffer::Bind(CKGLRasterizerContext *ctx)
 {
     ZoneScopedN(__FUNCTION__);
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
     GLCall(glBindVertexArray(GLVertexArray));
-    ctx->set_position_transformed(GLLayout.GetElements().front().usage == CKRST_VF_RASTERPOS);
+    ctx->set_position_transformed(m_VertexFormat & CKRST_VF_RASTERPOS);
     ctx->set_vertex_has_color(m_VertexFormat & CKRST_VF_DIFFUSE);
 }
 
-void *CKGLVertexBufferDesc::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
+void *CKGLVertexBuffer::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
 {
     ZoneScopedN(__FUNCTION__);
     if (!offset && !len)
@@ -90,7 +90,7 @@ void *CKGLVertexBufferDesc::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
     return ret;
 }
 
-void CKGLVertexBufferDesc::Unlock()
+void CKGLVertexBuffer::Unlock()
 {
     if (client_side_data)
     {

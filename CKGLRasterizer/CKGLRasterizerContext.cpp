@@ -38,6 +38,7 @@ bool GLLogCall(const char* function, const char* file, int line)
 {
     while (GLenum error = glGetError())
     {
+        DebugBreak();
         std::string str = std::to_string(error) + ": at " + 
             function + " " + file + ":" + std::to_string(line);
         MessageBoxA(NULL, str.c_str(), "OpenGL Error", NULL);
@@ -87,6 +88,11 @@ CKGLRasterizerContext::~CKGLRasterizerContext()
     glDeleteProgram(m_CurrentProgram);
     if (m_Owner->m_FullscreenContext == this)
         m_Owner->m_FullscreenContext = NULL;
+
+    for (auto dvb : m_dynvbo)
+        delete dvb.second;
+    m_dynvbo.clear();
+
     m_DirtyRects.Clear();
     m_PixelShaders.Clear();
     m_VertexShaders.Clear();
@@ -831,7 +837,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     {
         SetRenderState(VXRENDERSTATE_CLIPPING, 0);
     }
-    CKGLVertexBufferDesc *vbo = nullptr;
+    CKGLVertexBuffer *vbo = nullptr;
     auto vboid = std::make_pair(vertexFormat, DWORD(m_direct_draw_counter));
     if (++m_direct_draw_counter > DYNAMIC_VBO_COUNT) m_direct_draw_counter = 0;
     if (m_dynvbo.find(vboid) == m_dynvbo.end() ||
@@ -844,7 +850,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
         vbd.m_VertexFormat = vertexFormat;
         vbd.m_VertexSize = vertexSize;
         vbd.m_MaxVertexCount = (data->VertexCount + 100 > DEFAULT_VB_SIZE) ? data->VertexCount + 100 : DEFAULT_VB_SIZE;
-        CKGLVertexBufferDesc *vb = new CKGLVertexBufferDesc(&vbd);
+        CKGLVertexBuffer *vb = new CKGLVertexBuffer(&vbd);
         vb->Create();
         m_dynvbo[vboid] = vb;
     }
@@ -868,7 +874,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
         CKRSTLoadVertexBuffer(static_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
     }
     vbo->Unlock();
-    return InternalDrawPrimitive(pType, vbo, vbase, data->VertexCount, indices, indexcount);
+    return InternalDrawPrimitive(pType, vbo, vbase, data->VertexCount, indices, indexcount, true);
 }
 
 CKBOOL CKGLRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
@@ -885,7 +891,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Ver
     ++vbbat;
     ZoneScopedN(__FUNCTION__);
 #endif
-    return InternalDrawPrimitive(pType, static_cast<CKGLVertexBufferDesc*>(m_VertexBuffers[VertexBuffer]),
+    return InternalDrawPrimitive(pType, static_cast<CKGLVertexBuffer*>(m_VertexBuffers[VertexBuffer]),
         StartIndex, VertexCount, indices, indexcount);
 }
 
@@ -906,11 +912,11 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
     return CKRasterizerContext::DrawPrimitiveVBIB(pType, VB, IB, MinVIndex, VertexCount, StartIndex, Indexcount);
 }
 
-CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc *vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt)
+CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBuffer *vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt, bool vbbound)
 {
     ZoneScopedN(__FUNCTION__);
     if (!vbo) return FALSE;
-    vbo->Bind(this);
+    if (!vbbound) vbo->Bind(this);
 
 #if USE_INDEX_BUFFER
     int ibbase = 0;
@@ -1029,7 +1035,7 @@ void * CKGLRasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, 
 {
     ZoneScopedN(__FUNCTION__);
     if (VB >= m_VertexBuffers.Size()) return NULL;
-    CKGLVertexBufferDesc *vbo = static_cast<CKGLVertexBufferDesc*>(m_VertexBuffers[VB]);
+    CKGLVertexBuffer *vbo = static_cast<CKGLVertexBuffer*>(m_VertexBuffers[VB]);
     if (!vbo) return NULL;
     return vbo->Lock(StartVertex * vbo->m_VertexSize, VertexCount * vbo->m_VertexSize, (Lock & CKRST_LOCK_NOOVERWRITE) == 0);
 }
@@ -1038,7 +1044,7 @@ CKBOOL CKGLRasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 {
     ZoneScopedN(__FUNCTION__);
     if (VB >= m_VertexBuffers.Size()) return FALSE;
-    CKGLVertexBufferDesc *vbo = static_cast<CKGLVertexBufferDesc*>(m_VertexBuffers[VB]);
+    CKGLVertexBuffer *vbo = static_cast<CKGLVertexBuffer*>(m_VertexBuffers[VB]);
     if (!vbo) return FALSE;
     vbo->Unlock();
     return TRUE;
@@ -1286,7 +1292,7 @@ CKBOOL CKGLRasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc 
         return 0;
     delete m_VertexBuffers[VB];
 
-    CKGLVertexBufferDesc* desc = new CKGLVertexBufferDesc(DesiredFormat);
+    CKGLVertexBuffer* desc = new CKGLVertexBuffer(DesiredFormat);
     desc->Create();
     m_VertexBuffers[VB] = desc;
 #if LOGGING && LOG_CREATEBUFFER

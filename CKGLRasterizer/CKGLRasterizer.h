@@ -220,7 +220,7 @@ protected:
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
     CKDWORD GetStaticIndexBuffer(CKDWORD Count, GLushort* IndexData);
     CKDWORD GetDynamicIndexBuffer(CKDWORD Count, GLushort* IndexData, CKDWORD Index);
-    CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBufferDesc * vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt);
+    CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBuffer * vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt, bool vbbound = false);
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
     CKBOOL CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat);
@@ -256,6 +256,6 @@ private:
     CKDWORD m_alpha_test_flags;
     CKDWORD m_fog_flags;
     float m_fog_parameters[3];
-    std::unordered_map<std::pair<CKDWORD, CKDWORD>, CKGLVertexBufferDesc*, pair_hash> m_dynvbo;
+    std::unordered_map<std::pair<CKDWORD, CKDWORD>, CKGLVertexBuffer*, pair_hash> m_dynvbo;
     DWORD m_direct_draw_counter = 0;
 };
