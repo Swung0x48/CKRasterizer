@@ -22,20 +22,43 @@ jobs:
 
       - uses: lukka/get-cmake@latest
 
+      - name: Cache vendor dir
+        id:   cache
+        uses: actions/cache@v1
+        with:
+        path: ${{env.VENDOR_ROOT}}
+        key:  cache
+
       - name: Fetch git submodules
         run: git submodule update --init --recursive --remote
 
       - name: Download GLEW
+        if:   steps.cache.outputs.cache-hit != 'true'
         uses: suisei-cn/actions-download-file@v1.3.0
-        id: glew  # Remember to give an ID if you need the output filename
+        id: download-glew  # Remember to give an ID if you need the output filename
         with:
           url: "https://github.com/nigels-com/glew/releases/download/glew-${{env.GLEW_VERSION}}/glew-${{env.GLEW_VERSION}}-win32.zip"
           target: ${{env.VENDOR_ROOT}}
-          filename: glew.zip
+          filename: glew-${{env.GLEW_VERSION}}-win32.zip
+
+      - name:  Config
+        run:   echo ::set-env name=DXSDK_DIR::${{env.VENDOR_ROOT}}/DXSDK/
+        shell: bash
 
       - name: Extract and setup GLEW
+        if:   steps.cache.outputs.cache-hit != 'true'
         working-directory: ${{env.VENDOR_ROOT}}
-        run: (7z x ${{env.VENDOR_ROOT}}/glew.zip -o${{env.VENDOR_ROOT}}) -and (ren glew-${{env.GLEW_VERSION}} glew)
+        run: (7z x ${{env.VENDOR_ROOT}}/glew-${{env.GLEW_VERSION}}-win32.zip -o${{env.VENDOR_ROOT}}) -and (ren glew-${{env.GLEW_VERSION}} glew)
+
+      - name: Create cache
+        if:   steps.cache.outputs.cache-hit != 'true'
+        run:  |
+              curl -L https://download.microsoft.com/download/a/e/7/ae743f1f-632b-4809-87a9-aa1bb3458e31/DXSDK_Jun10.exe -o _DX2010_.exe
+              7z x _DX2010_.exe DXSDK/Include -o_DX2010_
+              7z x _DX2010_.exe DXSDK/Lib/x86 -o_DX2010_
+              mv _DX2010_/DXSDK ${{env.VENDOR_ROOT}}/DXSDK
+              rm -fR _DX*_ _DX*_.exe
+        shell: bash
 
       # Setup MSVC command prompt environment vars
       - uses: ilammy/msvc-dev-cmd@v1
