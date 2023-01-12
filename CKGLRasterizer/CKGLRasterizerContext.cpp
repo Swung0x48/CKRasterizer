@@ -313,6 +313,12 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         blanktex->Bind(this);
         blanktex->Load(&white);
     }
+    {
+        int idx = glGetUniformBlockIndex(m_CurrentProgram, "MatUniformBlock");
+        GLCall(glUniformBlockBinding(m_CurrentProgram, idx, 0));
+        GLCall(glGenBuffers(1, &m_ubo_mat));
+        GLCall(glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_ubo_mat));
+    }
 
     SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&VxMatrix::Identity());
     SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&VxMatrix::Identity());
@@ -404,10 +410,11 @@ CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
     if (m_lights[Light].second.Type == VX_LIGHTDIREC)
     {
         GLCall(glUniform1ui(get_uniform_location("lights.type"), 3));
-        GLCall(glUniform3fv(get_uniform_location("lights.ambi"), 1, lit->Ambient.col));
-        GLCall(glUniform3fv(get_uniform_location("lights.diff"), 1, lit->Diffuse.col));
-        GLCall(glUniform3fv(get_uniform_location("lights.spcl"), 1, lit->Specular.col));
-        GLCall(glUniform3fv(get_uniform_location("lights.dir"), 1, lit->Direction.v));
+        GLCall(glUniform4fv(get_uniform_location("lights.ambi"), 1, lit->Ambient.col));
+        GLCall(glUniform4fv(get_uniform_location("lights.diff"), 1, lit->Diffuse.col));
+        GLCall(glUniform4fv(get_uniform_location("lights.spcl"), 1, lit->Specular.col));
+        VxVector4 vd(lit->Direction.x, lit->Direction.y, lit->Direction.z, 0);
+        GLCall(glUniform4fv(get_uniform_location("lights.dir"), 1, (float*)&vd));
     }
     return TRUE;
 }
@@ -415,12 +422,9 @@ CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 CKBOOL CKGLRasterizerContext::SetMaterial(CKMaterialData *mat)
 {
     ZoneScopedN(__FUNCTION__);
-    //ignore alpha
-    GLCall(glUniform3fv(get_uniform_location("material.ambi"), 1, mat->Ambient.col));
-    GLCall(glUniform3fv(get_uniform_location("material.diff"), 1, mat->Diffuse.col));
-    GLCall(glUniform3fv(get_uniform_location("material.spcl"), 1, mat->Specular.col));
-    GLCall(glUniform3fv(get_uniform_location("material.emis"), 1, mat->Emissive.col));
-    GLCall(glUniform1f(get_uniform_location("material.spcl_strength"), mat->SpecularPower));
+    CKGLMaterialUniform mu(*mat);
+    GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_mat));
+    GLCall(glBufferData(GL_UNIFORM_BUFFER, sizeof(CKGLMaterialUniform), &mu, GL_DYNAMIC_DRAW));
     return TRUE;
 }
 

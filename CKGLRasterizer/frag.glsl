@@ -5,22 +5,23 @@ const uint LSW_VRTCOLOR_ENABLED = 0x0004U;
 
 struct mat_t
 {
-    vec3 ambi;
-    vec3 diff;
-    vec3 spcl;
-    float spcl_strength;
-    vec3 emis;
+    vec4 ambi;          //@0
+    vec4 diff;          //@16
+    vec4 spcl;          //@32
+    float spcl_strength;//@48
+    vec4 emis;          //@64
 };
 struct light_t
 {
-    uint type; //1=point, 2=spot, 3=directional
-    vec3 ambi;
-    vec3 diff;
-    vec3 spcl;
+    //1=point, 2=spot, 3=directional
+    uint type;
+    vec4 ambi;
+    vec4 diff;
+    vec4 spcl;
     //directional
-    vec3 dir;
+    vec4 dir;
     //point & spot
-    vec3 pos;
+    vec4 pos;
     float range;
     //point
     float a0;
@@ -44,24 +45,27 @@ uniform vec4 fog_color;
 uniform vec3 fog_parameters; //start, end, density
 uniform vec3 vpos; //camera position
 uniform vec2 depth_range; //near-far plane distances for fog calculation
-uniform mat_t material;
+layout (std140) uniform MatUniformBlock
+{
+    mat_t material;
+};
 uniform uint lighting_switches;
 uniform light_t lights; // will become array in the future
 uniform sampler2D tex; //this will become an array in the future
 
 vec3 light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
 {
-    vec3 ldir = normalize(-l.dir);
+    vec3 ldir = normalize(-l.dir.xyz);
     float diff = max(dot(normal, ldir), 0.);
-    vec3 ret = vec3(0., 0., 0.);
-    vec3 amb = l.ambi * material.ambi;
-    vec3 dif = diff * l.diff * material.diff;
+    vec4 ret = vec4(0., 0., 0., 0.);
+    vec4 amb = l.ambi * material.ambi;
+    vec4 dif = diff * l.diff * material.diff;
     ret = amb + dif + material.emis;
     if (spec_enabled)
     {
         vec3 refldir = reflect(-ldir, normal);
         float specl = pow(max(dot(vdir, refldir), 0.), material.spcl_strength);
-        vec3 spc = l.spcl * material.spcl * specl;
+        vec4 spc = l.spcl * material.spcl * specl;
         ret += spc;
     }
     return ret;

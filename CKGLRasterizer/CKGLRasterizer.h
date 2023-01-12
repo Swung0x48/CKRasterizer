@@ -123,6 +123,20 @@ public:
     }
 } CKGLPixelShaderDesc;
 
+struct CKGLMaterialUniform
+{
+    VxColor ambi;
+    VxColor diff;
+    VxColor spcl;
+    float spcl_strength;
+    float padding[3];
+    VxColor emis;
+
+    CKGLMaterialUniform(CKMaterialData md) :
+        ambi(md.Ambient), diff(md.Diffuse),
+        spcl(md.Specular), spcl_strength(md.SpecularPower),
+        emis(md.Emissive), padding{0, 0, 0} {}
+};
 
 class CKGLRasterizerContext : public CKRasterizerContext
 {
@@ -259,4 +273,6 @@ private:
     CKDWORD m_current_vf = ~0U;
     std::unordered_map<CKDWORD, CKGLIndexBuffer*> m_dynibo;
     DWORD m_noibo_draw_counter = 0;
+
+    GLuint m_ubo_mat = 0;
 };
