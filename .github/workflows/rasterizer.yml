@@ -15,7 +15,7 @@ jobs:
     runs-on: windows-latest
     env:
       PROJECT_ROOT: ${{github.workspace}}/CKRasterizer
-      VENDOR_ROOT: ${{env.PROJECT_ROOT}}/vendor
+      VENDOR_ROOT: ${{github.workspace}}/CKRasterizer/vendor
       GLEW_VERSION: "2.2.0"
     steps:
       - uses: actions/checkout@v2
