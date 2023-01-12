@@ -57,7 +57,7 @@ jobs:
       - name: Release Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: ${{PROJECT_NAME}}
+          name: ${{env.PROJECT_NAME}}
           path: ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build/${{env.BUILD_TYPE}}
 
   build-gl:
@@ -118,5 +118,5 @@ jobs:
       - name: Release Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: ${{PROJECT_NAME}}
+          name: ${{env.PROJECT_NAME}}
           path: ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build/${{env.BUILD_TYPE}}
