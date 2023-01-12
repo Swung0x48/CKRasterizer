@@ -25,7 +25,6 @@ jobs:
       - name: Cache vendor dir
         id:   cache
         uses: actions/cache@v1
-        with:
         path: ${{env.VENDOR_ROOT}}
         key:  cache
 
