@@ -28,7 +28,6 @@ jobs:
       - name: Download GLEW
         uses: suisei-cn/actions-download-file@v1.3.0
         id: glew  # Remember to give an ID if you need the output filename
-        name: download glew
         with:
           url: "https://github.com/nigels-com/glew/releases/download/glew-${{env.GLEW_VERSION}}/glew-${{env.GLEW_VERSION}}-win32.zip"
           target: ${{env.VENDOR_ROOT}}
