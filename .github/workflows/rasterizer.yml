@@ -9,7 +9,7 @@ on:
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
-  CMAKE_ARGS: -DVIRTOOLS_SDK_FETCH_FROM_GIT=ON -TRACY_ENABLE=OFF -A Win32
+  CMAKE_ARGS: -DVIRTOOLS_SDK_FETCH_FROM_GIT=ON -DTRACY_ENABLE=OFF -A Win32
 
 jobs:
   build-gl:
