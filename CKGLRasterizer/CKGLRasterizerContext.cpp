@@ -324,6 +324,9 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&VxMatrix::Identity());
     SetUniformMatrix4fv("world", 1, GL_FALSE, (float*)&VxMatrix::Identity());
     SetUniformMatrix4fv("tiworld", 1, GL_FALSE, (float*)&VxMatrix::Identity());
+
+    set_position_transformed(true);
+    set_vertex_has_color(true);
     return TRUE;
 }
 
@@ -1234,12 +1237,25 @@ unsigned CKGLRasterizerContext::get_vertex_attrib_location(CKDWORD component)
     return loc.find(component) != loc.end() ? loc.find(component)->second : ~0;
 }
 
-void CKGLRasterizerContext::set_position_transformed(bool transformed) {
-    GLCall(glUniform1i(get_uniform_location("is_transformed"), transformed));
+void CKGLRasterizerContext::set_position_transformed(bool transformed)
+{
+    if (bool(m_cur_vp & VP_IS_TRANSFORMED) ^ transformed)
+    {
+        GLCall(glUniform1i(get_uniform_location("is_transformed"), transformed));
+        m_cur_vp &= ~0U ^ VP_IS_TRANSFORMED;
+        if (transformed) m_cur_vp |= VP_IS_TRANSFORMED;
+    }
 }
 
-void CKGLRasterizerContext::set_vertex_has_color(bool color) {
-    GLCall(glUniform1i(get_uniform_location("has_color"), color)); }
+void CKGLRasterizerContext::set_vertex_has_color(bool color)
+{
+    if (bool(m_cur_vp & VP_HAS_COLOR) ^ color)
+    {
+        GLCall(glUniform1i(get_uniform_location("has_color"), color));
+        m_cur_vp &= ~0U ^ VP_HAS_COLOR;
+        if (color) m_cur_vp |= VP_HAS_COLOR;
+    }
+}
 
 void CKGLRasterizerContext::set_title_status(const char *fmt, ...)
 {

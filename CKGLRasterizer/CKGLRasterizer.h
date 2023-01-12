@@ -21,6 +21,9 @@
 #define LSW_LIGHTING_ENABLED 0x0002
 #define LSW_VRTCOLOR_ENABLED 0x0004
 
+#define VP_HAS_COLOR      0x0001
+#define VP_IS_TRANSFORMED 0x0002
+
 LRESULT WINAPI GL_WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
 
 class CKGLRasterizerContext;
@@ -273,6 +276,6 @@ private:
     CKDWORD m_current_vf = ~0U;
     std::unordered_map<CKDWORD, CKGLIndexBuffer*> m_dynibo;
     DWORD m_noibo_draw_counter = 0;
-
+    CKDWORD m_cur_vp = 0;
     GLuint m_ubo_mat = 0;
 };
