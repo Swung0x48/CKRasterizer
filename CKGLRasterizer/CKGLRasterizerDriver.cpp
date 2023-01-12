@@ -109,11 +109,34 @@ CKBOOL CKGLRasterizerDriver::InitializeCaps()
     m_Desc << glGetString(GL_RENDERER);
     m_Desc << " (OpenGL)";
 
+    ZeroMemory(&m_3DCaps, sizeof(m_3DCaps));
+    ZeroMemory(&m_2DCaps, sizeof(m_2DCaps));
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_CANDOVERTEXBUFFER;
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_CANDOINDEXBUFFER;
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_GLATTENUATIONMODEL;
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_HARDWARETL;
-    m_3DCaps.MaxActiveLights = 16;
+    m_3DCaps.MaxNumberTextureStage = 1; //until we have multiple textures in the frag shader
+    m_3DCaps.MaxActiveLights = 16;      //this is a lie (at least for now)
+    m_3DCaps.MinTextureWidth = 1;       //we are using texture of width 1 for blank textures
+    m_3DCaps.MinTextureHeight = 1;      //so we know it must work... or do we?
+    m_3DCaps.MaxTextureWidth = 1024;    //we know OpenGL guarantees this to be at least 1024...
+    m_3DCaps.MaxTextureHeight = 1024;   //and I'm too lazy to create a context here...
+    m_3DCaps.VertexCaps |= CKRST_VTXCAPS_DIRECTIONALLIGHTS;
+    m_3DCaps.AlphaCmpCaps = 0xff;       //we have TECHNOLOGY
+    m_3DCaps.ZCmpCaps = 0xff;           //who wouldn't be 0xff here?
+    m_3DCaps.TextureAddressCaps = 0x1f; //everything
+    m_3DCaps.TextureCaps |= CKRST_TEXTURECAPS_PERSPECTIVE; //not only do we support it, it's ALWAYS on
+    m_3DCaps.MiscCaps |= CKRST_MISCCAPS_MASKZ;      //glDepthMask
+    m_3DCaps.MiscCaps |= CKRST_MISCCAPS_CONFORMANT; //because non-conformant OpenGL drivers don't exist /s
+    m_3DCaps.MiscCaps |= CKRST_MISCCAPS_CULLNONE;
+    m_3DCaps.MiscCaps |= CKRST_MISCCAPS_CULLCW;
+    m_3DCaps.MiscCaps |= CKRST_MISCCAPS_CULLCCW;
+    m_3DCaps.RasterCaps |= CKRST_RASTERCAPS_ZTEST;
+    m_3DCaps.RasterCaps |= CKRST_RASTERCAPS_FOGPIXEL; //vertex fog? what's that paleocene technology?
+    m_3DCaps.RasterCaps |= CKRST_RASTERCAPS_WBUFFER;
+    m_3DCaps.RasterCaps |= CKRST_RASTERCAPS_WFOG;     //w fog hardcoded in shader
+    m_3DCaps.SrcBlendCaps = 0x1fff;     //everything
+    m_3DCaps.DestBlendCaps = 0x1fff;    //ditto
     m_2DCaps.Family = CKRST_OPENGL;
     m_2DCaps.Caps = (CKRST_2DCAPS_3D | CKRST_2DCAPS_GDI);
     m_DisplayModes.PushBack({640, 480, 16, 60});

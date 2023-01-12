@@ -295,7 +295,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     m_alpha_test_flags = 8; //alpha test off, alpha function always
     GLCall(glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags));
     //m_fog_flags = 0; //fog off, fog type none. We do not support vertex fog.
-    m_fog_flags = 1; //fog off, fog type exponential. certain crappy game doesn't init this flag
+    m_fog_flags = 3; //fog off, fog type linear. certain crappy game doesn't init this flag
     VxColor init_fog_color = VxColor();
     m_fog_parameters[0] = 0.;
     m_fog_parameters[1] = 1.;

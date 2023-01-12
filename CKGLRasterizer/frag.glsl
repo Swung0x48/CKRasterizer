@@ -88,13 +88,13 @@ vec4 clamp_color(vec4 c)
 {
     return clamp(c, vec4(0, 0, 0, 0), vec4(1, 1, 1, 1));
 }
-float fog_factor(float dist, uint mode)
+float fog_factor(float dist, float rdist, uint mode)
 {
     switch(mode)
     {
         case 1U: return 1. / exp(dist * fog_parameters.z);
         case 2U: return 1. / exp(pow(dist * fog_parameters.z, 2));
-        case 3U: return (fog_parameters.y - dist) / (fog_parameters.y - fog_parameters.x);
+        case 3U: return (fog_parameters.y - rdist) / (fog_parameters.y - fog_parameters.x);
         default: return 1.;
     }
 }
@@ -107,7 +107,8 @@ void main()
     if ((fog_flags & 0x80U) != 0U)
     {
         float fvdepth = clamp(length(vpos - fpos) / (depth_range.y - depth_range.x), 0, 1);
-        float ffactor = fog_factor(fvdepth, fog_flags & 0x08U);
+        float rdepth = length(vpos - fpos);
+        ffactor = fog_factor(fvdepth, rdepth, fog_flags & 0x0fU);
         if (ffactor < 1. / 512)
         {
             color = fog_color;
