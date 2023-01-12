@@ -34,14 +34,14 @@ jobs:
           target: ${{env.VENDOR_ROOT}}
           filename: glew-${{env.GLEW_VERSION}}-win32.zip
 
-      - name:  Config DXSDK path env var
-        run:   echo ::set-env name=DXSDK_DIR::${{env.VENDOR_ROOT}}/DXSDK/
-        shell: bash
-
       - name: Extract and setup GLEW
         if:   steps.cache.outputs.cache-hit != 'true'
         working-directory: ${{env.VENDOR_ROOT}}
         run: (7z x ${{env.VENDOR_ROOT}}/glew-${{env.GLEW_VERSION}}-win32.zip -o${{env.VENDOR_ROOT}}) -and (ren glew-${{env.GLEW_VERSION}} glew)
+
+      - name:  Config DXSDK path env var
+        run:   echo "DXSDK_DIR=${{env.VENDOR_ROOT}}/DXSDK" >> $GITHUB_ENV
+        shell: bash
 
       - name: Download and setup DXSDK
         run:  |
