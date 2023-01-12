@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "CKGLRasterizerCommon.h"
-#include "CKGLVertexBuffer.h"
 
 #define LSW_SPECULAR_ENABLED 0x0001
 #define LSW_LIGHTING_ENABLED 0x0002
@@ -85,20 +84,9 @@ struct pair_hash
     { return std::hash<S>()(p.first) ^ std::hash<T>()(p.second); }
 };
 
-typedef struct CKGLIndexBufferDesc : public CKIndexBufferDesc
-{
-public:
-    GLuint GLBuffer;
-public:
-    bool operator==(const CKIndexBufferDesc &) const;
-    void Create();
-    void *Lock(CKDWORD offset, CKDWORD len, bool overwrite);
-    void Unlock();
-    void Bind();
-    explicit CKGLIndexBufferDesc(CKIndexBufferDesc* DesiredFormat);
-    CKGLIndexBufferDesc() { GLBuffer = 0; }
-    ~CKGLIndexBufferDesc() { GLCall(glDeleteBuffers(1, &GLBuffer)); }
-} CKGLIndexBufferDesc;
+class CKGLVertexFormat;
+struct CKGLVertexBuffer;
+struct CKGLIndexBuffer;
 
 typedef struct CKGLVertexShaderDesc : public CKVertexShaderDesc
 {
@@ -229,8 +217,6 @@ public:
 
 protected:
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
-    CKDWORD GetStaticIndexBuffer(CKDWORD Count, GLushort* IndexData);
-    CKDWORD GetDynamicIndexBuffer(CKDWORD Count, GLushort* IndexData, CKDWORD Index);
     CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBuffer * vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt, bool vbbound = false);
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
@@ -254,7 +240,6 @@ public:
     HWND m_HWND;
 private:
     constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
-    CKGLIndexBufferDesc *m_IndexBuffer = nullptr;
     CKDWORD m_CurrentVertexShader = INVALID_VALUE;
     CKDWORD m_CurrentPixelShader = INVALID_VALUE;
     CKDWORD m_CurrentProgram = INVALID_VALUE;
@@ -272,4 +257,6 @@ private:
     DWORD m_direct_draw_counter = 0;
     std::unordered_map<CKDWORD, CKGLVertexFormat*> m_vertfmts;
     CKDWORD m_current_vf = ~0U;
+    std::unordered_map<CKDWORD, CKGLIndexBuffer*> m_dynibo;
+    DWORD m_noibo_draw_counter = 0;
 };

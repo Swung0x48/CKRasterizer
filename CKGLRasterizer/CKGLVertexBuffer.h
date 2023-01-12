@@ -116,12 +116,14 @@ public:
     void select();
 };
 
-typedef struct CKGLVertexBuffer : public CKVertexBufferDesc
+struct CKGLVertexBuffer : public CKVertexBufferDesc
 {
 private:
     GLuint GLBuffer;
+#if !USE_SEPARATE_ATTRIBUTE
     GLVertexBufferLayout GLLayout;
     GLuint GLVertexArray;
+#endif
     void *client_side_data = nullptr;
     void *client_side_locked_data = nullptr;
     CKDWORD lock_offset;
@@ -134,7 +136,6 @@ public:
     void *Lock(CKDWORD offset, CKDWORD len, bool overwrite);
     void Unlock();
     explicit CKGLVertexBuffer(CKVertexBufferDesc* DesiredFormat);
-    CKGLVertexBuffer() { GLBuffer = 0; }
     ~CKGLVertexBuffer();
-} CKGLVertexBuffer;
+};
 #endif

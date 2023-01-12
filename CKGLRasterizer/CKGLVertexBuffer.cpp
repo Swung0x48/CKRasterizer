@@ -4,25 +4,32 @@
 
 CKGLVertexBuffer::CKGLVertexBuffer(CKVertexBufferDesc* DesiredFormat)
 {
+    GLBuffer = 0;
     this->m_Flags = DesiredFormat->m_Flags;          // CKRST_VBFLAGS
     this->m_VertexFormat = DesiredFormat->m_VertexFormat;   // Vertex format : CKRST_VERTEXFORMAT
     this->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount; // Max number of vertices this buffer can contain
     this->m_VertexSize = DesiredFormat->m_VertexSize;     // Size in bytes taken by a vertex..
     this->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
+    lock_offset = 0;
+    lock_length = 0;
 #if !USE_SEPARATE_ATTRIBUTE
+    GLVertexArray = 0;
     this->GLLayout = GLVertexBufferLayout::GetLayoutFromFVF(DesiredFormat->m_VertexFormat);
 #endif
 }
 CKGLVertexBuffer::~CKGLVertexBuffer()
 {
     GLCall(glDeleteBuffers(1, &GLBuffer));
+    GLBuffer  = 0;
 #if !USE_SEPARATE_ATTRIBUTE
     GLCall(glDeleteVertexArrays(1, &GLVertexArray));
 #endif
-    VirtualFree(client_side_locked_data, 0, MEM_RELEASE);
+    if (client_side_data)
+        VirtualFree(client_side_data, 0, MEM_RELEASE);
     client_side_data = nullptr;
     if (client_side_locked_data)
-        client_side_locked_data = nullptr;
+        VirtualFree(client_side_locked_data, 0, MEM_RELEASE);
+    client_side_locked_data = nullptr;
 }
 
 bool CKGLVertexBuffer::operator==(const CKVertexBufferDesc & that) const

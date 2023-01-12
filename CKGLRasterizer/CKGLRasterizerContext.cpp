@@ -1,4 +1,6 @@
 #include "CKGLRasterizer.h"
+#include "CKGLVertexBuffer.h"
+#include "CKGLIndexBuffer.h"
 
 #define LOGGING 0
 #define STEP 0
@@ -17,6 +19,7 @@
 #define USE_INDEX_BUFFER 1
 
 #define DYNAMIC_VBO_COUNT 64
+#define DYNAMIC_IBO_COUNT 64
 
 #if STEP
 #include <conio.h>
@@ -91,6 +94,10 @@ CKGLRasterizerContext::~CKGLRasterizerContext()
     for (auto dvb : m_dynvbo)
         delete dvb.second;
     m_dynvbo.clear();
+
+    for (auto dib : m_dynibo)
+        delete dib.second;
+    m_dynibo.clear();
 
     m_DirtyRects.Clear();
     m_PixelShaders.Clear();
@@ -258,7 +265,6 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     if (m_Fullscreen)
         m_Driver->m_Owner->m_FullscreenContext = this;
 
-    m_IndexBuffer = nullptr;
     memset(m_renderst, 0xff, sizeof(m_renderst));
 
     // TODO: Shader compilation and binding may be moved elsewhere
@@ -842,7 +848,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     }
     CKGLVertexBuffer *vbo = nullptr;
     auto vboid = std::make_pair(vertexFormat, DWORD(m_direct_draw_counter));
-    if (++m_direct_draw_counter > DYNAMIC_VBO_COUNT) m_direct_draw_counter = 0;
+    if (++ m_direct_draw_counter > DYNAMIC_VBO_COUNT) m_direct_draw_counter = 0;
     if (m_dynvbo.find(vboid) == m_dynvbo.end() ||
         m_dynvbo[vboid]->m_MaxVertexCount < data->VertexCount)
     {
@@ -922,7 +928,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
     if (!vbo) return NULL;
 
     if (IB >= m_IndexBuffers.Size()) return NULL;
-    CKGLIndexBufferDesc *ibo = static_cast<CKGLIndexBufferDesc*>(m_IndexBuffers[VB]);
+    CKGLIndexBuffer *ibo = static_cast<CKGLIndexBuffer*>(m_IndexBuffers[IB]);
     if (!ibo) return NULL;
 
     vbo->Bind(this);
@@ -957,7 +963,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
         default:
             break;
     }
-    GLCall(glDrawElements(glpt, Indexcount, GL_UNSIGNED_SHORT, (void*)StartIndex));
+    GLCall(glDrawElementsBaseVertex(glpt, Indexcount, GL_UNSIGNED_SHORT, (void*)(2 * StartIndex), MinVIndex));
     return TRUE;
 }
 
@@ -981,30 +987,36 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
     if (idx)
     {
         void *pdata = nullptr;
-        if (!m_IndexBuffer || m_IndexBuffer->m_MaxIndexCount < icnt)
+        auto iboid = m_noibo_draw_counter;
+        if (++ m_noibo_draw_counter > DYNAMIC_IBO_COUNT) m_noibo_draw_counter = 0;
+        if (m_dynibo.find(iboid) == m_dynibo.end() ||
+            m_dynibo[iboid]->m_MaxIndexCount < icnt)
         {
-            if (m_IndexBuffer) delete m_IndexBuffer;
-            m_IndexBuffer = new CKGLIndexBufferDesc();
-            m_IndexBuffer->m_MaxIndexCount = icnt + 100;
-            m_IndexBuffer->m_CurrentICount = 0;
-            m_IndexBuffer->Create();
+            if (m_dynibo[iboid])
+                delete m_dynibo[iboid];
+            CKIndexBufferDesc ibd;
+            ibd.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+            ibd.m_MaxIndexCount = icnt + 100 < DEFAULT_VB_SIZE ? DEFAULT_VB_SIZE : icnt + 100;
+            ibd.m_CurrentICount = 0;
+            CKGLIndexBuffer *ib = new CKGLIndexBuffer(&ibd);
+            ib->Create();
+            m_dynibo[iboid] = ib;
         }
-        m_IndexBuffer->Bind();
-        if (icnt + m_IndexBuffer->m_CurrentICount <= m_IndexBuffer->m_MaxIndexCount)
+        CKGLIndexBuffer *ibo = m_dynibo[iboid];
+        ibo->Bind();
+        if (icnt + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
         {
-            pdata = m_IndexBuffer->Lock(2 * m_IndexBuffer->m_CurrentICount, 2 * icnt, false);
-            ibbase = 2 * m_IndexBuffer->m_CurrentICount;
-            m_IndexBuffer->m_CurrentICount += icnt;
+            pdata = ibo->Lock(2 * ibo->m_CurrentICount, 2 * icnt, false);
+            ibbase = 2 * ibo->m_CurrentICount;
+            ibo->m_CurrentICount += icnt;
         } else
         {
-            pdata = m_IndexBuffer->Lock(0, 2 * icnt, true);
-            m_IndexBuffer->m_CurrentICount = icnt;
+            pdata = ibo->Lock(0, 2 * icnt, true);
+            ibo->m_CurrentICount = icnt;
         }
         if (pdata)
-        {
             memcpy(pdata, idx, 2 * icnt);
-        }
-        m_IndexBuffer->Unlock();
+        ibo->Unlock();
     }
 #endif
 
@@ -1175,7 +1187,7 @@ CKBOOL CKGLRasterizerContext::GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane &
 void * CKGLRasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
 {
     if (IB >= m_IndexBuffers.Size()) return NULL;
-    CKGLIndexBufferDesc *ibo = static_cast<CKGLIndexBufferDesc*>(m_IndexBuffers[IB]);
+    CKGLIndexBuffer *ibo = static_cast<CKGLIndexBuffer*>(m_IndexBuffers[IB]);
     if (!ibo) return NULL;
     return ibo->Lock(StartIndex * 2, IndexCount * 2, (Lock & CKRST_LOCK_NOOVERWRITE) == 0);
 }
@@ -1183,8 +1195,9 @@ void * CKGLRasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CK
 CKBOOL CKGLRasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
     if (IB >= m_IndexBuffers.Size()) return NULL;
-    CKGLIndexBufferDesc *ibo = static_cast<CKGLIndexBufferDesc*>(m_IndexBuffers[IB]);
+    CKGLIndexBuffer *ibo = static_cast<CKGLIndexBuffer*>(m_IndexBuffers[IB]);
     if (!ibo) return NULL;
+    ibo->Unlock();
     return TRUE;
 }
 
@@ -1246,64 +1259,6 @@ BOOL CKGLRasterizerContext::SetUniformMatrix4fv(std::string name, GLsizei count,
 {
     GLCall(glUniformMatrix4fv(get_uniform_location(name.c_str()), count, transpose, value));
     return TRUE;
-}
-
-CKDWORD CKGLRasterizerContext::GetStaticIndexBuffer(CKDWORD Count, GLushort *IndexData)
-{
-    ZoneScopedN(__FUNCTION__);
-    // Use count as index.
-    // Since we're using it as a static buffer, it should be disposable.
-    int index = Count % m_IndexBuffers.Size();
-
-    CKGLIndexBufferDesc* ib = static_cast<CKGLIndexBufferDesc *>(m_IndexBuffers[index]);
-
-    // If valid and meets our need, use it
-    if (ib && ib->m_MaxIndexCount == Count)
-        return index;
-    // ...if not, dispose it
-    delete ib;
-
-    ib = new CKGLIndexBufferDesc;
-    ib->m_MaxIndexCount = Count;
-    ib->m_CurrentICount = 0;
-    ib->Create();
-    //ib->Populate(IndexData, Count);
-    m_IndexBuffers[index] = ib;
-    return index;
-}
-
-CKDWORD CKGLRasterizerContext::GetDynamicIndexBuffer(CKDWORD Count, GLushort* IndexData, CKDWORD Index)
-{
-    /*if ((m_Driver->m_3DCaps.CKRasterizerSpecificCaps & CKRST_SPECIFICCAPS_CANDOVERTEXBUFFER) == 0)
-        return 0;
-
-    CKDWORD index = VertexFormat & (CKRST_VF_RASTERPOS | CKRST_VF_NORMAL);
-    index |= (VertexFormat & (CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEXMASK)) >> 3;
-    index >>= 2;
-    index |= AddKey << 7;
-    index += 1;
-    CKIndexBufferDesc *ib = m_IndexBuffers[index];
-    ib->m_MaxIndexCount
-    if (!vb || vb->m_MaxVertexCount < VertexCount)
-    {
-        if (vb)
-        {
-            delete vb;
-            m_VertexBuffers[index] = NULL;
-        }
-
-        CKVertexBufferDesc nvb;
-        nvb.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
-        nvb.m_VertexFormat = VertexFormat;
-        nvb.m_VertexSize = VertexSize;
-        nvb.m_MaxVertexCount = (VertexCount + 100 > DEFAULT_VB_SIZE) ? VertexCount + 100 : DEFAULT_VB_SIZE;
-        if (AddKey != 0)
-            nvb.m_Flags |= CKRST_VB_SHARED;
-        CreateObject(index, CKRST_OBJ_INDEXBUFFER, &nvb);
-    }
-
-    return index;*/
-    return 0;
 }
 
 CKBOOL CKGLRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat)
@@ -1384,7 +1339,7 @@ CKBOOL CKGLRasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *D
     if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
         return 0;
     delete m_IndexBuffers[IB];
-    CKGLIndexBufferDesc* desc = new CKGLIndexBufferDesc(DesiredFormat);
+    CKGLIndexBuffer* desc = new CKGLIndexBuffer(DesiredFormat);
     desc->Create();
     m_IndexBuffers[IB] = desc;
     return 1;
