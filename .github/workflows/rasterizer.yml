@@ -2,9 +2,9 @@ name: Rasterizers
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
@@ -25,16 +25,16 @@ jobs:
       - name: Fetch git submodules
         run: git submodule update --init --recursive --remote
 
-      - name: download glew
-        - uses: suisei-cn/actions-download-file@v1.3.0
-          id: glew  # Remember to give an ID if you need the output filename
-          name: download glew
-          with:
-            url: "https://github.com/nigels-com/glew/releases/download/glew-${{env.GLEW_VERSION}}/glew-${{env.GLEW_VERSION}}-win32.zip"
-            target: ${{env.VENDOR_ROOT}}
-            filename: glew.zip
+      - name: Download GLEW
+        uses: suisei-cn/actions-download-file@v1.3.0
+        id: glew  # Remember to give an ID if you need the output filename
+        name: download glew
+        with:
+          url: "https://github.com/nigels-com/glew/releases/download/glew-${{env.GLEW_VERSION}}/glew-${{env.GLEW_VERSION}}-win32.zip"
+          target: ${{env.VENDOR_ROOT}}
+          filename: glew.zip
 
-      - name: extract and setup glew
+      - name: Extract and setup glew
         working-directory: ${{env.VENDOR_ROOT}}
         run: (7z x ${{env.VENDOR_ROOT}}/glew.zip -oC${{env.VENDOR_ROOT}}) -and (ren glew-${{env.GLEW_VERSION}} glew)
 
