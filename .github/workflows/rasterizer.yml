@@ -1,0 +1,71 @@
+name: Rasterizers
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    env:
+      PROJECT_ROOT: ${{github.workspace}}/CKRasterizer
+      VENDOR_ROOT: ${{env.PROJECT_ROOT}}/vendor
+      GLEW_VERSION: "2.2.0"
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: lukka/get-cmake@latest
+
+      - name: Fetch git submodules
+        run: git submodule update --init --recursive --remote
+
+      - name: download glew
+        - uses: suisei-cn/actions-download-file@v1.3.0
+          id: glew  # Remember to give an ID if you need the output filename
+          name: download glew
+          with:
+            url: "https://github.com/nigels-com/glew/releases/download/glew-${{env.GLEW_VERSION}}/glew-${{env.GLEW_VERSION}}-win32.zip"
+            target: ${{env.VENDOR_ROOT}}
+            filename: glew.zip
+
+      - name: extract and setup glew
+        working-directory: ${{env.VENDOR_ROOT}}
+        run: (7z x ${{env.VENDOR_ROOT}}/glew.zip -oC${{env.VENDOR_ROOT}}) -and (ren glew-${{env.GLEW_VERSION}} glew)
+
+      # Setup MSVC command prompt environment vars
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure CMake
+        run: cmake -B ${{env.PROJECT_ROOT}}/build -S ${{env.PROJECT_ROOT}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DVIRTOOLS_SDK_FETCH_FROM_GIT=ON -A Win32
+
+      - name: Build
+        working-directory: ${{env.PROJECT_ROOT}}/build
+        run: cmake --build ${{env.PROJECT_ROOT}}/build --config ${{env.BUILD_TYPE}}
+
+#      - name: List build dir
+#        working-directory: ${{github.workspace}}/BallanceMMOServer/build
+#        run: dir
+
+      # - name: Run post-build script
+      #   working-directory: ${{github.workspace}}/BallanceMMOServer/build
+      #   run: ${{github.workspace}}/BallanceMMOServer/build/postbuild.bat ${{env.BUILD_TYPE}}
+
+      - name: Test
+        working-directory: ${{env.PROJECT_ROOT}}
+        run: ctest -C ${{env.BUILD_TYPE}}
+
+      # - name: Dry run
+      #   working-directory: ${{github.workspace}}/BallanceMMOServer/build/${{env.BUILD_TYPE}}
+      #   run: ${{github.workspace}}/BallanceMMOServer/build/${{env.BUILD_TYPE}}/BallanceMMOServer.exe --dry-run
+
+      - name: Release Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: rasterizer-windows
+          path: ${{env.PROJECT_ROOT}}/build
