@@ -22,12 +22,6 @@ jobs:
 
       - uses: lukka/get-cmake@latest
 
-      - name: Cache vendor dir
-        id:   cache
-        uses: actions/cache@v1
-        path: ${{env.VENDOR_ROOT}}
-        key:  cache
-
       - name: Fetch git submodules
         run: git submodule update --init --recursive --remote
 
@@ -40,7 +34,7 @@ jobs:
           target: ${{env.VENDOR_ROOT}}
           filename: glew-${{env.GLEW_VERSION}}-win32.zip
 
-      - name:  Config
+      - name:  Config DXSDK path env var
         run:   echo ::set-env name=DXSDK_DIR::${{env.VENDOR_ROOT}}/DXSDK/
         shell: bash
 
@@ -49,8 +43,7 @@ jobs:
         working-directory: ${{env.VENDOR_ROOT}}
         run: (7z x ${{env.VENDOR_ROOT}}/glew-${{env.GLEW_VERSION}}-win32.zip -o${{env.VENDOR_ROOT}}) -and (ren glew-${{env.GLEW_VERSION}} glew)
 
-      - name: Create cache
-        if:   steps.cache.outputs.cache-hit != 'true'
+      - name: Download and setup DXSDK
         run:  |
               curl -L https://download.microsoft.com/download/a/e/7/ae743f1f-632b-4809-87a9-aa1bb3458e31/DXSDK_Jun10.exe -o _DX2010_.exe
               7z x _DX2010_.exe DXSDK/Include -o_DX2010_
