@@ -13,13 +13,18 @@ if (CMAKE_SIZEOF_VOID_P EQUAL 8)
 endif()
 
 option(BUILD_DX9_RASTERIZER "Build Direct3D 9 Rasterizer" ON)
-option(BUILD_GL_RASTERIZER "Build OpenGL 3.x Rasterizer" ON)
+option(BUILD_GL_RASTERIZER "Build OpenGL Core Profile Rasterizer" ON)
+option(BUILD_GL_RASTERIZER "Build Direct3D 11 Rasterizer" ON)
 
 if(BUILD_DX9_RASTERIZER)
 	add_subdirectory(CKDX9Rasterizer)
 endif()
 
 if(BUILD_GL_RASTERIZER)
+	add_subdirectory(CKGLRasterizer)
+endif()
+
+if(BUILD_DX11_RASTERIZER)
 	add_subdirectory(CKGLRasterizer)
 endif()
 
