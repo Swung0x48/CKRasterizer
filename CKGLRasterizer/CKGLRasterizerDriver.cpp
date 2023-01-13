@@ -44,9 +44,6 @@ CKBOOL CKGLRasterizerDriver::InitializeCaps()
     {
         if (!EnumDisplaySettingsA(m_Adapter.DeviceName, modeIndex, &dm))
             break;
-        //ZeroMemory(&monitor, sizeof(monitor));
-        //monitor.cbSize = sizeof(monitor);
-        //EnumDisplayMonitors(NULL, &rect, monitorCallback, (LPARAM)&monitor);
         
         mode.Width = dm.dmPelsWidth;
         mode.Height = dm.dmPelsHeight;
@@ -139,10 +136,6 @@ CKBOOL CKGLRasterizerDriver::InitializeCaps()
     m_3DCaps.DestBlendCaps = 0x1fff;    //ditto
     m_2DCaps.Family = CKRST_OPENGL;
     m_2DCaps.Caps = (CKRST_2DCAPS_3D | CKRST_2DCAPS_GDI);
-    m_DisplayModes.PushBack({640, 480, 16, 60});
-    m_DisplayModes.PushBack({1024, 768, 32, 60});
-    m_DisplayModes.PushBack({1600, 1200, 32, 60});
-    m_DisplayModes.PushBack({1920, 1440, 32, 60});
     m_CapsUpToDate = TRUE;
     return 1;
 }
