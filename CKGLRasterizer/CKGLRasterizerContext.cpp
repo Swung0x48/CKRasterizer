@@ -1,6 +1,7 @@
 #include "CKGLRasterizer.h"
 #include "CKGLVertexBuffer.h"
 #include "CKGLIndexBuffer.h"
+#include "EnumMaps.h"
 
 #define LOG_LOADTEXTURE 0
 #define LOG_CREATETEXTURE 0
@@ -10,16 +11,14 @@
 #define LOG_DRAWPRIMITIVEVBIB 0
 #define LOG_SETTEXURESTAGESTATE 0
 #define LOG_FLUSHCACHES 0
-#define LOG_BATCHSTATS 1
+#define LOG_RENDERSTATE 0
 
 #define DYNAMIC_VBO_COUNT 64
 #define DYNAMIC_IBO_COUNT 64
 
-#if LOG_BATCHSTATS
 static int directbat = 0;
 static int vbbat = 0;
 static int vbibbat = 0;
-#endif
 
 extern void debug_setup(CKGLRasterizerContext *rst);
 
@@ -350,16 +349,14 @@ CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
 
 CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 {
-#if LOG_BATCHSTATS
-    fprintf(stderr, "batch stats: direct %d, vb %d, vbib %d\r", directbat, vbbat, vbibbat);
-    set_title_status("OpenGL %s | batch stats: direct %d, vb %d, vbib %d", glGetString(GL_VERSION), directbat, vbbat, vbibbat);
+    if (m_batch_status)
+        set_title_status("OpenGL %s | batch stats: direct %d, vb %d, vbib %d", glGetString(GL_VERSION), directbat, vbbat, vbibbat);
     TracyPlot("DirectBatch", (int64_t)directbat);
     TracyPlot("VB", (int64_t)vbbat);
     TracyPlot("VBIB", (int64_t)vbibbat);
     directbat = 0;
     vbbat = 0;
     vbibbat = 0;
-#endif
     SwapBuffers(m_DC);
     TracyGpuCollect;
     if (m_step_mode == 1)
@@ -512,6 +509,9 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
 CKBOOL CKGLRasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
     ZoneScopedN(__FUNCTION__);
+#if LOG_RENDERSTATE
+    fprintf(stderr, "set render state %s -> %x, currently %x\n", rstytostr(State), Value, m_renderst[State]);
+#endif
     if (m_renderst[State] != Value)
     {
         m_renderst[State] = Value;
@@ -763,6 +763,7 @@ void CKGLRasterizerContext::toggle_console(int t)
 void CKGLRasterizerContext::set_step_mode(int mode)
 {
     if (mode > 0) toggle_console(1);
+    else set_title_status(nullptr);
     m_step_mode = mode;
 }
 
@@ -786,8 +787,15 @@ void CKGLRasterizerContext::step_mode_wait()
                 ret = true;
             }
         }
-        if (ret) return;
+        if (ret) break;
     }
+    fputs("\n", stderr);
+}
+
+void CKGLRasterizerContext::toggle_batch_status()
+{
+    if (!(m_batch_status ^= 1))
+        set_title_status(nullptr);
 }
 
 CKBOOL CKGLRasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *Value)
@@ -879,9 +887,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
 #if LOG_DRAWPRIMITIVE
     fprintf(stderr, "drawprimitive ib %p %d\n", indices, indexcount);
 #endif
-#if LOG_BATCHSTATS
     ++directbat;
-#endif
     ZoneScopedN(__FUNCTION__);
     CKBOOL clip = 0;
     CKDWORD vertexSize;
@@ -944,10 +950,8 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Ver
 #if LOG_DRAWPRIMITIVEVB
     fprintf(stderr, "drawprimitive vb %d %d\n", VertexCount, indexcount);
 #endif
-#if LOG_BATCHSTATS
     ++vbbat;
     ZoneScopedN(__FUNCTION__);
-#endif
     return InternalDrawPrimitive(VXPRIMITIVETYPE((CKDWORD)pType | 0x100), static_cast<CKGLVertexBuffer*>(m_VertexBuffers[VertexBuffer]),
         StartIndex, VertexCount, indices, indexcount);
 }
@@ -958,9 +962,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
 #if LOG_DRAWPRIMITIVEVBIB
     fprintf(stderr, "drawprimitive vbib %d %d\n", VertexCount, Indexcount);
 #endif
-#if LOG_BATCHSTATS
     ++vbibbat;
-#endif
     ZoneScopedN(__FUNCTION__);
 
     if (VB >= m_VertexBuffers.Size()) return NULL;
@@ -1307,17 +1309,20 @@ void CKGLRasterizerContext::set_vertex_has_color(bool color)
 
 void CKGLRasterizerContext::set_title_status(const char *fmt, ...)
 {
-    va_list args;
-    va_start(args, fmt);
-    va_list argsx;
-    va_copy(argsx, args);
     std::string ts;
-    ts.resize(vsnprintf(NULL, 0, fmt, argsx) + 1);
-    va_end(argsx);
-    vsnprintf(ts.data(), ts.size(), fmt, args);
-    va_end(args);
+    if (fmt)
+    {
+        va_list args;
+        va_start(args, fmt);
+        va_list argsx;
+        va_copy(argsx, args);
+        ts.resize(vsnprintf(NULL, 0, fmt, argsx) + 1);
+        va_end(argsx);
+        vsnprintf(ts.data(), ts.size(), fmt, args);
+        va_end(args);
+        ts = m_orig_title + " | " + ts;
+    } else ts = m_orig_title;
 
-    ts = m_orig_title + " | " + ts;
     SetWindowTextA(GetAncestor((HWND)m_Window, GA_ROOT), ts.c_str());
 }
 

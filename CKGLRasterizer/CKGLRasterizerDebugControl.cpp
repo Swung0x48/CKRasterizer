@@ -12,13 +12,14 @@ CKGLRasterizerContext *r;
 
 LRESULT CALLBACK keyboard_handler(int code, WPARAM kc, LPARAM rc)
 {
-	if (rc & 0x20000000) //ALT
+	if ((rc & 0x20000000) && !(rc & 0x40000000)) //ALT, key press
     {
 		switch (kc)
         {
             case 'Q': r->toggle_console(); break;
             case 'A': r->set_step_mode(1); break;
             case 'Z': r->set_step_mode(2); break;
+            case 'W': r->toggle_batch_status(); break;
 		}
 	}
 

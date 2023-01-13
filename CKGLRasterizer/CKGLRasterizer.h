@@ -236,6 +236,7 @@ public:
     void toggle_console(int t = 0);
     void set_step_mode(int mode);
     void step_mode_wait();
+    void toggle_batch_status();
 
 protected:
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
@@ -283,5 +284,8 @@ private:
     DWORD m_noibo_draw_counter = 0;
     CKDWORD m_cur_vp = 0;
     GLuint m_ubo_mat = 0;
+
+    //debugging
     int m_step_mode = 0;
+    int m_batch_status = 0;
 };
