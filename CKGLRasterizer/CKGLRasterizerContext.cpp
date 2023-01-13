@@ -2,8 +2,6 @@
 #include "CKGLVertexBuffer.h"
 #include "CKGLIndexBuffer.h"
 
-#define LOGGING 0
-#define STEP 0
 #define LOG_LOADTEXTURE 0
 #define LOG_CREATETEXTURE 0
 #define LOG_CREATEBUFFER 0
@@ -14,23 +12,16 @@
 #define LOG_FLUSHCACHES 0
 #define LOG_BATCHSTATS 1
 
-//index buffer implementation is buggy
-//messes up RenderDoc and glNamedMappedBufferRange
-#define USE_INDEX_BUFFER 1
-
 #define DYNAMIC_VBO_COUNT 64
 #define DYNAMIC_IBO_COUNT 64
-
-#if STEP
-#include <conio.h>
-static bool step_mode = false;
-#endif
 
 #if LOG_BATCHSTATS
 static int directbat = 0;
 static int vbbat = 0;
 static int vbibbat = 0;
 #endif
+
+extern void debug_setup(CKGLRasterizerContext *rst);
 
 void GLClearError()
 {
@@ -128,11 +119,7 @@ LRESULT WINAPI GL_WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
 CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
     CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
-#if (STEP) || (LOGGING)
-    AllocConsole();
-    freopen("CON", "w", stdout);
-    freopen("CON", "w", stderr);
-#endif
+    debug_setup(this);
     HINSTANCE hInstance = GetModuleHandle(NULL);
     WNDCLASSEXA wcex;
     ZeroMemory(&wcex, sizeof(wcex));
@@ -347,19 +334,24 @@ CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
         GLCall(glDepthMask(true));
         mask |= GL_DEPTH_BUFFER_BIT;
     }
-    GLCall(glClearColor(0.0f, 0.0f, 0.0f, 1.0f));
+    VxColor c(Ccol);
+    GLCall(glClearColor(c.r, c.g, c.b, c.a));
     GLCall(glClearDepth(Z));
     GLCall(glClearStencil(Stencil));
     GLCall(glClear(mask));
+    if (m_step_mode == 2)
+    {
+        BackToFront(FALSE);
+        GLCall(glClear(mask));
+        BackToFront(FALSE);
+    }
     return 1;
 }
 
 CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 {
-#if LOGGING && LOG_BATCHSTATS
-    fprintf(stderr, "batch stats: direct %d, vb %d, vbib %d\r", directbat, vbbat, vbibbat);
-#endif
 #if LOG_BATCHSTATS
+    fprintf(stderr, "batch stats: direct %d, vb %d, vbib %d\r", directbat, vbbat, vbibbat);
     set_title_status("OpenGL %s | batch stats: direct %d, vb %d, vbib %d", glGetString(GL_VERSION), directbat, vbbat, vbibbat);
     TracyPlot("DirectBatch", (int64_t)directbat);
     TracyPlot("VB", (int64_t)vbbat);
@@ -368,15 +360,13 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
     vbbat = 0;
     vbibbat = 0;
 #endif
-#if STEP
-    int x = _getch();
-    if (x == 'z')
-        step_mode = true;
-    else if (x == 'x')
-        step_mode = false;
-#endif
     SwapBuffers(m_DC);
     TracyGpuCollect;
+    if (m_step_mode == 1)
+    {
+        set_title_status("stepping frame | X in console = quit step mode | Any key = next frame");
+        step_mode_wait();
+    }
 
     return 1;
 }
@@ -749,6 +739,57 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
     }
 }
 
+void CKGLRasterizerContext::toggle_console(int t)
+{
+    static bool enabled = false;
+    if (t == 0) enabled ^= true;
+    else enabled = t > 0;
+    if (enabled)
+    {
+        AllocConsole();
+        freopen("CON", "r", stdin);
+        freopen("CON", "w", stdout);
+        freopen("CON", "w", stderr);
+    }
+    else
+    {
+        FreeConsole();
+        freopen("NUL", "r", stdin);
+        freopen("NUL", "w", stdout);
+        freopen("NUL", "w", stderr);
+    }
+}
+
+void CKGLRasterizerContext::set_step_mode(int mode)
+{
+    if (mode > 0) toggle_console(1);
+    m_step_mode = mode;
+}
+
+void CKGLRasterizerContext::step_mode_wait()
+{
+    while (true)
+    {
+        HANDLE hstdin = GetStdHandle(STD_INPUT_HANDLE);
+        WaitForSingleObject(hstdin, INFINITE);
+        INPUT_RECORD rcd;
+        DWORD nevt, nread;
+        if (!GetNumberOfConsoleInputEvents(hstdin, &nevt)) return;
+        bool ret = false;
+        for (DWORD i = 0; i < nevt; ++i)
+        {
+            if (!ReadConsoleInputA(hstdin, &rcd, 1, &nread)) return;
+            if (rcd.EventType == KEY_EVENT && rcd.Event.KeyEvent.bKeyDown)
+            {
+                if (rcd.Event.KeyEvent.wVirtualKeyCode == 'X')
+                    set_step_mode(0);
+                ret = true;
+            }
+        }
+        if (ret) return;
+    }
+}
+
 CKBOOL CKGLRasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *Value)
 {
     return CKRasterizerContext::GetRenderState(State, Value);
@@ -756,7 +797,7 @@ CKBOOL CKGLRasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *V
 
 CKBOOL CKGLRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 {
-#if LOGGING && LOG_SETTEXTURE
+#if LOG_SETTEXTURE
     fprintf(stderr, "settexture %d %d\n", Texture, Stage);
 #endif
     ZoneScopedN(__FUNCTION__);
@@ -835,7 +876,7 @@ CKBOOL CKGLRasterizerContext::SetPixelShaderConstant(CKDWORD Register, const voi
 CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
     VxDrawPrimitiveData *data)
 {
-#if LOGGING && LOG_DRAWPRIMITIVE
+#if LOG_DRAWPRIMITIVE
     fprintf(stderr, "drawprimitive ib %p %d\n", indices, indexcount);
 #endif
 #if LOG_BATCHSTATS
@@ -900,30 +941,22 @@ CKBOOL CKGLRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
 CKBOOL CKGLRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
     CKDWORD VertexCount, CKWORD *indices, int indexcount)
 {
-#if LOGGING && LOG_DRAWPRIMITIVEVB
+#if LOG_DRAWPRIMITIVEVB
     fprintf(stderr, "drawprimitive vb %d %d\n", VertexCount, indexcount);
-#endif
-#if STEP
-    if (step_mode)
-        _getch();
 #endif
 #if LOG_BATCHSTATS
     ++vbbat;
     ZoneScopedN(__FUNCTION__);
 #endif
-    return InternalDrawPrimitive(pType, static_cast<CKGLVertexBuffer*>(m_VertexBuffers[VertexBuffer]),
+    return InternalDrawPrimitive(VXPRIMITIVETYPE((CKDWORD)pType | 0x100), static_cast<CKGLVertexBuffer*>(m_VertexBuffers[VertexBuffer]),
         StartIndex, VertexCount, indices, indexcount);
 }
 
 CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
     CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
-#if LOGGING && LOG_DRAWPRIMITIVEVBIB
+#if LOG_DRAWPRIMITIVEVBIB
     fprintf(stderr, "drawprimitive vbib %d %d\n", VertexCount, Indexcount);
-#endif
-#if STEP
-    if (step_mode)
-        _getch();
 #endif
 #if LOG_BATCHSTATS
     ++vbibbat;
@@ -971,6 +1004,14 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
             break;
     }
     GLCall(glDrawElementsBaseVertex(glpt, Indexcount, GL_UNSIGNED_SHORT, (void*)(2 * StartIndex), MinVIndex));
+    if (m_step_mode == 2)
+    {
+        BackToFront(FALSE);
+        GLCall(glDrawElementsBaseVertex(glpt, Indexcount, GL_UNSIGNED_SHORT, (void*)(2 * StartIndex), MinVIndex));
+        BackToFront(FALSE);
+        set_title_status("stepping - DrawPrimitiveVBIB | X in console = quit step mode | Any key = next");
+        step_mode_wait();
+    }
     return TRUE;
 }
 
@@ -989,7 +1030,6 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
     vbo->bind_to_array();
 #endif
 
-#if USE_INDEX_BUFFER
     int ibbase = 0;
     if (idx)
     {
@@ -1025,10 +1065,9 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
             memcpy(pdata, idx, 2 * icnt);
         ibo->Unlock();
     }
-#endif
 
     GLenum glpt = GL_NONE;
-    switch (pType)
+    switch (pType & 0xf)
     {
         case VX_LINELIST:
             glpt = GL_LINES;
@@ -1050,16 +1089,25 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
     }
     if (idx)
     {
-#if USE_INDEX_BUFFER
         GLCall(glDrawElementsBaseVertex(glpt, icnt, GL_UNSIGNED_SHORT, (void*)ibbase, vbase));
-#else
-        GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
-        GLCall(glDrawElementsBaseVertex(glpt, icnt, GL_UNSIGNED_SHORT, idx, vbase));
-#endif
     }
     else
         GLCall(glDrawArrays(glpt, vbase, vcnt));
-    return 1;
+    if (m_step_mode == 2)
+    {
+        BackToFront(FALSE);
+        if (idx)
+        {
+            GLCall(glDrawElementsBaseVertex(glpt, icnt, GL_UNSIGNED_SHORT, (void*)ibbase, vbase));
+        }
+        else
+            GLCall(glDrawArrays(glpt, vbase, vcnt));
+        BackToFront(FALSE);
+        set_title_status("stepping - %s | X in console = quit step mode | Any key = next",
+            pType & 0x100 ? "DrawPrimitiveVB" : "DrawPrimitive");
+        step_mode_wait();
+    }
+    return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
@@ -1288,7 +1336,7 @@ CKBOOL CKGLRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Desi
         return FALSE;
     if (m_Textures[Texture])
         return TRUE;
-#if LOGGING && LOG_CREATETEXTURE
+#if LOG_CREATETEXTURE
     fprintf(stderr, "create texture %d %dx%d %x\n", Texture, DesiredFormat->Format.Width, DesiredFormat->Format.Height, DesiredFormat->Flags);
 #endif
 
@@ -1342,7 +1390,7 @@ CKBOOL CKGLRasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc 
     CKGLVertexBuffer* desc = new CKGLVertexBuffer(DesiredFormat);
     desc->Create();
     m_VertexBuffers[VB] = desc;
-#if LOGGING && LOG_CREATEBUFFER
+#if LOG_CREATEBUFFER
     fprintf(stderr, "\rvbo avail:");
     for (int i = 0; i < m_VertexBuffers.Size(); ++i)
     {

@@ -1,12 +1,18 @@
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
 #include <CKContext.h>
 
 static CKPluginInfo plugininfo;
 CKContext *rst_ckctx = nullptr;
+DWORD main_thread_id = 0;
 
 #define CKGLRST CKGUID(0x10241024,0x10241024)
 
 CKERROR get_ck_context(CKContext* context)
 {
+	main_thread_id = GetCurrentThreadId();
 	rst_ckctx = context;
 	return CK_OK;
 }

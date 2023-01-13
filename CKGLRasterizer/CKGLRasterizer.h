@@ -232,6 +232,11 @@ public:
 
     CKBOOL _SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value);
 
+    // debugging
+    void toggle_console(int t = 0);
+    void set_step_mode(int mode);
+    void step_mode_wait();
+
 protected:
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
     CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBuffer * vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt, bool vbbound = false);
@@ -278,4 +283,5 @@ private:
     DWORD m_noibo_draw_counter = 0;
     CKDWORD m_cur_vp = 0;
     GLuint m_ubo_mat = 0;
+    int m_step_mode = 0;
 };
