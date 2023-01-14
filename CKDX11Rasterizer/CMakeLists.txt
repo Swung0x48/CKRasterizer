@@ -30,11 +30,11 @@ file(GLOB CKDX11_RASTERIZER_SRC
     "*.cpp"
 )
 
-message(STATUS "DirectX11_INCLUDE_DIRS=${DirectX11_INCLUDE_DIRS}")
-message(STATUS "DirectX11_LIBRARIES=${DirectX11_LIBRARIES}")
+message(STATUS "DirectX11_INCLUDE_DIR=${DirectX11_INCLUDE_DIR}")
+message(STATUS "DirectX11_LIBRARY=${DirectX11_LIBRARIES}")
 include_directories(${DirectX11_INCLUDE_DIRS})
-add_library(${PROJECT_NAME} SHARED ${CKDX9_RASTERIZER_SRC})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${DirectX11_LIBRARIES})
+add_library(${PROJECT_NAME} SHARED ${CKDX11_RASTERIZER_SRC})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${DirectX11_LIBRARY})
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)
 if(DEFINED BALLANCE_DIR)

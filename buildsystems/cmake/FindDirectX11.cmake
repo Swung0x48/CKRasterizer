@@ -1,8 +1,8 @@
 # Find DirectX11 SDK
 # Define:
 # DirectX11_FOUND
-# DirectX11_INCLUDE_DIRS
-# DirectX11_LIBRARIES
+# DirectX11_INCLUDE_DIR
+# DirectX11_LIBRARY
 
 if(WIN32) # The only platform it makes sense to check for DirectX11 SDK
 	if( MSVC AND NOT MSVC90 )

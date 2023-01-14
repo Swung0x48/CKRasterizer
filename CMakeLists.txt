@@ -25,7 +25,7 @@ if(BUILD_GL_RASTERIZER)
 endif()
 
 if(BUILD_DX11_RASTERIZER)
-	add_subdirectory(CKGLRasterizer)
+	add_subdirectory(CKDX11Rasterizer)
 endif()
 
 if(NOT DEFINED BALLANCE_DIR)
