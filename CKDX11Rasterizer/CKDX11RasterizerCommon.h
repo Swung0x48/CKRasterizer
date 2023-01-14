@@ -4,10 +4,11 @@
 #include "tracy/Tracy.hpp"
 #include <string>
 #include <format>
+#include <cstdlib>
 
 #ifdef _DEBUG
     #define D3DCall(x) {\
-        x;\
+        hr = x;\
         D3DLogCall(hr, #x, __FILE__, __LINE__);}
 #else
     #define D3DCall(x) x;
