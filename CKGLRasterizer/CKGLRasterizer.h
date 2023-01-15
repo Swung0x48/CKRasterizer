@@ -22,9 +22,16 @@
 #define LSW_VRTCOLOR_ENABLED 0x0004
 
 //vertex properties
-#define VP_HAS_COLOR      0x10000000
-#define VP_IS_TRANSFORMED 0x20000000
-#define VP_TEXTURE_MASK   0x0000000f
+#define VP_HAS_COLOR      0x10000000 //vertex attribute includes color data
+#define VP_IS_TRANSFORMED 0x20000000 //vertex position is in viewport space
+#define VP_TEXTURE_MASK   0x0000000f //bitwise and with this to get # of textures used
+
+//per-texture vertex properties
+#define TVP_TC_CSNORM     0x01000000 //use camera space normal as input tex-coords
+#define TVP_TC_CSVECP     0x02000000 //use camera space position ......
+#define TVP_TC_CSREFV     0x04000000 //use camera space reflect vector ......
+#define TVP_TC_TRANSF     0x08000000 //tex-coords should be transformed by its matrix
+#define TVP_TC_PROJECTED  0x10000000 //tex-coords should be projected
 
 LRESULT WINAPI GL_WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
 
@@ -345,6 +352,7 @@ private:
     DWORD m_noibo_draw_counter = 0;
     CKDWORD m_cur_vp = 0;
     CKGLTexCombinatorUniform m_texcombo[8];
+    CKDWORD m_tex_vp[8] = {0};
     GLuint m_ubo_mat = 0;
     GLuint m_ubo_texc = 0;
 

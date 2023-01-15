@@ -79,6 +79,7 @@ vec4[4] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
         vec3 refldir = reflect(-ldir, normal);
         float specl = pow(max(dot(vdir, refldir), 0.), material.spcl_strength);
         spc = l.spcl * material.spcl * specl;
+        //return vec4[4](vec4(0), vec4(0), spc, vec4(0));
     }
     return vec4[4](amb, dif, spc, ems);
 }
@@ -108,7 +109,7 @@ vec4 clamp_color(vec4 c)
 {
     return clamp(c, vec4(0, 0, 0, 0), vec4(1, 1, 1, 1));
 }
-vec4 accum_color(vec4[4] c)
+vec4 accum_light(vec4[4] c)
 {
     return clamp_color(vec4((c[0] + c[1] + c[2] + c[3]).xyz, 1.));
 }
@@ -145,15 +146,15 @@ vec4 select_argument(uint stage, uint source, vec4 tex, vec4 cum, vec4 tmp, vec4
     vec4 ret = vec4(0.);
     switch(source) //D3DTA_*
     {
-        case 0: ret = lights[1]; break; //DIFFUSE
-        case 1: if (stage == 0U)        //CURRENT
-                    ret = accum_color(lights);
+        case 0U: ret = lights[1]; break; //DIFFUSE
+        case 1U: if (stage == 0U)        //CURRENT
+                    ret = accum_light(lights);
                 else ret = cum; break;
-        case 2: ret = tex; break;       //TEXTURE
-        case 3: ret = vec4(0); break;   //TFACTOR
-        case 4: ret = lights[2]; break; //SPECULAR
-        case 5: ret = tmp; break;       //TEMP
-        case 6: ret = dw2color(texcomb[stage].constant); break; //CONSTANT
+        case 2U: ret = tex; break;       //TEXTURE
+        case 3U: ret = vec4(0.); break;   //TFACTOR
+        case 4U: ret = lights[2]; break; //SPECULAR
+        case 5U: ret = tmp; break;       //TEMP
+        case 6U: ret = dw2color(texcomb[stage].constant); break; //CONSTANT
     }
     if ((source & 0x10U) != 0U)
         ret = vec4(1.) - ret;
@@ -186,7 +187,7 @@ void main()
     if (lights.type == uint(3) && (lighting_switches & LSW_LIGHTING_ENABLED) != 0U)
     {
         lighting_colors = light_directional(lights, norm, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U);
-        color = accum_color(lighting_colors);
+        color = accum_light(lighting_colors);
     }
     if (fntex > 1U)
     {
@@ -195,7 +196,18 @@ void main()
                                vec4(0.), vec4(0.), vec4(0.), vec4(0.));
         for (uint i = 0U; i < fntex; ++i)
         {
-            vec4 txc = texture(tex[i], ftexcoord[i]);
+            vec4 txc = vec4(0.);
+            switch (i)
+            {
+                case 0U: txc = texture(tex[0], ftexcoord[i]); break;
+                case 1U: txc = texture(tex[1], ftexcoord[i]); break;
+                case 2U: txc = texture(tex[2], ftexcoord[i]); break;
+                case 3U: txc = texture(tex[3], ftexcoord[i]); break;
+                case 4U: txc = texture(tex[4], ftexcoord[i]); break;
+                case 5U: txc = texture(tex[5], ftexcoord[i]); break;
+                case 6U: txc = texture(tex[6], ftexcoord[i]); break;
+                case 7U: txc = texture(tex[7], ftexcoord[i]); break;
+            }
             uint cop = texcomb[i].op & 0xfU;
             uint aop = (texcomb[i].op & 0xf0U) >> 4;
             uint dst = texcomb[i].op >> 31; //1: temp, 0: accumulator
