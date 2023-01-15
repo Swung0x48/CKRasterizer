@@ -325,11 +325,14 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
             TexArg::current, ~0U);
     GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc));
     GLCall(glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW));
+    for (int i = 0; i < 8; ++i)
+        GLCall(glUniform1ui(get_uniform_location(("texp[" + std::to_string(i) + "]").c_str()), m_tex_vp[i]));
 
     SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&VxMatrix::Identity());
     SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&VxMatrix::Identity());
     SetUniformMatrix4fv("world", 1, GL_FALSE, (float*)&VxMatrix::Identity());
     SetUniformMatrix4fv("tiworld", 1, GL_FALSE, (float*)&VxMatrix::Identity());
+    SetUniformMatrix4fv("tiworldview", 1, GL_FALSE, (float*)&VxMatrix::Identity());
 
     set_position_transformed(true);
     set_vertex_has_color(true);
@@ -470,8 +473,10 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
             VxMatrix im, tim;
             Vx3DTransposeMatrix(tim, Mat); //row-major to column-major conversion madness
             im = inv(tim);
-
             SetUniformMatrix4fv("tiworld", 1, GL_FALSE, (float*)&im);
+            Vx3DTransposeMatrix(tim, m_ModelViewMatrix);
+            im = inv(tim);
+            SetUniformMatrix4fv("tiworldview", 1, GL_FALSE, (float*)&im);
             m_MatrixUptodate &= ~0U ^ WORLD_TRANSFORM;
             break;
         }
@@ -509,8 +514,12 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
         case VXMATRIX_TEXTURE5:
         case VXMATRIX_TEXTURE6:
         case VXMATRIX_TEXTURE7:
+        {
+            CKDWORD tex = Type - VXMATRIX_TEXTURE0;
+            SetUniformMatrix4fv("textr[" + std::to_string(tex) + "]", 1, GL_FALSE, (float*)&Mat);
             UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
             break;
+        }
         default:
             return FALSE;
     }
@@ -958,6 +967,36 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
                 GLCall(glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW));
             }
             return valid;
+        }
+        case CKRST_TSS_TEXTURETRANSFORMFLAGS:
+        {
+            CKDWORD tvp = m_tex_vp[Stage];
+            if (!Value)
+                tvp &= ~0U ^ TVP_TC_TRANSF;
+            else tvp |= TVP_TC_TRANSF;
+            if (Value & CKRST_TTF_PROJECTED)
+                tvp |= TVP_TC_PROJECTED;
+            else tvp &= ~0U ^ TVP_TC_PROJECTED;
+            if (tvp != m_tex_vp[Stage])
+                GLCall(glUniform1ui(get_uniform_location(("texp[" + std::to_string(Stage) + "]").c_str()), tvp));
+            m_tex_vp[Stage] = tvp;
+            return TRUE;
+        }
+        case CKRST_TSS_TEXCOORDINDEX:
+        {
+            CKDWORD tvp = m_tex_vp[Stage] & (~0U ^ 0x07000000U);
+            switch (Value >> 16)
+            {
+                case 0: break;
+                case 1: tvp |= TVP_TC_CSNORM; break;
+                case 2: tvp |= TVP_TC_CSVECP; break;
+                case 3: tvp |= TVP_TC_CSREFV; break;
+                default: return FALSE;
+            }
+            if (tvp != m_tex_vp[Stage])
+                GLCall(glUniform1ui(get_uniform_location(("texp[" + std::to_string(Stage) + "]").c_str()), tvp));
+            m_tex_vp[Stage] = tvp;
+            return TRUE;
         }
         default:
             fprintf(stderr, "unhandled texture stage state %s -> %d\n", tstytostr(Tss), Value);
