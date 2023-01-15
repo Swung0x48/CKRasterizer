@@ -76,9 +76,10 @@ void CKGLVertexBuffer::Bind(CKGLRasterizerContext *ctx)
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, GLBuffer));
 #if !USE_SEPARATE_ATTRIBUTE
     GLCall(glBindVertexArray(GLVertexArray));
-#endif
     ctx->set_position_transformed(m_VertexFormat & CKRST_VF_RASTERPOS);
     ctx->set_vertex_has_color(m_VertexFormat & CKRST_VF_DIFFUSE);
+    ctx->set_num_textures((m_VertexFormat & CKRST_VF_TEXMASK) >> 8);
+#endif
 }
 
 void CKGLVertexBuffer::bind_to_array()
@@ -143,7 +144,7 @@ void CKGLVertexBuffer::Unlock()
     GLCall(glUnmapNamedBuffer(GLBuffer));
 }
 
-CKGLVertexFormat::CKGLVertexFormat(CKRST_VERTEXFORMAT vf)
+CKGLVertexFormat::CKGLVertexFormat(CKRST_VERTEXFORMAT vf) : ckvf(vf)
 {
     GLCall(glGenVertexArrays(1, &GLVertexArray));
     GLCall(glBindVertexArray(GLVertexArray));
@@ -166,7 +167,10 @@ CKGLVertexFormat::~CKGLVertexFormat()
     GLCall(glDeleteVertexArrays(1, &GLVertexArray));
 }
 
-void CKGLVertexFormat::select()
+void CKGLVertexFormat::select(CKGLRasterizerContext *ctx)
 {
     GLCall(glBindVertexArray(GLVertexArray));
+    ctx->set_position_transformed(ckvf & CKRST_VF_RASTERPOS);
+    ctx->set_vertex_has_color(ckvf & CKRST_VF_DIFFUSE);
+    ctx->set_num_textures((ckvf & CKRST_VF_TEXMASK) >> 8);
 }

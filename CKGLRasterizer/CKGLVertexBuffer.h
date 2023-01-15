@@ -108,12 +108,13 @@ class CKGLVertexFormat
 {
 private:
     GLuint GLVertexArray;
+    CKDWORD ckvf;
 
 public:
     CKGLVertexFormat(CKRST_VERTEXFORMAT vf);
     ~CKGLVertexFormat();
 
-    void select();
+    void select(CKGLRasterizerContext *ctx);
 };
 
 struct CKGLVertexBuffer : public CKVertexBufferDesc

@@ -21,8 +21,10 @@
 #define LSW_LIGHTING_ENABLED 0x0002
 #define LSW_VRTCOLOR_ENABLED 0x0004
 
-#define VP_HAS_COLOR      0x0001
-#define VP_IS_TRANSFORMED 0x0002
+//vertex properties
+#define VP_HAS_COLOR      0x10000000
+#define VP_IS_TRANSFORMED 0x20000000
+#define VP_TEXTURE_MASK   0x0000000f
 
 LRESULT WINAPI GL_WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
 
@@ -141,6 +143,64 @@ struct CKGLMaterialUniform
         emis(md.Emissive), padding{0, 0, 0} {}
 };
 
+enum TexOp // for CKGLTexCombinatorUniform::op
+{
+    disable   = 0x1,
+    select1   = 0x2,
+    select2   = 0x3,
+    modulate  = 0x4,
+    modulate2 = 0x5,
+    modulate4 = 0x6,
+    add       = 0x7,
+    addbip    = 0x8,
+    addbip2   = 0x9,
+    subtract  = 0xa,
+    addsmooth = 0xb,
+    mixtexalp = 0xd,
+    top_max   = ~0UL
+};
+
+enum TexArg // for CKGLTexCombinatorUniform::cargs / aargs
+{
+    diffuse  = 0x0,
+    current  = 0x1,
+    texture  = 0x2,
+    tfactor  = 0x3,
+    specular = 0x4,
+    temp     = 0x5,
+    constant = 0x6,
+    flag_cpl = 0x10,
+    flag_alp = 0x20,
+    tar_max  = ~0UL
+};
+
+struct CKGLTexCombinatorUniform
+{
+    CKDWORD op;         //bit 0-3: color op, bit 4-7: alpha op, bit 31: dest
+    CKDWORD cargs;      //bit 0-7: arg1, bit 8-15: arg2, bit 16-23: arg3
+    CKDWORD aargs;      //ditto
+    CKDWORD constant;
+
+    void set_color_op(TexOp o) { op &= ~0x0fU; op |= o; }
+    void set_alpha_op(TexOp o) { op &= ~0xf0U; op |= (o << 4); }
+    void set_color_arg1(TexArg a) { cargs &= ~0x00ffU; cargs |= a; }
+    void set_color_arg2(TexArg a) { cargs &= ~0xff00U; cargs |= (a << 8); }
+    void set_alpha_arg1(TexArg a) { aargs &= ~0x00ffU; aargs |= a; }
+    void set_alpha_arg2(TexArg a) { aargs &= ~0xff00U; aargs |= (a << 8); }
+
+    TexArg dest() { return op & (1UL << 31) ? TexArg::temp : TexArg::current; }
+
+    static CKGLTexCombinatorUniform make(
+        TexOp cop, TexArg ca1, TexArg ca2, TexArg ca3,
+        TexOp aop, TexArg aa1, TexArg aa2, TexArg aa3,
+        TexArg dest, CKDWORD constant) {
+        CKDWORD op = cop | (aop << 4) | ((dest == TexArg::temp) << 31);
+        CKDWORD cargs = ca1 | (ca2 << 8) | (ca3 << 16);
+        CKDWORD aargs = aa1 | (aa2 << 8) | (aa3 << 16);
+        return CKGLTexCombinatorUniform{op, cargs, aargs, constant};
+    }
+};
+
 class CKGLRasterizerContext : public CKRasterizerContext
 {
 public:
@@ -228,6 +288,7 @@ public:
 
     void set_position_transformed(bool transformed);
     void set_vertex_has_color(bool color);
+    void set_num_textures(CKDWORD ntex);
     void set_title_status(const char* fmt, ...);
 
     CKBOOL _SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value);
@@ -283,7 +344,9 @@ private:
     std::unordered_map<CKDWORD, CKGLIndexBuffer*> m_dynibo;
     DWORD m_noibo_draw_counter = 0;
     CKDWORD m_cur_vp = 0;
+    CKGLTexCombinatorUniform m_texcombo[8];
     GLuint m_ubo_mat = 0;
+    GLuint m_ubo_texc = 0;
 
     //debugging
     int m_step_mode = 0;

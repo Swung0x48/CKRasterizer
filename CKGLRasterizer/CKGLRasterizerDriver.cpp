@@ -112,13 +112,15 @@ CKBOOL CKGLRasterizerDriver::InitializeCaps()
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_CANDOINDEXBUFFER;
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_GLATTENUATIONMODEL;
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_HARDWARETL;
-    m_3DCaps.MaxNumberTextureStage = 1; //until we have multiple textures in the frag shader
+    m_3DCaps.MaxNumberTextureStage = 8; //?
+    m_3DCaps.MaxNumberBlendStage = 8;   //fake it until we make it
     m_3DCaps.MaxActiveLights = 16;      //this is a lie (at least for now)
     m_3DCaps.MinTextureWidth = 1;       //we are using texture of width 1 for blank textures
     m_3DCaps.MinTextureHeight = 1;      //so we know it must work... or do we?
     m_3DCaps.MaxTextureWidth = 1024;    //we know OpenGL guarantees this to be at least 1024...
     m_3DCaps.MaxTextureHeight = 1024;   //and I'm too lazy to create a context here...
     m_3DCaps.VertexCaps |= CKRST_VTXCAPS_DIRECTIONALLIGHTS;
+    m_3DCaps.VertexCaps |= CKRST_VTXCAPS_TEXGEN;
     m_3DCaps.AlphaCmpCaps = 0xff;       //we have TECHNOLOGY
     m_3DCaps.ZCmpCaps = 0xff;           //who wouldn't be 0xff here?
     m_3DCaps.TextureAddressCaps = 0x1f; //everything
