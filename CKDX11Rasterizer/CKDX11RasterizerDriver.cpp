@@ -225,28 +225,3 @@ CKBOOL CKDX11RasterizerDriver::InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapte
     m_CapsUpToDate = TRUE;
     return TRUE;
 }
-
-CKBOOL CKDX11RasterizerDriver::IsTextureFormatOk(DXGI_FORMAT TextureFormat, DXGI_FORMAT AdapterFormat, DWORD Usage) {
-    return FALSE;
-}
-
-DXGI_FORMAT CKDX11RasterizerDriver::FindNearestTextureFormat(CKTextureDesc *desc, DXGI_FORMAT AdapterFormat, DWORD Usage) {
-    return DXGI_FORMAT_UNKNOWN;
-}
-DXGI_FORMAT CKDX11RasterizerDriver::FindNearestRenderTargetFormat(int Bpp, CKBOOL Windowed) {
-    return DXGI_FORMAT_UNKNOWN;
-
-}
-DXGI_FORMAT CKDX11RasterizerDriver::FindNearestDepthFormat(DXGI_FORMAT pf, int ZBpp, int StencilBpp) {
-    return DXGI_FORMAT_UNKNOWN;
-
-}
-
-CKBOOL CKDX11RasterizerDriver::CheckDeviceFormat(DXGI_FORMAT AdapterFormat, DXGI_FORMAT CheckFormat) {
-    return FALSE;
-
-}
-
-BOOL CKDX11RasterizerDriver::CheckDepthStencilMatch(DXGI_FORMAT AdapterFormat, DXGI_FORMAT CheckFormat) {
-    return FALSE;
-}

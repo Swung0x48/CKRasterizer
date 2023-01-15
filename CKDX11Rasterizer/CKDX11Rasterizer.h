@@ -35,15 +35,6 @@ public:
     virtual CKRasterizerContext *CreateContext();
     
     CKBOOL InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapter1> Adapter, Microsoft::WRL::ComPtr<IDXGIOutput> Output);
-    CKBOOL IsTextureFormatOk(DXGI_FORMAT TextureFormat, DXGI_FORMAT AdapterFormat, DWORD Usage = 0);
-
-    DXGI_FORMAT FindNearestTextureFormat(CKTextureDesc *desc, DXGI_FORMAT AdapterFormat, DWORD Usage = 0);
-    DXGI_FORMAT FindNearestRenderTargetFormat(int Bpp, CKBOOL Windowed);
-    DXGI_FORMAT FindNearestDepthFormat(DXGI_FORMAT pf, int ZBpp, int StencilBpp);
-
-private:
-    CKBOOL CheckDeviceFormat(DXGI_FORMAT AdapterFormat, DXGI_FORMAT CheckFormat);
-    BOOL CheckDepthStencilMatch(DXGI_FORMAT AdapterFormat, DXGI_FORMAT CheckFormat);
 
 public:
     CKBOOL m_Inited;
@@ -173,7 +164,19 @@ protected:
 //    LPDIRECT3DSURFACE9 GetTempZBuffer(int Width, int Height);
 
 public:
-//    IDirect3DDevice9Ex *m_Device;
+    Microsoft::WRL::ComPtr<IDXGISwapChain> m_Swapchain;
+    Microsoft::WRL::ComPtr<ID3D11Device> m_Device;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_DeviceContext;
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_BackBuffer;
+
+    D3D_FEATURE_LEVEL m_FeatureLevel;
+    const float m_ClearColor[4] = {
+        0.0f,
+        0.2f,
+        0.4f,
+        1.0f,
+    };
+        //    IDirect3DDevice9Ex *m_Device;
 //    D3DPRESENT_PARAMETERS m_PresentParams;
 //    VxDirectXData m_DirectXData;
 //    CKBOOL m_SoftwareVertexProcessing;
