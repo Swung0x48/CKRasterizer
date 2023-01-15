@@ -37,7 +37,7 @@ bool D3DLogCall(HRESULT hr, const char* function, const char* file, int line)
                        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                        (LPTSTR)&error_text, 0,
                        NULL);
-        std::string str = std::format("{}: at {} {}:{:d}",
+        std::string str = std::format("{}\n at {}\n{}:{:d}",
                                       error_text,
                                       function,
                                       file,
@@ -99,6 +99,11 @@ XBOOL CKDX11Rasterizer::Start(WIN_HANDLE AppWnd)
 
 void CKDX11Rasterizer::Close(void)
 {
+    while (!m_Drivers.IsEmpty())
+    {
+        auto *driver = m_Drivers.PopBack();
+        delete driver;
+	}
 	if (m_Factory)
 	{
 	    m_Factory->Release();
