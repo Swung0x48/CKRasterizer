@@ -9,7 +9,7 @@
 #define LOG_DRAWPRIMITIVE 0
 #define LOG_DRAWPRIMITIVEVB 0
 #define LOG_DRAWPRIMITIVEVBIB 0
-#define LOG_SETTEXURESTAGESTATE 0
+#define LOG_SETTEXTURE 0
 #define LOG_FLUSHCACHES 0
 #define LOG_RENDERSTATE 0
 
@@ -273,8 +273,8 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     GLCall(glLinkProgram(m_CurrentProgram));
     GLCall(glValidateProgram(m_CurrentProgram));
     GLCall(glUseProgram(m_CurrentProgram));
-    GLCall(glUniform1i(get_uniform_location("tex"), 0));
-    GLCall(glActiveTexture(GL_TEXTURE0));
+    for (int i = 0; i < 8; ++i)
+    GLCall(glUniform1i(get_uniform_location(("tex[" + std::to_string(i) + "]").c_str()), i));
 
     m_lighting_flags = LSW_LIGHTING_ENABLED | LSW_VRTCOLOR_ENABLED;
     GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
@@ -289,6 +289,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     GLCall(glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags));
     GLCall(glUniform4fv(get_uniform_location("fog_color"), 1, (float*)&init_fog_color.col));
     GLCall(glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters));
+    //setup blank texture
     {
         CKTextureDesc blank;
         blank.Format.Width = 1;
@@ -299,12 +300,31 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         blanktex->Bind(this);
         blanktex->Load(&white);
     }
+    //setup material uniform block
     {
         int idx = glGetUniformBlockIndex(m_CurrentProgram, "MatUniformBlock");
         GLCall(glUniformBlockBinding(m_CurrentProgram, idx, 0));
         GLCall(glGenBuffers(1, &m_ubo_mat));
         GLCall(glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_ubo_mat));
     }
+    //setup texture combinator uniform block
+    {
+        int idx = glGetUniformBlockIndex(m_CurrentProgram, "TexCombinatorUniformBlock");
+        GLCall(glUniformBlockBinding(m_CurrentProgram, idx, 1));
+        GLCall(glGenBuffers(1, &m_ubo_texc));
+        GLCall(glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_ubo_texc));
+    }
+    m_texcombo[0] = CKGLTexCombinatorUniform::make(
+        TexOp::modulate, TexArg::texture, TexArg::current, TexArg::current,
+        TexOp::select1, TexArg::diffuse, TexArg::current, TexArg::current,
+        TexArg::current, ~0U);
+    for (int i = 0 ; i < 7; ++i)
+        m_texcombo[1] = CKGLTexCombinatorUniform::make(
+            TexOp::disable, TexArg::texture, TexArg::current, TexArg::current,
+            TexOp::disable, TexArg::diffuse, TexArg::current, TexArg::current,
+            TexArg::current, ~0U);
+    GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc));
+    GLCall(glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW));
 
     SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&VxMatrix::Identity());
     SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&VxMatrix::Identity());
@@ -735,6 +755,7 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         //case VXRENDERSTATE_FILLMODE:
         //case VXRENDERSTATE_CLIPPING:
         default:
+            fprintf(stderr, "unhandled render state %s -> %d\n", rstytostr(State), Value);
             return FALSE;
     }
 }
@@ -811,6 +832,7 @@ CKBOOL CKGLRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
     ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
+    GLCall(glActiveTexture(GL_TEXTURE0 + Stage));
     CKGLTextureDesc *desc = static_cast<CKGLTextureDesc *>(m_Textures[Texture]);
     if (!desc)
     {
@@ -856,7 +878,89 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             GLCall(glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, (float*)&c.col));
             return TRUE;
         }
+        case CKRST_TSS_MINFILTER:
+        case CKRST_TSS_MAGFILTER:
+            //!!TODO
+            return TRUE;
+        case CKRST_TSS_STAGEBLEND:
+        {
+            CKGLTexCombinatorUniform tc = m_texcombo[Stage];
+            bool valid = true;
+            switch (Value)
+            {
+                case STAGEBLEND(VXBLEND_ZERO, VXBLEND_SRCCOLOR):
+                case STAGEBLEND(VXBLEND_DESTCOLOR, VXBLEND_ZERO):
+                    tc = CKGLTexCombinatorUniform::make(
+                        TexOp::modulate, TexArg::texture, TexArg::current, TexArg::current,
+                        TexOp::select1,  TexArg::current, TexArg::current, TexArg::current,
+                        tc.dest(), tc.constant);
+                    break;
+                case STAGEBLEND(VXBLEND_ONE, VXBLEND_ONE):
+                    tc = CKGLTexCombinatorUniform::make(
+                        TexOp::add, TexArg::current, TexArg::current, TexArg::current,
+                        TexOp::select1,  TexArg::current, TexArg::current, TexArg::current,
+                        tc.dest(), tc.constant);
+                    break;
+                default:
+                    valid = false;
+            }
+            if (valid)
+            {
+                m_texcombo[Stage] = tc;
+                GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc));
+                GLCall(glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW));
+            }
+            return valid;
+        }
+        case CKRST_TSS_TEXTUREMAPBLEND:
+        {
+            CKGLTexCombinatorUniform tc = m_texcombo[Stage];
+            bool valid = true;
+            switch (Value)
+            {
+                case VXTEXTUREBLEND_DECAL:
+                case VXTEXTUREBLEND_COPY:
+                    tc.set_color_op(TexOp::select1);
+                    tc.set_color_arg1(TexArg::texture);
+                    tc.set_alpha_op(TexOp::select1);
+                    tc.set_alpha_arg1(TexArg::texture);
+                    break;
+                case VXTEXTUREBLEND_MODULATE:
+                case VXTEXTUREBLEND_MODULATEALPHA:
+                case VXTEXTUREBLEND_MODULATEMASK:
+                    tc = CKGLTexCombinatorUniform::make(
+                        TexOp::modulate, TexArg::texture, TexArg::current, TexArg::current,
+                        TexOp::modulate, TexArg::texture, TexArg::current, TexArg::current,
+                        tc.dest(), tc.constant);
+                    break;
+                case VXTEXTUREBLEND_DECALALPHA:
+                case VXTEXTUREBLEND_DECALMASK:
+                    tc.set_color_op(TexOp::mixtexalp);
+                    tc.set_color_arg1(TexArg::texture);
+                    tc.set_alpha_arg2(TexArg::current);
+                    tc.set_alpha_op(TexOp::select1);
+                    tc.set_alpha_arg1(TexArg::diffuse);
+                    break;
+                case VXTEXTUREBLEND_ADD:
+                    tc.set_color_op(TexOp::add);
+                    tc.set_color_arg1(TexArg::texture);
+                    tc.set_alpha_arg2(TexArg::current);
+                    tc.set_alpha_op(TexOp::select1);
+                    tc.set_alpha_arg1(TexArg::current);
+                    break;
+                default:
+                    valid = false;
+            }
+            if (valid)
+            {
+                m_texcombo[Stage] = tc;
+                GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc));
+                GLCall(glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW));
+            }
+            return valid;
+        }
         default:
+            fprintf(stderr, "unhandled texture stage state %s -> %d\n", tstytostr(Tss), Value);
             return FALSE;
     }
 }
@@ -977,7 +1081,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
 #if USE_SEPARATE_ATTRIBUTE
     if (m_current_vf != vbo->m_VertexFormat)
     {
-        get_vertex_format((CKRST_VERTEXFORMAT)vbo->m_VertexFormat)->select();
+        get_vertex_format((CKRST_VERTEXFORMAT)vbo->m_VertexFormat)->select(this);
         m_current_vf = vbo->m_VertexFormat;
     }
     vbo->bind_to_array();
@@ -1026,7 +1130,7 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
 #if USE_SEPARATE_ATTRIBUTE
     if (m_current_vf != vbo->m_VertexFormat)
     {
-        get_vertex_format((CKRST_VERTEXFORMAT)vbo->m_VertexFormat)->select();
+        get_vertex_format((CKRST_VERTEXFORMAT)vbo->m_VertexFormat)->select(this);
         m_current_vf = vbo->m_VertexFormat;
     }
     vbo->bind_to_array();
@@ -1282,7 +1386,8 @@ unsigned CKGLRasterizerContext::get_vertex_attrib_location(CKDWORD component)
         {CKRST_VF_NORMAL, 1},
         {CKRST_VF_DIFFUSE, 2},
         {CKRST_VF_SPECULAR, 3},
-        {CKRST_VF_TEX1, 4}
+        {CKRST_VF_TEX1, 4},
+        {CKRST_VF_TEX2, 5}
     };
     return loc.find(component) != loc.end() ? loc.find(component)->second : ~0;
 }
@@ -1291,9 +1396,9 @@ void CKGLRasterizerContext::set_position_transformed(bool transformed)
 {
     if (bool(m_cur_vp & VP_IS_TRANSFORMED) ^ transformed)
     {
-        GLCall(glUniform1i(get_uniform_location("is_transformed"), transformed));
         m_cur_vp &= ~0U ^ VP_IS_TRANSFORMED;
         if (transformed) m_cur_vp |= VP_IS_TRANSFORMED;
+        GLCall(glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp));
     }
 }
 
@@ -1301,9 +1406,19 @@ void CKGLRasterizerContext::set_vertex_has_color(bool color)
 {
     if (bool(m_cur_vp & VP_HAS_COLOR) ^ color)
     {
-        GLCall(glUniform1i(get_uniform_location("has_color"), color));
         m_cur_vp &= ~0U ^ VP_HAS_COLOR;
         if (color) m_cur_vp |= VP_HAS_COLOR;
+        GLCall(glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp));
+    }
+}
+
+void CKGLRasterizerContext::set_num_textures(CKDWORD ntex)
+{
+    if (ntex <= 8 && (m_cur_vp & VP_TEXTURE_MASK) != ntex)
+    {
+        m_cur_vp &= ~VP_TEXTURE_MASK;
+        m_cur_vp |= ntex;
+        GLCall(glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp));
     }
 }
 

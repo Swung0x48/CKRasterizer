@@ -32,11 +32,20 @@ struct light_t
     float theta;
     float phi;
 };
+struct texcomb_t
+{
+    uint op;                //@0, bit 0-3: color op, bit 4-7: alpha op, bit 31: dest
+    uint cargs;             //@4, bit 0-7: arg1, bit 8-15: arg2, bit 16-23: arg3
+    uint aargs;             //@8, ditto but for alpha
+    uint constant;          //@12
+    //stride per element: 16
+};
 
 in vec3 fpos;
 in vec3 fnormal;
 in vec4 fragcol;
-in vec2 ftexcoord;
+flat in uint fntex;
+in vec2 ftexcoord[8];
 out vec4 color;
 uniform float alpha_thresh;
 uniform uint alphatest_flags;
@@ -51,24 +60,27 @@ layout (std140) uniform MatUniformBlock
 };
 uniform uint lighting_switches;
 uniform light_t lights; // will become array in the future
-uniform sampler2D tex; //this will become an array in the future
+layout (std140) uniform TexCombinatorUniformBlock
+{
+    texcomb_t texcomb[8];
+};
+uniform sampler2D tex[8]; //this will become an array in the future
 
-vec3 light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
+vec4[4] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
 {
     vec3 ldir = normalize(-l.dir.xyz);
     float diff = max(dot(normal, ldir), 0.);
-    vec4 ret = vec4(0., 0., 0., 0.);
     vec4 amb = l.ambi * material.ambi;
     vec4 dif = diff * l.diff * material.diff;
-    ret = amb + dif + material.emis;
+    vec4 spc = vec4(0.);
+    vec4 ems = material.emis;
     if (spec_enabled)
     {
         vec3 refldir = reflect(-ldir, normal);
         float specl = pow(max(dot(vdir, refldir), 0.), material.spcl_strength);
-        vec4 spc = l.spcl * material.spcl * specl;
-        ret += spc;
+        spc = l.spcl * material.spcl * specl;
     }
-    return ret;
+    return vec4[4](amb, dif, spc, ems);
 }
 bool alpha_test(float in_alpha)
 {
@@ -84,9 +96,21 @@ bool alpha_test(float in_alpha)
         default: return true;
     }
 }
+vec4 dw2color(uint c)
+{
+    return vec4(
+        float((c >> 16U) & 0xFFU) / 255.,
+        float((c >>  8U) & 0xFFU) / 255.,
+        float((c >>  0U) & 0xFFU) / 255.,
+        float((c >> 24U) & 0xFFU) / 255.);
+}
 vec4 clamp_color(vec4 c)
 {
     return clamp(c, vec4(0, 0, 0, 0), vec4(1, 1, 1, 1));
+}
+vec4 accum_color(vec4[4] c)
+{
+    return clamp_color(vec4((c[0] + c[1] + c[2] + c[3]).xyz, 1.));
 }
 float fog_factor(float dist, float rdist, uint mode)
 {
@@ -97,6 +121,45 @@ float fog_factor(float dist, float rdist, uint mode)
         case 3U: return (fog_parameters.y - rdist) / (fog_parameters.y - fog_parameters.x);
         default: return 1.;
     }
+}
+vec4 combine_value(uint mode, vec4 a, vec4 b, float factor)
+{
+    switch(mode)
+    {
+        case  2U: return a;
+        case  3U: return b;
+        case  4U: return a * b;
+        case  5U: return 2 * (a * b);
+        case  6U: return 4 * (a * b);
+        case  7U: return a + b;
+        case  8U: return a + b - vec4(0.5);
+        case  9U: return 2 * (a + b - vec4(0.5));
+        case 10U: return a - b;
+        case 11U: return a + b - a * b;
+        case 13U: return mix(b, a, factor);
+        default: return vec4(0.);
+    }
+}
+vec4 select_argument(uint stage, uint source, vec4 tex, vec4 cum, vec4 tmp, vec4[4] lights)
+{
+    vec4 ret = vec4(0.);
+    switch(source) //D3DTA_*
+    {
+        case 0: ret = lights[1]; break; //DIFFUSE
+        case 1: if (stage == 0U)        //CURRENT
+                    ret = accum_color(lights);
+                else ret = cum; break;
+        case 2: ret = tex; break;       //TEXTURE
+        case 3: ret = vec4(0); break;   //TFACTOR
+        case 4: ret = lights[2]; break; //SPECULAR
+        case 5: ret = tmp; break;       //TEMP
+        case 6: ret = dw2color(texcomb[stage].constant); break; //CONSTANT
+    }
+    if ((source & 0x10U) != 0U)
+        ret = vec4(1.) - ret;
+    if ((source & 0x20U) != 0U)
+        ret = vec4(ret.a);
+    return ret;
 }
 void main()
 {
@@ -117,11 +180,44 @@ void main()
     }
 
     color = vec4(1., 1., 1., 1.);
+    vec4[4] lighting_colors = vec4[4](vec4(0.), vec4(0.), vec4(0.), vec4(0.));
     if ((lighting_switches & LSW_VRTCOLOR_ENABLED) != 0U)
         color = fragcol;
     if (lights.type == uint(3) && (lighting_switches & LSW_LIGHTING_ENABLED) != 0U)
-        color *= clamp_color(vec4(light_directional(lights, norm, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U), 1.0));
-    color *= texture(tex, ftexcoord);
+    {
+        lighting_colors = light_directional(lights, norm, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U);
+        color = accum_color(lighting_colors);
+    }
+    if (fntex > 1U)
+    {
+        vec4 accum = vec4(0.);
+        vec4 temp[8] = vec4[8](vec4(0.), vec4(0.), vec4(0.), vec4(0.),
+                               vec4(0.), vec4(0.), vec4(0.), vec4(0.));
+        for (uint i = 0U; i < fntex; ++i)
+        {
+            vec4 txc = texture(tex[i], ftexcoord[i]);
+            uint cop = texcomb[i].op & 0xfU;
+            uint aop = (texcomb[i].op & 0xf0U) >> 4;
+            uint dst = texcomb[i].op >> 31; //1: temp, 0: accumulator
+            uint ca1 = texcomb[i].cargs & 0xffU;
+            uint ca2 = (texcomb[i].cargs & 0xff00U) >> 8;
+            uint aa1 = texcomb[i].aargs & 0xffU;
+            uint aa2 = (texcomb[i].aargs & 0xff00U) >> 8;
+            vec4 cv1 = select_argument(i, ca1, txc, accum, temp[i], lighting_colors);
+            vec4 cv2 = select_argument(i, ca2, txc, accum, temp[i], lighting_colors);
+            vec4 av1 = select_argument(i, aa1, txc, accum, temp[i], lighting_colors);
+            vec4 av2 = select_argument(i, aa2, txc, accum, temp[i], lighting_colors);
+            vec4 rc = combine_value(cop, cv1, cv2, txc.a);
+            vec4 ra = combine_value(aop, av1, av2, txc.a);
+            if (dst == 1U)
+                temp[i] = vec4(rc.rgb, ra.a);
+            else
+                accum = vec4(rc.rgb, ra.a);
+        }
+        color = accum;
+    }
+    else
+        color *= texture(tex[0], ftexcoord[0]);
     if ((alphatest_flags & 0x80U) != 0U && !alpha_test(color.a))
         discard;
     color = mix(fog_color, color, ffactor);
