@@ -5,6 +5,12 @@
 #include "CKRasterizer.h"
 #include <Windows.h>
 #include <d3d11.h>
+#include <DirectXMath.h>
+#include <wrl.h>
+
+#ifdef _DEBUG
+    #include <dxgidebug.h>
+#endif
 
 class CKDX11Rasterizer : public CKRasterizer
 {
@@ -16,7 +22,7 @@ public:
 	virtual void Close(void);
 
 public:
-	IDXGIFactory1* m_Factory = nullptr;
+    Microsoft::WRL::ComPtr<IDXGIFactory1> m_Factory;
 };
 
 class CKDX11RasterizerDriver : public CKRasterizerDriver
@@ -28,7 +34,7 @@ public:
     //--- Contexts
     virtual CKRasterizerContext *CreateContext();
     
-    CKBOOL InitializeCaps(UINT AdapterIndex, IDXGIAdapter1* Adapter);
+    CKBOOL InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapter1> Adapter, Microsoft::WRL::ComPtr<IDXGIOutput> Output);
     CKBOOL IsTextureFormatOk(DXGI_FORMAT TextureFormat, DXGI_FORMAT AdapterFormat, DWORD Usage = 0);
 
     DXGI_FORMAT FindNearestTextureFormat(CKTextureDesc *desc, DXGI_FORMAT AdapterFormat, DWORD Usage = 0);
@@ -41,9 +47,10 @@ private:
 
 public:
     CKBOOL m_Inited;
-    UINT m_AdapterIndex;
-    IDXGIAdapter1* m_Adapter;
-    DXGI_ADAPTER_DESC1 m_DXGIAdapterDesc;
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> m_Adapter;
+    Microsoft::WRL::ComPtr<IDXGIOutput> m_Output;
+    DXGI_ADAPTER_DESC1 m_AdapterDesc;
+    DXGI_OUTPUT_DESC m_OutputDesc;
 };
 
 class CKDX11RasterizerContext : public CKRasterizerContext

@@ -166,42 +166,39 @@ size_t BitsPerPixel(DXGI_FORMAT fmt)
     }
 }
 
-CKBOOL CKDX11RasterizerDriver::InitializeCaps(UINT AdapterIndex, IDXGIAdapter1* Adapter) {
+CKBOOL CKDX11RasterizerDriver::InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapter1> Adapter,
+                                              Microsoft::WRL::ComPtr<IDXGIOutput> Output)
+{
     HRESULT hr;
 
-    m_AdapterIndex = AdapterIndex;
     m_Adapter = Adapter;
+    m_Output = Output;
 
     // pretend we have a 640x480 @ 16bpp mode for compatibility reasons
     VxDisplayMode mode {640, 480, 16, 60};
     m_DisplayModes.PushBack(mode);
 
-    UINT i = 0;
-    IDXGIOutput * output = nullptr;
-    while (m_Adapter->EnumOutputs(i, &output) != DXGI_ERROR_NOT_FOUND)
+    UINT numModes = 0;
+    DXGI_MODE_DESC *displayModes = NULL;
+    DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+
+    // Get the number of elements
+    D3DCall(m_Output->GetDisplayModeList(format, 0, &numModes, NULL));
+
+    displayModes = new DXGI_MODE_DESC[numModes];
+
+    // Get the list
+    D3DCall(m_Output->GetDisplayModeList(format, 0, &numModes, displayModes));
+    for (UINT i = 0; i < numModes; ++i)
     {
-        UINT numModes = 0;
-        DXGI_MODE_DESC* displayModes = NULL;
-        DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-
-        // Get the number of elements
-        D3DCall(output->GetDisplayModeList(format, 0, &numModes, NULL));
-
-        displayModes = new DXGI_MODE_DESC[numModes];
-
-        // Get the list
-        D3DCall(output->GetDisplayModeList(format, 0, &numModes, displayModes));
-        for (UINT j = 0; j < numModes; ++j) {
-            auto dm = displayModes[i];
-            m_DisplayModes.PushBack({
-                static_cast<int>(dm.Width),
-                static_cast<int>(dm.Height),
-                static_cast<int>(BitsPerPixel(dm.Format) * 8),
-                (int)((float)dm.RefreshRate.Numerator / (float)dm.RefreshRate.Denominator)
-            });
-        }
-        delete[] displayModes;
+        auto &dm = displayModes[i];
+        mode.Width = dm.Width;
+        mode.Height = dm.Height;
+        mode.Bpp = BitsPerPixel(dm.Format);
+        mode.RefreshRate = (int)((float)dm.RefreshRate.Numerator / (float)dm.RefreshRate.Denominator);
+        m_DisplayModes.PushBack(mode);
     }
+    delete[] displayModes;
     m_Hardware = 1;
     ZeroMemory(&m_3DCaps, sizeof(m_3DCaps));
     ZeroMemory(&m_2DCaps, sizeof(m_2DCaps));
@@ -209,17 +206,22 @@ CKBOOL CKDX11RasterizerDriver::InitializeCaps(UINT AdapterIndex, IDXGIAdapter1* 
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_CANDOINDEXBUFFER;
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_GLATTENUATIONMODEL;
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_HARDWARETL;
-    m_2DCaps.Family = CKRST_OPENGL;
+    m_2DCaps.Family = CKRST_DIRECTX;
     m_2DCaps.Caps = CKRST_2DCAPS_3D;
 
-    D3DCall(m_Adapter->GetDesc1(&m_DXGIAdapterDesc));
-    int length = WideCharToMultiByte(CP_UTF8, 0, m_DXGIAdapterDesc.Description, wcslen(m_DXGIAdapterDesc.Description),
-                                     nullptr, 0, nullptr, nullptr);
-    m_Desc = XString(length + 1);
-    WideCharToMultiByte(CP_UTF8, 0, m_DXGIAdapterDesc.Description, wcslen(m_DXGIAdapterDesc.Description),
-                        m_Desc.Str(), length, nullptr, nullptr);
-    m_Desc << " (DX11)";
-
+    D3DCall(m_Adapter->GetDesc1(&m_AdapterDesc));
+    D3DCall(m_Output->GetDesc(&m_OutputDesc));
+    m_Desc = "";
+    char buf[128];
+    ZeroMemory(buf, 128);
+    int len = WideCharToMultiByte(CP_ACP, 0, m_OutputDesc.DeviceName, wcslen(m_OutputDesc.DeviceName), nullptr, 0,
+                        nullptr, nullptr);
+    WideCharToMultiByte(CP_ACP, 0, m_OutputDesc.DeviceName, wcslen(m_OutputDesc.DeviceName), buf, len,
+                                  nullptr, nullptr);
+    m_Desc << buf << " @ ";
+    WideCharToMultiByte(CP_ACP, 0, m_AdapterDesc.Description, wcslen(m_AdapterDesc.Description),
+                        buf, 128, nullptr, nullptr);
+    m_Desc << buf << " (DX11, DXGI 1.1)";
     m_CapsUpToDate = TRUE;
     return TRUE;
 }

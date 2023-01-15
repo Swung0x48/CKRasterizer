@@ -69,22 +69,29 @@ CKDX11Rasterizer::~CKDX11Rasterizer(void)
 
 XBOOL CKDX11Rasterizer::Start(WIN_HANDLE AppWnd)
 {
+	using Microsoft::WRL::ComPtr;
 	m_MainWindow = AppWnd;
-    HRESULT hr = CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)&m_Factory);
+    HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(&m_Factory));
 	if (!D3DLogCall(hr, __FUNCTION__, __FILE__, __LINE__))
 	{
 	    return FALSE;
 	}
 
-	IDXGIAdapter1* adapter = nullptr;
+	ComPtr<IDXGIAdapter1> adapter = nullptr;
+    ComPtr<IDXGIOutput> output = nullptr;
 	for (UINT i = 0;
 		m_Factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND;
 		++i)
 	{
-	    CKDX11RasterizerDriver* driver = new CKDX11RasterizerDriver(this);
-		if (!driver->InitializeCaps(i, adapter))
-			delete driver;
-		m_Drivers.PushBack(driver);
+        for (UINT j = 0;
+			adapter->EnumOutputs(j, &output) != DXGI_ERROR_NOT_FOUND;
+			++j)
+        {
+            CKDX11RasterizerDriver *driver = new CKDX11RasterizerDriver(this);
+            if (!driver->InitializeCaps(adapter, output))
+                delete driver;
+            m_Drivers.PushBack(driver);
+        }
 	}
 
 	return TRUE;
