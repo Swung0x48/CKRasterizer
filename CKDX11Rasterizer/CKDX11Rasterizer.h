@@ -5,6 +5,8 @@
 #include "CKRasterizer.h"
 #include <Windows.h>
 #include <d3d11.h>
+#include <d3d10.h>
+#include <d3dcompiler.h>
 #include <DirectXMath.h>
 #include <wrl.h>
 
@@ -228,3 +230,19 @@ public:
 
     CKDX11Rasterizer *m_Owner;
 };
+
+typedef struct CKDX11VertexBufferDesc : public CKVertexBufferDesc
+{
+public:
+    Microsoft::WRL::ComPtr<ID3D11Buffer> DxBuffer;
+    D3D11_BUFFER_DESC DxDesc;
+    CKDX11VertexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
+} CKDX11VertexBufferDesc;
+
+typedef struct CKDX11IndexBufferDesc : public CKIndexBufferDesc
+{
+public:
+    Microsoft::WRL::ComPtr<ID3D11Buffer> DxBuffer;
+    D3D11_BUFFER_DESC DxDesc;
+    CKDX11IndexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
+} CKDX11IndexBufferDesc;
