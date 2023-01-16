@@ -8,6 +8,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
 {
     HRESULT hr;
 
+    m_InCreateDestroy = TRUE;
     SetWindowLongA((HWND)Window, GWL_STYLE, WS_OVERLAPPED | WS_SYSMENU);
     SetClassLongPtr((HWND)Window, GCLP_HBRBACKGROUND, (LONG)GetStockObject(NULL_BRUSH));
 
@@ -47,11 +48,11 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
         D3DCall(hr);
     }
 
-    ID3D11Texture2D *pBackBuffer = nullptr;
-    D3DCall(m_Swapchain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer)));
-    D3DCall(m_Device->CreateRenderTargetView(pBackBuffer, nullptr, &m_BackBuffer));
-    D3DCall(pBackBuffer->Release());
-    m_DeviceContext->OMSetRenderTargets(1, &m_BackBuffer, NULL);
+    ID3D11Texture2D *pBuffer = nullptr;
+    D3DCall(m_Swapchain->GetBuffer(0, IID_PPV_ARGS(&pBuffer)));
+    D3DCall(m_Device->CreateRenderTargetView(pBuffer, nullptr, &m_BackBuffer));
+    D3DCall(pBuffer->Release());
+    m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
 
     m_Window = (HWND)Window;
     m_PosX = PosX;
@@ -63,6 +64,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     m_Height = Height;
     if (m_Fullscreen)
         m_Driver->m_Owner->m_FullscreenContext = this;
+    m_InCreateDestroy = FALSE;
 
     return SUCCEEDED(hr);
 }
@@ -75,7 +77,8 @@ CKBOOL CKDX11RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
 {
     if (!m_BackBuffer)
         return FALSE;
-    m_DeviceContext->ClearRenderTargetView(m_BackBuffer.Get(), m_ClearColor);
+    if (Flags & CKRST_CTXCLEAR_COLOR)
+        m_DeviceContext->ClearRenderTargetView(m_BackBuffer.Get(), m_ClearColor);
     /* if (Flags & CKRST_CTXCLEAR_STENCIL)
         D3DCall(m_DeviceContext->ClearDepthStencilView());
     if (Flags & CKRST_)
@@ -101,14 +104,16 @@ CKBOOL CKDX11RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 CKBOOL CKDX11RasterizerContext::SetMaterial(CKMaterialData *mat) { return CKRasterizerContext::SetMaterial(mat); }
 
 CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
-    D3D11_VIEWPORT viewport;
-    viewport.TopLeftX = data->ViewX;
-    viewport.TopLeftY = data->ViewY;
-    viewport.Width = data->ViewWidth;
-    viewport.Height = data->ViewHeight;
-    viewport.MaxDepth = data->ViewZMax;
-    viewport.MinDepth = data->ViewZMin;
-    m_DeviceContext->RSSetViewports(1, &viewport);
+    ZeroMemory(&m_Viewport, sizeof(D3D11_VIEWPORT));
+    m_Viewport.TopLeftX = (FLOAT)data->ViewX;
+    m_Viewport.TopLeftY = (FLOAT)data->ViewY;
+    m_Viewport.Width = (FLOAT)data->ViewWidth;
+    m_Viewport.Height = (FLOAT)data->ViewHeight;
+    m_Viewport.MaxDepth = 1.0f;
+    m_Viewport.MinDepth = 0.0f;
+    //viewport.MaxDepth = data->ViewZMax;
+    //viewport.MinDepth = data->ViewZMin;
+    m_DeviceContext->RSSetViewports(1, &m_Viewport);
     return TRUE;
 }
 

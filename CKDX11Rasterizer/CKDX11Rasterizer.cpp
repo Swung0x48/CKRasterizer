@@ -104,9 +104,4 @@ void CKDX11Rasterizer::Close(void)
         auto *driver = m_Drivers.PopBack();
         delete driver;
 	}
-	if (m_Factory)
-	{
-	    m_Factory->Release();
-		m_Factory = nullptr;
-	}
 }

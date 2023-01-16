@@ -171,11 +171,12 @@ public:
 
     D3D_FEATURE_LEVEL m_FeatureLevel;
     const float m_ClearColor[4] = {
-        0.0f,
         0.2f,
+        0.3f,
         0.4f,
         1.0f,
     };
+    D3D11_VIEWPORT m_Viewport;
         //    IDirect3DDevice9Ex *m_Device;
 //    D3DPRESENT_PARAMETERS m_PresentParams;
 //    VxDirectXData m_DirectXData;
@@ -192,7 +193,7 @@ public:
 //    LPDIRECT3DSURFACE9 m_DefaultBackBuffer; // Backup pointer of previous back buffer
 //    LPDIRECT3DSURFACE9 m_DefaultDepthBuffer; // Backup pointer of previous depth buffer
 //
-//    volatile CKBOOL m_InCreateDestroy;
+    volatile CKBOOL m_InCreateDestroy;
 //
 //    //--- For web content the render context can be transparent (no clear of backbuffer but instead
 //    //--- a copy of what is currently on screen)
