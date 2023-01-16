@@ -252,6 +252,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         m_Driver->m_Owner->m_FullscreenContext = this;
 
     memset(m_renderst, 0xff, sizeof(m_renderst));
+    memset(m_lights_data, 0, sizeof(m_lights_data));
 
     // TODO: Shader compilation and binding may be moved elsewhere
     CKDWORD vs_idx = 0, ps_idx = 1;
@@ -307,6 +308,13 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         GLCall(glGenBuffers(1, &m_ubo_mat));
         GLCall(glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_ubo_mat));
     }
+    //setup lights uniform block
+    {
+        int idx = glGetUniformBlockIndex(m_CurrentProgram, "LightsUniformBlock");
+        GLCall(glUniformBlockBinding(m_CurrentProgram, idx, 2));
+        GLCall(glGenBuffers(1, &m_ubo_lights));
+        GLCall(glBindBufferBase(GL_UNIFORM_BUFFER, 2, m_ubo_lights));
+    }
     //setup texture combinator uniform block
     {
         int idx = glGetUniformBlockIndex(m_CurrentProgram, "TexCombinatorUniformBlock");
@@ -314,6 +322,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         GLCall(glGenBuffers(1, &m_ubo_texc));
         GLCall(glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_ubo_texc));
     }
+    //initialize texture combinator stuff
     m_texcombo[0] = CKGLTexCombinatorUniform::make(
         TexOp::modulate, TexArg::texture, TexArg::current, TexArg::current,
         TexOp::select1, TexArg::diffuse, TexArg::current, TexArg::current,
@@ -327,6 +336,9 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     GLCall(glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW));
     for (int i = 0; i < 8; ++i)
         GLCall(glUniform1ui(get_uniform_location(("texp[" + std::to_string(i) + "]").c_str()), m_tex_vp[i]));
+
+    GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights));
+    GLCall(glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW));
 
     SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&VxMatrix::Identity());
     SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&VxMatrix::Identity());
@@ -406,8 +418,14 @@ CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
     ZoneScopedN(__FUNCTION__);
     if (Light >= m_lights.size())
-        m_lights.resize(Light + 1);
+        m_lights.resize(Light + 1, std::pair<CKDWORD, CKLightData>(MAX_ACTIVE_LIGHTS, CKLightData()));
     m_lights[Light].second = *data;
+    if (m_lights[Light].first < MAX_ACTIVE_LIGHTS)
+    {
+        m_lights_data[m_lights[Light].first] = CKGLLightUniform(*data);
+        GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights));
+        GLCall(glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW));
+    }
     return TRUE;
 }
 
@@ -416,19 +434,26 @@ CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
     ZoneScopedN(__FUNCTION__);
     if (Light >= m_lights.size())
         return FALSE;
-    m_lights[Light].first = Enable;
-    //!!FIXME: this implementation is temporary, AND WRONG.
-    //only for directional light testing for now.
-    auto lit = &m_lights[Light].second;
-    if (m_lights[Light].second.Type == VX_LIGHTDIREC)
+    if (!((m_lights[Light].first < MAX_ACTIVE_LIGHTS) ^ Enable))
+        return TRUE;
+    if (Enable)
     {
-        GLCall(glUniform1ui(get_uniform_location("lights.type"), 3));
-        GLCall(glUniform4fv(get_uniform_location("lights.ambi"), 1, lit->Ambient.col));
-        GLCall(glUniform4fv(get_uniform_location("lights.diff"), 1, lit->Diffuse.col));
-        GLCall(glUniform4fv(get_uniform_location("lights.spcl"), 1, lit->Specular.col));
-        VxVector4 vd(lit->Direction.x, lit->Direction.y, lit->Direction.z, 0);
-        GLCall(glUniform4fv(get_uniform_location("lights.dir"), 1, (float*)&vd));
+        if (m_lights[Light].first >= MAX_ACTIVE_LIGHTS)
+        {
+            CKDWORD &i = m_lights[Light].first;
+            for (i = 0; i < MAX_ACTIVE_LIGHTS && m_lights_data[i].type != 0; ++i);
+        }
+        if (m_lights[Light].first >= MAX_ACTIVE_LIGHTS)
+            return FALSE;
+        m_lights_data[m_lights[Light].first] = CKGLLightUniform(m_lights[Light].second);
     }
+    else
+    {
+        if (m_lights[Light].first < MAX_ACTIVE_LIGHTS)
+            m_lights_data[m_lights[Light].first].type = 0;
+    }
+    GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights));
+    GLCall(glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW));
     return TRUE;
 }
 
@@ -446,7 +471,6 @@ CKBOOL CKGLRasterizerContext::SetViewport(CKViewportData *data)
     ZoneScopedN(__FUNCTION__);
     GLCall(glViewport(data->ViewX, data->ViewY, data->ViewWidth, data->ViewHeight));
     GLCall(glDepthRangef(data->ViewZMin, data->ViewZMax));
-    GLCall(glDepthRangef(0, 1));
     VxMatrix _m = VxMatrix::Identity();
     float (*m)[4] = (float(*)[4])&_m;
     m[0][0] = 2. / data->ViewWidth;
@@ -487,10 +511,13 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
             Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
             SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&Mat);
             m_MatrixUptodate = 0;
-            VxMatrix t;
+            VxMatrix t, im, tim;
             Vx3DInverseMatrix(t, Mat);
             m_viewpos = VxVector(t[3][0], t[3][1], t[3][2]);
             GLCall(glUniform3fv(get_uniform_location("vpos"), 1, (float*)&m_viewpos));
+            Vx3DTransposeMatrix(tim, m_ModelViewMatrix);
+            im = inv(tim);
+            SetUniformMatrix4fv("tiworldview", 1, GL_FALSE, (float*)&im);
             break;
         }
         case VXMATRIX_PROJECTION:

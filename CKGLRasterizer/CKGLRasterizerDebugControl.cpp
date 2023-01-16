@@ -20,6 +20,9 @@ LRESULT CALLBACK keyboard_handler(int code, WPARAM kc, LPARAM rc)
             case 'A': r->set_step_mode(1); break;
             case 'Z': r->set_step_mode(2); break;
             case 'W': r->toggle_batch_status(); break;
+            case 'S': break; //toggle specular light mode (normal, specular only, always off)
+            case 'E': break; //toggle 2D entites rendering (only supported in FBO enabled builds)
+            case 'D': break; //cycle through post-processing shaders ("super secret settings")
 		}
 	}
 

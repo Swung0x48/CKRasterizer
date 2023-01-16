@@ -8,29 +8,23 @@ struct mat_t
     vec4 ambi;          //@0
     vec4 diff;          //@16
     vec4 spcl;          //@32
-    float spcl_strength;//@48
+    float spcl_strength;//@48 + 12 padding
     vec4 emis;          //@64
 };
 struct light_t
 {
     //1=point, 2=spot, 3=directional
-    uint type;
-    vec4 ambi;
-    vec4 diff;
-    vec4 spcl;
+    uint type;          //@0 + 12 padding
+    vec4 ambi;          //@16
+    vec4 diff;          //@32
+    vec4 spcl;          //@48
     //directional
-    vec4 dir;
+    vec4 dir;           //@64
     //point & spot
-    vec4 pos;
-    float range;
-    //point
-    float a0;
-    float a1;
-    float a2;
-    //spot (cone)
-    float falloff;
-    float theta;
-    float phi;
+    vec4 pos;           //@80
+    vec4 psparam1;      //@96, xyzw=range, falloff, theta, phi
+    vec4 psparam2;      //@112, xyzw=a0, a1, a2
+    //stride per element: 128
 };
 struct texcomb_t
 {
@@ -59,13 +53,38 @@ layout (std140) uniform MatUniformBlock
     mat_t material;
 };
 uniform uint lighting_switches;
-uniform light_t lights; // will become array in the future
+layout (std140) uniform LightsUniformBlock
+{
+    light_t lights[16]; // this is 2 KiB already...
+};
 layout (std140) uniform TexCombinatorUniformBlock
 {
     texcomb_t texcomb[8];
 };
-uniform sampler2D tex[8]; //this will become an array in the future
+uniform sampler2D tex[8];
 
+vec4[4] light_point(light_t l, vec3 normal, vec3 fpos, vec3 vdir, bool spec_enabled)
+{
+    float range = l.psparam1.x;
+    float a0 = l.psparam2.x;
+    float a1 = l.psparam2.y;
+    float a2 = l.psparam2.z;
+    vec3 ldir = normalize(l.pos.xyz - fpos);
+    float dist = length(l.pos.xyz - fpos);
+    if (dist > range) return vec4[4](vec4(0.), vec4(0.), vec4(0.), vec4(0.));
+    float atnf = 1. / (a0 + a1 * dist + a2 * dist * dist);
+    float diff = max(dot(normal, ldir), 0.);
+    vec4 amb = l.ambi * material.ambi;
+    vec4 dif = diff * l.diff * material.diff;
+    vec4 spc = vec4(0.);
+    if (spec_enabled)
+    {
+        vec3 refldir = reflect(-ldir, normal);
+        float specl = pow(max(dot(vdir, refldir), 0.), material.spcl_strength);
+        spc = l.spcl * material.spcl * specl;
+    }
+    return vec4[4](amb * atnf, dif * atnf, spc * atnf, vec4(0.));
+}
 vec4[4] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
 {
     vec3 ldir = normalize(-l.dir.xyz);
@@ -73,7 +92,6 @@ vec4[4] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
     vec4 amb = l.ambi * material.ambi;
     vec4 dif = diff * l.diff * material.diff;
     vec4 spc = vec4(0.);
-    vec4 ems = material.emis;
     if (spec_enabled)
     {
         vec3 refldir = reflect(-ldir, normal);
@@ -81,7 +99,7 @@ vec4[4] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
         spc = l.spcl * material.spcl * specl;
         //return vec4[4](vec4(0), vec4(0), spc, vec4(0));
     }
-    return vec4[4](amb, dif, spc, ems);
+    return vec4[4](amb, dif, spc, vec4(0.));
 }
 bool alpha_test(float in_alpha)
 {
@@ -108,6 +126,11 @@ vec4 dw2color(uint c)
 vec4 clamp_color(vec4 c)
 {
     return clamp(c, vec4(0, 0, 0, 0), vec4(1, 1, 1, 1));
+}
+vec4[4] component_add(vec4[4] a, vec4[4] b)
+{
+    return vec4[4](a[0] + b[0], a[1] + b[1],
+                   a[2] + b[2], a[3] + b[3]);
 }
 vec4 accum_light(vec4[4] c)
 {
@@ -184,9 +207,23 @@ void main()
     vec4[4] lighting_colors = vec4[4](vec4(0.), vec4(0.), vec4(0.), vec4(0.));
     if ((lighting_switches & LSW_VRTCOLOR_ENABLED) != 0U)
         color = fragcol;
-    if (lights.type == uint(3) && (lighting_switches & LSW_LIGHTING_ENABLED) != 0U)
+    if ((lighting_switches & LSW_LIGHTING_ENABLED) != 0U)
     {
-        lighting_colors = light_directional(lights, norm, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U);
+        for (uint i = 0U; i < 16U; ++i)
+        {
+            switch (lights[i].type)
+            {
+                case 1U: lighting_colors = component_add(
+                    lighting_colors,
+                    light_point(lights[i], norm, fpos, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U));
+                    break;
+                case 3U: lighting_colors = component_add(
+                    lighting_colors,
+                    light_directional(lights[i], norm, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U));
+                    break;
+            }
+        }
+        lighting_colors[3] = material.emis;
         color = accum_light(lighting_colors);
     }
     if (fntex > 1U)

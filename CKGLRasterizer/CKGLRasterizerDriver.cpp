@@ -114,7 +114,7 @@ CKBOOL CKGLRasterizerDriver::InitializeCaps()
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_HARDWARETL;
     m_3DCaps.MaxNumberTextureStage = 8; //?
     m_3DCaps.MaxNumberBlendStage = 8;   //fake it until we make it
-    m_3DCaps.MaxActiveLights = 16;      //this is a lie (at least for now)
+    m_3DCaps.MaxActiveLights = MAX_ACTIVE_LIGHTS;
     m_3DCaps.MinTextureWidth = 1;       //we are using texture of width 1 for blank textures
     m_3DCaps.MinTextureHeight = 1;      //so we know it must work... or do we?
     m_3DCaps.MaxTextureWidth = 1024;    //we know OpenGL guarantees this to be at least 1024...
