@@ -20,6 +20,8 @@
 #define LSW_SPECULAR_ENABLED 0x0001
 #define LSW_LIGHTING_ENABLED 0x0002
 #define LSW_VRTCOLOR_ENABLED 0x0004
+#define LSW_SPCL_OVERR_FORCE 0x0008
+#define LSW_SPCL_OVERR_ONLY  0x0010
 
 //vertex properties
 #define VP_HAS_COLOR      0x10000000 //vertex attribute includes color data
@@ -32,6 +34,8 @@
 #define TVP_TC_CSREFV     0x04000000 //use camera space reflect vector ......
 #define TVP_TC_TRANSF     0x08000000 //tex-coords should be transformed by its matrix
 #define TVP_TC_PROJECTED  0x10000000 //tex-coords should be projected
+
+#define MAX_ACTIVE_LIGHTS 16
 
 LRESULT WINAPI GL_WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
 
@@ -141,13 +145,41 @@ struct CKGLMaterialUniform
     VxColor diff;
     VxColor spcl;
     float spcl_strength;
-    float padding[3];
+    CKDWORD padding[3];
     VxColor emis;
 
     CKGLMaterialUniform(CKMaterialData md) :
         ambi(md.Ambient), diff(md.Diffuse),
         spcl(md.Specular), spcl_strength(md.SpecularPower),
         emis(md.Emissive), padding{0, 0, 0} {}
+};
+
+struct CKGLLightUniform
+{
+    CKDWORD type;
+    CKDWORD padding[3];
+    VxColor ambi;
+    VxColor diff;
+    VxColor spcl;
+    VxVector4 dir;
+    VxVector4 pos;
+    float range;
+    float falloff;
+    float theta;
+    float phi;
+    float a0;
+    float a1;
+    float a2;
+    float unused;
+
+    CKGLLightUniform() {}
+    CKGLLightUniform(CKLightData ld) :
+        type(ld.Type), ambi(ld.Ambient), diff(ld.Diffuse), spcl(ld.Specular),
+        dir(VxVector4(ld.Direction.x, ld.Direction.y, ld.Direction.z, 0.)),
+        pos(VxVector4(ld.Position.x, ld.Position.y, ld.Position.z, 1.)),
+        range(ld.Range), falloff(ld.Falloff), theta(ld.InnerSpotCone),
+        phi(ld.OuterSpotCone), a0(ld.Attenuation0), a1(ld.Attenuation1),
+        a2(ld.Attenuation2), padding{0, 0, 0}, unused(0) {}
 };
 
 enum TexOp // for CKGLTexCombinatorUniform::op
@@ -305,6 +337,7 @@ public:
     void set_step_mode(int mode);
     void step_mode_wait();
     void toggle_batch_status();
+    void toggle_specular_handling();
 
 protected:
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
@@ -336,7 +369,8 @@ private:
     CKDWORD m_CurrentProgram = INVALID_VALUE;
     CKDWORD m_CurrentIndexBuffer = INVALID_VALUE;
     std::unordered_map<std::string, GLint> m_UniformLocationCache;
-    std::vector<std::pair<bool, CKLightData>> m_lights;
+    std::vector<std::pair<CKDWORD, CKLightData>> m_lights;
+    CKGLLightUniform m_lights_data[MAX_ACTIVE_LIGHTS];
     VxVector m_viewpos;
     CKDWORD m_lighting_flags;
     std::string m_orig_title;
@@ -355,6 +389,7 @@ private:
     CKDWORD m_tex_vp[8] = {0};
     GLuint m_ubo_mat = 0;
     GLuint m_ubo_texc = 0;
+    GLuint m_ubo_lights = 0;
 
     //debugging
     int m_step_mode = 0;

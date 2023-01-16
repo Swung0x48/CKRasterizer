@@ -1,36 +1,33 @@
 #version 330 core
+#define DEBUG
 const uint LSW_SPECULAR_ENABLED = 0x0001U;
 const uint LSW_LIGHTING_ENABLED = 0x0002U;
 const uint LSW_VRTCOLOR_ENABLED = 0x0004U;
+const uint LSW_SPCL_OVERR_FORCE = 0x0008U;
+const uint LSW_SPCL_OVERR_ONLY  = 0x0010U;
 
 struct mat_t
 {
     vec4 ambi;          //@0
     vec4 diff;          //@16
     vec4 spcl;          //@32
-    float spcl_strength;//@48
+    float spcl_strength;//@48 + 12 padding
     vec4 emis;          //@64
 };
 struct light_t
 {
     //1=point, 2=spot, 3=directional
-    uint type;
-    vec4 ambi;
-    vec4 diff;
-    vec4 spcl;
+    uint type;          //@0 + 12 padding
+    vec4 ambi;          //@16
+    vec4 diff;          //@32
+    vec4 spcl;          //@48
     //directional
-    vec4 dir;
+    vec4 dir;           //@64
     //point & spot
-    vec4 pos;
-    float range;
-    //point
-    float a0;
-    float a1;
-    float a2;
-    //spot (cone)
-    float falloff;
-    float theta;
-    float phi;
+    vec4 pos;           //@80
+    vec4 psparam1;      //@96, xyzw=range, falloff, theta, phi
+    vec4 psparam2;      //@112, xyzw=a0, a1, a2
+    //stride per element: 128
 };
 struct texcomb_t
 {
@@ -46,7 +43,6 @@ in vec3 fnormal;
 in vec4 fragcol;
 flat in uint fntex;
 in vec2 ftexcoord[8];
-out vec4 color;
 uniform float alpha_thresh;
 uniform uint alphatest_flags;
 uniform uint fog_flags;
@@ -54,34 +50,74 @@ uniform vec4 fog_color;
 uniform vec3 fog_parameters; //start, end, density
 uniform vec3 vpos; //camera position
 uniform vec2 depth_range; //near-far plane distances for fog calculation
+out vec4 color;
 layout (std140) uniform MatUniformBlock
 {
     mat_t material;
 };
 uniform uint lighting_switches;
-uniform light_t lights; // will become array in the future
+layout (std140) uniform LightsUniformBlock
+{
+    light_t lights[16]; // this is 2 KiB already...
+};
 layout (std140) uniform TexCombinatorUniformBlock
 {
     texcomb_t texcomb[8];
 };
-uniform sampler2D tex[8]; //this will become an array in the future
+uniform sampler2D tex[8];
 
-vec4[4] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
+vec4[3] light_point(light_t l, vec3 normal, vec3 fpos, vec3 vdir, bool spec_enabled)
+{
+    float range = l.psparam1.x;
+    float a0 = l.psparam2.x;
+    float a1 = l.psparam2.y;
+    float a2 = l.psparam2.z;
+    vec3 ldir = normalize(l.pos.xyz - fpos);
+    float dist = length(l.pos.xyz - fpos);
+    if (dist > range) return vec4[3](vec4(0.), vec4(0.), vec4(0.));
+    float atnf = 1. / (a0 + a1 * dist + a2 * dist * dist);
+    float diff = max(dot(normal, ldir), 0.);
+    vec4 amb = l.ambi * material.ambi;
+    vec4 dif = diff * l.diff * material.diff;
+    vec4 spc = vec4(0.);
+    if (spec_enabled
+#ifdef DEBUG
+    && (lighting_switches & LSW_SPCL_OVERR_FORCE) == 0U
+#endif
+    )
+    {
+        vec3 refldir = reflect(-ldir, normal);
+        float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.spcl_strength);
+        spc = 4 * l.spcl * material.spcl * specl;
+#ifdef DEBUG
+        if ((lighting_switches & LSW_SPCL_OVERR_ONLY) != 0U)
+            return vec4[3](vec4(0.), vec4(0.), spc * atnf);
+#endif
+    }
+    return vec4[3](amb * atnf, dif * atnf, spc * atnf);
+}
+vec4[3] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
 {
     vec3 ldir = normalize(-l.dir.xyz);
     float diff = max(dot(normal, ldir), 0.);
     vec4 amb = l.ambi * material.ambi;
     vec4 dif = diff * l.diff * material.diff;
     vec4 spc = vec4(0.);
-    vec4 ems = material.emis;
-    if (spec_enabled)
+    if (spec_enabled
+#ifdef DEBUG
+    && (lighting_switches & LSW_SPCL_OVERR_FORCE) == 0U
+#endif
+    )
     {
         vec3 refldir = reflect(-ldir, normal);
-        float specl = pow(max(dot(vdir, refldir), 0.), material.spcl_strength);
-        spc = l.spcl * material.spcl * specl;
-        //return vec4[4](vec4(0), vec4(0), spc, vec4(0));
+        float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.spcl_strength);
+        spc = 4 * l.spcl * material.spcl * specl;
+#ifdef DEBUG
+        if ((lighting_switches & LSW_SPCL_OVERR_ONLY) != 0U)
+            return vec4[3](vec4(0), vec4(0), spc);
+#endif
     }
-    return vec4[4](amb, dif, spc, ems);
+    return vec4[3](amb, dif, spc);
 }
 bool alpha_test(float in_alpha)
 {
@@ -109,9 +145,17 @@ vec4 clamp_color(vec4 c)
 {
     return clamp(c, vec4(0, 0, 0, 0), vec4(1, 1, 1, 1));
 }
-vec4 accum_light(vec4[4] c)
+vec4[3] component_add(vec4[3] a, vec4[3] b)
 {
-    return clamp_color(vec4((c[0] + c[1] + c[2] + c[3]).xyz, 1.));
+    return vec4[3](a[0] + b[0], a[1] + b[1], a[2] + b[2]);
+}
+vec4 accum_light(vec4[3] c)
+{
+    return clamp_color(c[0] + c[1] + c[2]);
+}
+vec4 accum_light_e(vec4[4] c)
+{
+    return clamp_color(c[0] + c[1] + c[2] + c[3]);
 }
 float fog_factor(float dist, float rdist, uint mode)
 {
@@ -148,10 +192,10 @@ vec4 select_argument(uint stage, uint source, vec4 tex, vec4 cum, vec4 tmp, vec4
     {
         case 0U: ret = lights[1]; break; //DIFFUSE
         case 1U: if (stage == 0U)        //CURRENT
-                    ret = accum_light(lights);
+                    ret = accum_light_e(lights);
                 else ret = cum; break;
         case 2U: ret = tex; break;       //TEXTURE
-        case 3U: ret = vec4(0.); break;   //TFACTOR
+        case 3U: ret = vec4(0.); break;  //TFACTOR, unsupported
         case 4U: ret = lights[2]; break; //SPECULAR
         case 5U: ret = tmp; break;       //TEMP
         case 6U: ret = dw2color(texcomb[stage].constant); break; //CONSTANT
@@ -181,13 +225,36 @@ void main()
     }
 
     color = vec4(1., 1., 1., 1.);
-    vec4[4] lighting_colors = vec4[4](vec4(0.), vec4(0.), vec4(0.), vec4(0.));
+    vec4[3] lighting_colors = vec4[3](vec4(0.), vec4(0.), vec4(0.));
+    vec4[4] lighting_colors_e = vec4[4](vec4(0.), vec4(0.), vec4(0.), vec4(0.));
     if ((lighting_switches & LSW_VRTCOLOR_ENABLED) != 0U)
         color = fragcol;
-    if (lights.type == uint(3) && (lighting_switches & LSW_LIGHTING_ENABLED) != 0U)
+    if ((lighting_switches & LSW_LIGHTING_ENABLED) != 0U)
     {
-        lighting_colors = light_directional(lights, norm, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U);
+        for (uint i = 0U; i < 16U; ++i)
+        {
+            switch (lights[i].type)
+            {
+                case 1U: lighting_colors = component_add(
+                    lighting_colors,
+                    light_point(lights[i], norm, fpos, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U));
+                    break;
+                case 3U: lighting_colors = component_add(
+                    lighting_colors,
+                    light_directional(lights[i], norm, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U));
+                    break;
+            }
+        }
         color = accum_light(lighting_colors);
+        lighting_colors_e = vec4[4](lighting_colors[0], lighting_colors[1], lighting_colors[2], vec4(0.));
+#ifdef DEBUG
+        if ((lighting_switches & LSW_SPECULAR_ENABLED) == 0U ||
+            (lighting_switches & LSW_SPECULAR_ENABLED) != 0U && (lighting_switches & LSW_SPCL_OVERR_ONLY) == 0U)
+#endif
+        {
+            color += material.emis;
+            lighting_colors_e[3] = material.emis;
+        }
     }
     if (fntex > 1U)
     {
@@ -215,10 +282,10 @@ void main()
             uint ca2 = (texcomb[i].cargs & 0xff00U) >> 8;
             uint aa1 = texcomb[i].aargs & 0xffU;
             uint aa2 = (texcomb[i].aargs & 0xff00U) >> 8;
-            vec4 cv1 = select_argument(i, ca1, txc, accum, temp[i], lighting_colors);
-            vec4 cv2 = select_argument(i, ca2, txc, accum, temp[i], lighting_colors);
-            vec4 av1 = select_argument(i, aa1, txc, accum, temp[i], lighting_colors);
-            vec4 av2 = select_argument(i, aa2, txc, accum, temp[i], lighting_colors);
+            vec4 cv1 = select_argument(i, ca1, txc, accum, temp[i], lighting_colors_e);
+            vec4 cv2 = select_argument(i, ca2, txc, accum, temp[i], lighting_colors_e);
+            vec4 av1 = select_argument(i, aa1, txc, accum, temp[i], lighting_colors_e);
+            vec4 av2 = select_argument(i, aa2, txc, accum, temp[i], lighting_colors_e);
             vec4 rc = combine_value(cop, cv1, cv2, txc.a);
             vec4 ra = combine_value(aop, av1, av2, txc.a);
             if (dst == 1U)

@@ -59,7 +59,7 @@ void main()
         else if ((texp[i] & TVP_TC_CSVECP) != 0U)
             tcout = pos;
         else if ((texp[i] & TVP_TC_CSREFV) != 0U)
-            tcout = vec4(reflect(normalize(pos.xyz), ffnormal), 1.);
+            tcout = vec4(reflect(normalize((view * world * pos).xyz), ffnormal), 1.);
         else tcout = vec4(texcoord[i], 0., 0.);
         if ((texp[i] & TVP_TC_TRANSF) != 0U)
             tcout = textr[i] * tcout;
