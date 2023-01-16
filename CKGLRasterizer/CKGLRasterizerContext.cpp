@@ -855,6 +855,19 @@ void CKGLRasterizerContext::toggle_batch_status()
         set_title_status(nullptr);
 }
 
+void CKGLRasterizerContext::toggle_specular_handling()
+{
+    CKDWORD next = 0;
+    if (m_lighting_flags & LSW_SPCL_OVERR_FORCE)
+        next = LSW_SPCL_OVERR_ONLY;
+    else if (m_lighting_flags & LSW_SPCL_OVERR_ONLY)
+        next = 0;
+    else next = LSW_SPCL_OVERR_FORCE;
+    m_lighting_flags &= ~0U ^ (LSW_SPCL_OVERR_FORCE | LSW_SPCL_OVERR_ONLY);
+    m_lighting_flags |= next;
+    GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
+}
+
 CKBOOL CKGLRasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *Value)
 {
     return CKRasterizerContext::GetRenderState(State, Value);

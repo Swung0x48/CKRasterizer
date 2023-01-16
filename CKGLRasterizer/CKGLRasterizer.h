@@ -20,6 +20,8 @@
 #define LSW_SPECULAR_ENABLED 0x0001
 #define LSW_LIGHTING_ENABLED 0x0002
 #define LSW_VRTCOLOR_ENABLED 0x0004
+#define LSW_SPCL_OVERR_FORCE 0x0008
+#define LSW_SPCL_OVERR_ONLY  0x0010
 
 //vertex properties
 #define VP_HAS_COLOR      0x10000000 //vertex attribute includes color data
@@ -335,6 +337,7 @@ public:
     void set_step_mode(int mode);
     void step_mode_wait();
     void toggle_batch_status();
+    void toggle_specular_handling();
 
 protected:
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
