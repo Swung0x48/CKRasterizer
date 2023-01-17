@@ -339,6 +339,7 @@ public:
     void step_mode_wait();
     void toggle_batch_status();
     void toggle_specular_handling();
+    void toggle_2d_rendering();
 
 protected:
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
@@ -395,6 +396,8 @@ private:
 #if USE_FBO_AND_POSTPROCESSING
     CKGLPostProcessingPipeline *m_3dpp = nullptr;
     CKGLPostProcessingPipeline *m_2dpp = nullptr;
+    int m_target_mode = 0; // 0=screen, 1=3d, -1=2d
+    bool m_2d_enabled = true;
 #endif
 
     //debugging

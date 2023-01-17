@@ -21,7 +21,7 @@ LRESULT CALLBACK keyboard_handler(int code, WPARAM kc, LPARAM rc)
             case 'Z': r->set_step_mode(2); break;
             case 'W': r->toggle_batch_status(); break;
             case 'S': r->toggle_specular_handling(); break;
-            case 'E': break; //toggle 2D entites rendering (only supported in FBO enabled builds)
+            case 'E': r->toggle_2d_rendering(); break;
             case 'D': break; //cycle through post-processing shaders ("super secret settings")
 		}
 	}

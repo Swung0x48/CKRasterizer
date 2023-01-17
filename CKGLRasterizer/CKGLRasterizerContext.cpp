@@ -445,18 +445,19 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
         m_Vsync = vsync;
         wglSwapIntervalEXT(vsync ? 1 : 0);
     }
-    CKInputManager *im = (CKInputManager*)rst_ckctx->GetManagerByGuid(CKGUID(0xf787c904));
-    Vx2DVector x;
-    im->GetMousePosition(x, false);
 
 #if USE_FBO_AND_POSTPROCESSING
+    m_target_mode = 0;
     GLCall(glEnable(GL_BLEND));
     GLCall(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
     m_3dpp->draw();
-    m_2dpp->draw();
+    if (m_2d_enabled)
+        m_2dpp->draw();
     GLCall(glUseProgram(m_CurrentProgram));
     _SetRenderState(VXRENDERSTATE_SRCBLEND, m_renderst[VXRENDERSTATE_SRCBLEND]);
     _SetRenderState(VXRENDERSTATE_DESTBLEND, m_renderst[VXRENDERSTATE_DESTBLEND]);
+    _SetRenderState(VXRENDERSTATE_ZENABLE, m_renderst[VXRENDERSTATE_ZENABLE]);
+    _SetRenderState(VXRENDERSTATE_CULLMODE, m_renderst[VXRENDERSTATE_CULLMODE]);
 #endif
 
     SwapBuffers(m_DC);
@@ -744,13 +745,27 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         case VXRENDERSTATE_SRCBLEND:
         {
             srcblend = vxblend2glblfactor((VXBLEND_MODE)Value);
-            GLCall(glBlendFunc(srcblend, dstblend));
+#if USE_FBO_AND_POSTPROCESSING
+            if (m_target_mode == -1)
+            {
+                GLCall(glBlendFuncSeparate(srcblend, dstblend, GL_ONE_MINUS_DST_ALPHA, GL_ONE));
+            }
+            else
+#endif
+                GLCall(glBlendFunc(srcblend, dstblend));
             return TRUE;
         }
         case VXRENDERSTATE_DESTBLEND:
         {
             dstblend = vxblend2glblfactor((VXBLEND_MODE)Value);
-            GLCall(glBlendFunc(srcblend, dstblend));
+#if USE_FBO_AND_POSTPROCESSING
+            if (m_target_mode == -1)
+            {
+                GLCall(glBlendFuncSeparate(srcblend, dstblend, GL_ONE_MINUS_DST_ALPHA, GL_ONE));
+            }
+            else
+#endif
+                GLCall(glBlendFunc(srcblend, dstblend));
             return TRUE;
         }
         case VXRENDERSTATE_INVERSEWINDING:
@@ -936,6 +951,13 @@ void CKGLRasterizerContext::toggle_specular_handling()
     m_lighting_flags &= ~0U ^ (LSW_SPCL_OVERR_FORCE | LSW_SPCL_OVERR_ONLY);
     m_lighting_flags |= next;
     GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
+}
+
+void CKGLRasterizerContext::toggle_2d_rendering()
+{
+#if USE_FBO_AND_POSTPROCESSING
+    m_2d_enabled = !m_2d_enabled;
+#endif
 }
 
 CKBOOL CKGLRasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *Value)
@@ -1228,9 +1250,29 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
 
 #if USE_FBO_AND_POSTPROCESSING
     if (vbo->m_VertexFormat & CKRST_VF_RASTERPOS)
-        m_2dpp->set_as_target();
+    {
+        if (m_target_mode != -1)
+        {
+            m_target_mode = -1;
+            m_2dpp->set_as_target();
+            GLint s, d;
+            GLCall(glGetIntegerv(GL_BLEND_SRC_RGB, &s));
+            GLCall(glGetIntegerv(GL_BLEND_DST_RGB, &d));
+            GLCall(glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE));
+        }
+    }
     else
-        m_3dpp->set_as_target();
+    {
+        if (m_target_mode != 1)
+        {
+            m_target_mode = 1;
+            m_3dpp->set_as_target();
+            GLint s, d;
+            GLCall(glGetIntegerv(GL_BLEND_SRC_RGB, &s));
+            GLCall(glGetIntegerv(GL_BLEND_DST_RGB, &d));
+            GLCall(glBlendFunc(s, d));
+        }
+    }
 #endif
 
     vbo->Bind(this);
@@ -1284,11 +1326,28 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
 #if USE_FBO_AND_POSTPROCESSING
     if (vbo->m_VertexFormat & CKRST_VF_RASTERPOS)
     {
-        m_2dpp->set_as_target();
-        GLCall(glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE_MINUS_DST_ALPHA, GL_ONE));
+        if (m_target_mode != -1)
+        {
+            m_target_mode = -1;
+            m_2dpp->set_as_target();
+            GLint s, d;
+            GLCall(glGetIntegerv(GL_BLEND_SRC_RGB, &s));
+            GLCall(glGetIntegerv(GL_BLEND_DST_RGB, &d));
+            GLCall(glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE));
+        }
     }
     else
-        m_3dpp->set_as_target();
+    {
+        if (m_target_mode != 1)
+        {
+            m_target_mode = 1;
+            m_3dpp->set_as_target();
+            GLint s, d;
+            GLCall(glGetIntegerv(GL_BLEND_SRC_RGB, &s));
+            GLCall(glGetIntegerv(GL_BLEND_DST_RGB, &d));
+            GLCall(glBlendFunc(s, d));
+        }
+    }
 #endif
 
     if (!vbo) return FALSE;
