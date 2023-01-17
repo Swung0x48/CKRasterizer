@@ -37,11 +37,11 @@
 
 #define MAX_ACTIVE_LIGHTS 16
 
+#define USE_FBO_AND_POSTPROCESSING 1
+
 LRESULT WINAPI GL_WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
 
 class CKGLRasterizerContext;
-
-extern CKContext *rst_ckctx;
 
 class CKGLRasterizer : public CKRasterizer
 {
@@ -103,6 +103,7 @@ struct pair_hash
 class CKGLVertexFormat;
 struct CKGLVertexBuffer;
 struct CKGLIndexBuffer;
+class CKGLPostProcessingPipeline;
 
 typedef struct CKGLVertexShaderDesc : public CKVertexShaderDesc
 {
@@ -390,6 +391,10 @@ private:
     GLuint m_ubo_mat = 0;
     GLuint m_ubo_texc = 0;
     GLuint m_ubo_lights = 0;
+#if USE_FBO_AND_POSTPROCESSING
+    CKGLPostProcessingPipeline *m_3dpp = nullptr;
+    CKGLPostProcessingPipeline *m_2dpp = nullptr;
+#endif
 
     //debugging
     int m_step_mode = 0;
