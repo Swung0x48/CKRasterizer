@@ -217,7 +217,35 @@ void *CKDX11RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, C
 }
 CKBOOL CKDX11RasterizerContext::UnlockIndexBuffer(CKDWORD IB) { return CKRasterizerContext::UnlockIndexBuffer(IB); }
 CKBOOL CKDX11RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat) { return 0; }
-CKBOOL CKDX11RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat) { return 0; }
+CKBOOL CKDX11RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat) { 
+    if (VShader >= m_VertexShaders.Size() || !DesiredFormat)
+        return FALSE;
+    CKVertexShaderDesc *desc = m_VertexShaders[VShader];
+    if (DesiredFormat == desc) {
+        CKDX11VertexShaderDesc *d11desc = static_cast<CKDX11VertexShaderDesc *>(desc);
+        // 
+    }
+    return TRUE;
+}
 CKBOOL CKDX11RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat) { return 0; }
-CKBOOL CKDX11RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat) { return 0; }
+CKBOOL CKDX11RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat)
+{
+    if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
+        return FALSE;
+    HRESULT hr;
+    D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
+    if (DesiredFormat->m_Flags & CKRST_VB_DYNAMIC)
+        usage = D3D11_USAGE_DYNAMIC;
+    auto *vbDesc = m_VertexBuffers[VB];
+    if (vbDesc)
+        delete vbDesc;
+    auto *desc = new CKDX11VertexBufferDesc;
+    desc->DxDesc.Usage = usage;
+    desc->DxDesc.ByteWidth = DesiredFormat->m_MaxVertexCount;
+    desc->DxDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    desc->DxDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    D3DCall(m_Device->CreateBuffer(&desc->DxDesc, nullptr, desc->DxBuffer.GetAddressOf()));
+    m_VertexBuffers[VB] = desc;
+    return SUCCEEDED(hr);
+}
 CKBOOL CKDX11RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat) { return 0; }

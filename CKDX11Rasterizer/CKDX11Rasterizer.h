@@ -246,3 +246,9 @@ public:
     D3D11_BUFFER_DESC DxDesc;
     CKDX11IndexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
 } CKDX11IndexBufferDesc;
+
+typedef struct CKDX11VertexShaderDesc: public CKVertexShaderDesc
+{
+    Microsoft::WRL::ComPtr<ID3DBlob> DxBlob;
+    Microsoft::WRL::ComPtr<ID3D11VertexShader> DxShader;
+} CKDX11VertexShaderDesc;
