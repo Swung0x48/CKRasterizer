@@ -1,3 +1,9 @@
 BUILTIN_VERTEX_SHADER   CKGLR_VERT_SHADER vert.glsl
 BUILTIN_FRAGMENT_SHADER CKGLR_FRAG_SHADER frag.glsl
 
+1						CKGLRPP_VERT_SHDR post/vs.glsl
+1						CKGLRPP_FRAG_SHDR post/default.glsl
+2						CKGLRPP_FRAG_SHDR post/yflip.glsl
+3						CKGLRPP_FRAG_SHDR post/redwave.glsl
+4						CKGLRPP_FRAG_SHDR post/normalvideo.glsl
+5						CKGLRPP_FRAG_SHDR post/altitudinemvideo.glsl

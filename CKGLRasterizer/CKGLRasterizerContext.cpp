@@ -1,7 +1,11 @@
 #include "CKGLRasterizer.h"
 #include "CKGLVertexBuffer.h"
 #include "CKGLIndexBuffer.h"
+#include "CKGLPostProcessing.h"
 #include "EnumMaps.h"
+
+#include <CKContext.h>
+#include <CKInputManager.h>
 
 #define LOG_LOADTEXTURE 0
 #define LOG_CREATETEXTURE 0
@@ -55,7 +59,7 @@ static HMODULE get_self_module()
     return self_module;
 }
 
-CKDWORD get_resource_size(const char* type, const char* name)
+unsigned int get_resource_size(const char* type, const char* name)
 {
     HRSRC rsc = FindResourceA(get_self_module(), name, type);
     if (!rsc) return 0;
@@ -78,6 +82,12 @@ CKGLRasterizerContext::CKGLRasterizerContext()
 CKGLRasterizerContext::~CKGLRasterizerContext()
 {
     glDeleteProgram(m_CurrentProgram);
+#if USE_FBO_AND_POSTPROCESSING
+    m_2dpp->clear_stages();
+    delete m_2dpp;
+    m_3dpp->clear_stages();
+    delete m_3dpp;
+#endif
     if (m_Owner->m_FullscreenContext == this)
         m_Owner->m_FullscreenContext = NULL;
 
@@ -271,6 +281,8 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     m_CurrentProgram = glCreateProgram();
     GLCall(glAttachShader(m_CurrentProgram, vs->GLShader));
     GLCall(glAttachShader(m_CurrentProgram, ps->GLShader));
+    GLCall(glBindFragDataLocation(m_CurrentProgram, 0, "color"));
+    GLCall(glBindFragDataLocation(m_CurrentProgram, 1, "normal"));
     GLCall(glLinkProgram(m_CurrentProgram));
     GLCall(glValidateProgram(m_CurrentProgram));
     GLCall(glUseProgram(m_CurrentProgram));
@@ -348,12 +360,34 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
 
     set_position_transformed(true);
     set_vertex_has_color(true);
+
+    m_renderst[VXRENDERSTATE_SRCBLEND] = VXBLEND_ONE;
+    m_renderst[VXRENDERSTATE_DESTBLEND] = VXBLEND_ZERO;
+
+#if USE_FBO_AND_POSTPROCESSING
+    m_3dpp = new CKGLPostProcessingPipeline();
+    m_2dpp = new CKGLPostProcessingPipeline();
+    int l = get_resource_size("CKGLRPP_FRAG_SHDR", (char*)4);
+    char *s = (char*)get_resource_data("CKGLRPP_FRAG_SHDR", (char*)4);
+    m_3dpp->add_stage(new CKGLPostProcessingStage(std::string(s, l)));
+    l = get_resource_size("CKGLRPP_FRAG_SHDR", (char*)1);
+    s = (char*)get_resource_data("CKGLRPP_FRAG_SHDR", (char*)1);
+    m_2dpp->add_stage(new CKGLPostProcessingStage(std::string(s, l)));
+    m_3dpp->setup_fbo(true, true, m_Width, m_Height);
+    m_2dpp->setup_fbo(false, false, m_Width, m_Height);
+#endif
     return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::Resize(int PosX, int PosY, int Width, int Height, CKDWORD Flags)
 {
-    return 1;
+    m_Height = Height;
+    m_Width = Width;
+#if USE_FBO_AND_POSTPROCESSING
+    m_3dpp->setup_fbo(true, true, m_Width, m_Height);
+    m_2dpp->setup_fbo(false, false, m_Width, m_Height);
+#endif
+    return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD Stencil, int RectCount, CKRECT *rects)
@@ -368,6 +402,9 @@ CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
         GLCall(glDepthMask(true));
         mask |= GL_DEPTH_BUFFER_BIT;
     }
+#if USE_FBO_AND_POSTPROCESSING
+    GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+#endif
     VxColor c(Ccol);
     GLCall(glClearColor(c.r, c.g, c.b, c.a));
     GLCall(glClearDepth(Z));
@@ -379,6 +416,13 @@ CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
         GLCall(glClear(mask));
         BackToFront(FALSE);
     }
+#if USE_FBO_AND_POSTPROCESSING
+    m_3dpp->set_as_target();
+    GLCall(glClear(mask));
+    m_2dpp->set_as_target();
+    GLCall(glClearColor(c.r, c.g, c.b, 0));
+    GLCall(glClear(mask));
+#endif
     return 1;
 }
 
@@ -392,6 +436,21 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
     directbat = 0;
     vbbat = 0;
     vbibbat = 0;
+
+    CKInputManager *im = (CKInputManager*)rst_ckctx->GetManagerByGuid(CKGUID(0xf787c904));
+    Vx2DVector x;
+    im->GetMousePosition(x, false);
+
+#if USE_FBO_AND_POSTPROCESSING
+    GLCall(glEnable(GL_BLEND));
+    GLCall(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
+    m_3dpp->draw();
+    m_2dpp->draw();
+    GLCall(glUseProgram(m_CurrentProgram));
+    _SetRenderState(VXRENDERSTATE_SRCBLEND, m_renderst[VXRENDERSTATE_SRCBLEND]);
+    _SetRenderState(VXRENDERSTATE_DESTBLEND, m_renderst[VXRENDERSTATE_DESTBLEND]);
+#endif
+
     SwapBuffers(m_DC);
     TracyGpuCollect;
     if (m_step_mode == 1)
@@ -406,6 +465,9 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 CKBOOL CKGLRasterizerContext::BeginScene()
 {
     FrameMark;
+#if USE_FBO_AND_POSTPROCESSING
+    //GLCall(glUseProgram(m_CurrentProgram));
+#endif
     return 1;
 }
 
@@ -1156,6 +1218,13 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
     CKGLIndexBuffer *ibo = static_cast<CKGLIndexBuffer*>(m_IndexBuffers[IB]);
     if (!ibo) return NULL;
 
+#if USE_FBO_AND_POSTPROCESSING
+    if (vbo->m_VertexFormat & CKRST_VF_RASTERPOS)
+        m_2dpp->set_as_target();
+    else
+        m_3dpp->set_as_target();
+#endif
+
     vbo->Bind(this);
 #if USE_SEPARATE_ATTRIBUTE
     if (m_current_vf != vbo->m_VertexFormat)
@@ -1203,6 +1272,17 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
 CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBuffer *vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt, bool vbbound)
 {
     ZoneScopedN(__FUNCTION__);
+
+#if USE_FBO_AND_POSTPROCESSING
+    if (vbo->m_VertexFormat & CKRST_VF_RASTERPOS)
+    {
+        m_2dpp->set_as_target();
+        GLCall(glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE_MINUS_DST_ALPHA, GL_ONE));
+    }
+    else
+        m_3dpp->set_as_target();
+#endif
+
     if (!vbo) return FALSE;
     if (!vbbound) vbo->Bind(this);
 
