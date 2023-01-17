@@ -125,6 +125,7 @@ LRESULT WINAPI GL_WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
+PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = nullptr;
 CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
     CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
@@ -243,6 +244,9 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     {
         return 0;
     }
+    wglSwapIntervalEXT = reinterpret_cast<PFNWGLSWAPINTERVALEXTPROC>(wglGetProcAddress("wglSwapIntervalEXT"));
+    if (wglSwapIntervalEXT)
+        wglSwapIntervalEXT(m_Vsync ? 1 : 0);
     TracyGpuContext;
 
     m_Window = Window;
@@ -436,7 +440,11 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
     directbat = 0;
     vbbat = 0;
     vbibbat = 0;
-
+    if (vsync != m_Vsync && wglSwapIntervalEXT)
+    {
+        m_Vsync = vsync;
+        wglSwapIntervalEXT(vsync ? 1 : 0);
+    }
     CKInputManager *im = (CKInputManager*)rst_ckctx->GetManagerByGuid(CKGUID(0xf787c904));
     Vx2DVector x;
     im->GetMousePosition(x, false);

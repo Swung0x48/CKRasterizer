@@ -364,6 +364,7 @@ public:
     HGLRC m_RC;
     HWND m_HWND;
 private:
+    CKBOOL m_Vsync = FALSE;
     constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
     CKDWORD m_CurrentVertexShader = INVALID_VALUE;
     CKDWORD m_CurrentPixelShader = INVALID_VALUE;
