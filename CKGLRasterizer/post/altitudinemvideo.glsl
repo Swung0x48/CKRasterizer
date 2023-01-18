@@ -10,7 +10,7 @@ out vec4 color;
 out vec3 normal;
 void main()
 {
-    color = vec4(vec3(texture(norpth_in, texcoords).w), 1.);
+    color = vec4(vec3(pow(texture(norpth_in, texcoords).w, 3)), 1.);
     normal = texture(norpth_in, texcoords).xyz;
     gl_FragDepth = texture(norpth_in, texcoords).w;
 }
