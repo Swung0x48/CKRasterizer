@@ -7,3 +7,5 @@ BUILTIN_FRAGMENT_SHADER CKGLR_FRAG_SHADER frag.glsl
 3						CKGLRPP_FRAG_SHDR post/redwave.glsl
 4						CKGLRPP_FRAG_SHDR post/normalvideo.glsl
 5						CKGLRPP_FRAG_SHDR post/altitudinemvideo.glsl
+6						CKGLRPP_FRAG_SHDR post/edgedetect.glsl
+7						CKGLRPP_FRAG_SHDR post/blobfilter.glsl
