@@ -14,13 +14,13 @@ void main()
     color = texture(color_in, texcoords);
     vec2 texel_size = 1. / screen_size;
     float radius = 4.;
-    float step = 1.;
-    for (float x = 0; x <= radius; x += step)
-        for (float y = 0; y <= radius; y += step)
+    float stp = 1.;
+    for (float x = 0; x <= radius; x += stp)
+        for (float y = 0; y <= radius; y += stp)
         {
             vec2 d[4] = vec2[4](vec2(-x, -y), vec2(-x, y),
                                 vec2( x, -y), vec2( x, y));
-            float w = step(sqrt(x * x + y * y) / (radius * step), 1.);
+            float w = step(sqrt(x * x + y * y) / radius, 1.);
             vec4 cc[4];
             for (int i = 0; i < 4; ++i)
                 cc[i] = texture(color_in, clamp2(texcoords + d[i] * texel_size));
