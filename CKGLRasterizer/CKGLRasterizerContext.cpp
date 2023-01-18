@@ -297,8 +297,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
     m_alpha_test_flags = 8; //alpha test off, alpha function always
     GLCall(glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags));
-    //m_fog_flags = 0; //fog off, fog type none. We do not support vertex fog.
-    m_fog_flags = 3; //fog off, fog type linear. certain crappy game doesn't init this flag
+    m_fog_flags = 0; //fog off, fog type none. We do not support vertex fog.
     VxColor init_fog_color = VxColor();
     m_fog_parameters[0] = 0.;
     m_fog_parameters[1] = 1.;
@@ -369,10 +368,13 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     m_renderst[VXRENDERSTATE_DESTBLEND] = VXBLEND_ZERO;
 
 #if USE_FBO_AND_POSTPROCESSING
+    for (m_max_ppsh_id = 1; m_max_ppsh_id < 256 && get_resource_size("CKGLRPP_FRAG_SHDR", (char*)m_max_ppsh_id) != 0; ++m_max_ppsh_id);
+    if (m_max_ppsh_id > 255) m_max_ppsh_id = 1;
+    m_current_ppsh_id = 1;
     m_3dpp = new CKGLPostProcessingPipeline();
     m_2dpp = new CKGLPostProcessingPipeline();
-    int l = get_resource_size("CKGLRPP_FRAG_SHDR", (char*)4);
-    char *s = (char*)get_resource_data("CKGLRPP_FRAG_SHDR", (char*)4);
+    int l = get_resource_size("CKGLRPP_FRAG_SHDR", (char*)m_current_ppsh_id);
+    char *s = (char*)get_resource_data("CKGLRPP_FRAG_SHDR", (char*)m_current_ppsh_id);
     m_3dpp->add_stage(new CKGLPostProcessingStage(std::string(s, l)));
     l = get_resource_size("CKGLRPP_FRAG_SHDR", (char*)1);
     s = (char*)get_resource_data("CKGLRPP_FRAG_SHDR", (char*)1);
@@ -458,6 +460,19 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
     _SetRenderState(VXRENDERSTATE_DESTBLEND, m_renderst[VXRENDERSTATE_DESTBLEND]);
     _SetRenderState(VXRENDERSTATE_ZENABLE, m_renderst[VXRENDERSTATE_ZENABLE]);
     _SetRenderState(VXRENDERSTATE_CULLMODE, m_renderst[VXRENDERSTATE_CULLMODE]);
+
+    if (m_ppsh_switch_pending)
+    {
+        if (++m_current_ppsh_id >= m_max_ppsh_id)
+            m_current_ppsh_id = 1;
+        if (m_3dpp) delete m_3dpp;
+        m_3dpp = new CKGLPostProcessingPipeline();
+        int l = get_resource_size("CKGLRPP_FRAG_SHDR", (char*)m_current_ppsh_id);
+        char *s = (char*)get_resource_data("CKGLRPP_FRAG_SHDR", (char*)m_current_ppsh_id);
+        m_3dpp->add_stage(new CKGLPostProcessingStage(std::string(s, l)));
+        m_3dpp->setup_fbo(true, true, m_Width, m_Height);
+        m_ppsh_switch_pending = false;
+    }
 #endif
 
     SwapBuffers(m_DC);
@@ -957,6 +972,13 @@ void CKGLRasterizerContext::toggle_2d_rendering()
 {
 #if USE_FBO_AND_POSTPROCESSING
     m_2d_enabled = !m_2d_enabled;
+#endif
+}
+
+void CKGLRasterizerContext::cycle_post_processing_shader()
+{
+#if USE_FBO_AND_POSTPROCESSING
+    m_ppsh_switch_pending = true;
 #endif
 }
 

@@ -340,6 +340,7 @@ public:
     void toggle_batch_status();
     void toggle_specular_handling();
     void toggle_2d_rendering();
+    void cycle_post_processing_shader();
 
 protected:
     BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
@@ -398,6 +399,9 @@ private:
     CKGLPostProcessingPipeline *m_2dpp = nullptr;
     int m_target_mode = 0; // 0=screen, 1=3d, -1=2d
     bool m_2d_enabled = true;
+    int m_max_ppsh_id = 0;
+    int m_current_ppsh_id = 0;
+    bool m_ppsh_switch_pending = false;
 #endif
 
     //debugging
