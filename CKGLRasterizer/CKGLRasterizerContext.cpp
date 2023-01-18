@@ -450,6 +450,7 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 
 #if USE_FBO_AND_POSTPROCESSING
     m_target_mode = 0;
+    m_current_vf = ~0U;
     GLCall(glEnable(GL_BLEND));
     GLCall(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
     m_3dpp->draw();
