@@ -457,16 +457,37 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 #if USE_FBO_AND_POSTPROCESSING
     m_target_mode = 0;
     m_current_vf = ~0U;
-    GLCall(glEnable(GL_BLEND));
+    if (!m_renderst[VXRENDERSTATE_ALPHABLENDENABLE])
+        _SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, TRUE);
     GLCall(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
+    if (m_renderst[VXRENDERSTATE_ZENABLE])
+        _SetRenderState(VXRENDERSTATE_ZENABLE, FALSE);
+    if (m_renderst[VXRENDERSTATE_CULLMODE] != VXCULL_NONE)
+        _SetRenderState(VXRENDERSTATE_ZENABLE, VXCULL_NONE);
+    if (m_renderst[VXRENDERSTATE_FILLMODE] != VXFILL_SOLID)
+        _SetRenderState(VXRENDERSTATE_ZENABLE, VXFILL_SOLID);
+    //here we are expecting:
+    // blending on; 1,1-srcalpha
+    // depth testing disabled or always passes
+    // face culling disabled
+    // solid polygon filling
+
     m_3dpp->draw();
     if (m_2d_enabled)
         m_2dpp->draw();
     GLCall(glUseProgram(m_CurrentProgram));
+
+    //restore to whatever the state was before
+    if (!m_renderst[VXRENDERSTATE_ALPHABLENDENABLE])
+        _SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, FALSE);
     _SetRenderState(VXRENDERSTATE_SRCBLEND, m_renderst[VXRENDERSTATE_SRCBLEND]);
     _SetRenderState(VXRENDERSTATE_DESTBLEND, m_renderst[VXRENDERSTATE_DESTBLEND]);
-    _SetRenderState(VXRENDERSTATE_ZENABLE, m_renderst[VXRENDERSTATE_ZENABLE]);
-    _SetRenderState(VXRENDERSTATE_CULLMODE, m_renderst[VXRENDERSTATE_CULLMODE]);
+    if (m_renderst[VXRENDERSTATE_ZENABLE])
+        _SetRenderState(VXRENDERSTATE_ZENABLE, TRUE);
+    if (m_renderst[VXRENDERSTATE_CULLMODE] != VXCULL_NONE)
+        _SetRenderState(VXRENDERSTATE_CULLMODE, m_renderst[VXRENDERSTATE_CULLMODE]);
+    if (m_renderst[VXRENDERSTATE_FILLMODE] != VXFILL_SOLID)
+        _SetRenderState(VXRENDERSTATE_ZENABLE, m_renderst[VXRENDERSTATE_FILLMODE]);
 
     if (m_ppsh_switch_pending)
     {
@@ -890,13 +911,46 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
             GLCall(glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters));
             return TRUE;
         }
-        //case VXRENDERSTATE_DITHERENABLE:
-        //case VXRENDERSTATE_TEXTUREPERSPECTIVE:
-        //case VXRENDERSTATE_NORMALIZENORMALS:
-        //case VXRENDERSTATE_AMBIENT:
-        //case VXRENDERSTATE_SHADEMODE:
-        //case VXRENDERSTATE_FILLMODE:
-        //case VXRENDERSTATE_CLIPPING:
+        case VXRENDERSTATE_SHADEMODE:
+        {
+            //not supported. we are stuck in Phong forever.
+            return FALSE;
+        }
+        case VXRENDERSTATE_CLIPPING:
+        {
+            //not supported. always on.
+            return FALSE;
+        }
+        case VXRENDERSTATE_DITHERENABLE:
+        {
+            //not supported or needed by modern hardware.
+            return FALSE;
+        }
+        case VXRENDERSTATE_TEXTUREPERSPECTIVE:
+        {
+            //not supported. always on.
+            return FALSE;
+        }
+        case VXRENDERSTATE_NORMALIZENORMALS:
+        {
+            //not supported. always on.
+            return FALSE;
+        }
+        case VXRENDERSTATE_AMBIENT:
+        {
+            //needs changes in the current fragment shader.
+            return FALSE;
+        }
+        case VXRENDERSTATE_FILLMODE:
+        {
+            switch (Value)
+            {
+                case VXFILL_POINT: glPolygonMode(GL_FRONT_AND_BACK, GL_POINT); break;
+                case VXFILL_WIREFRAME: glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); break;
+                case VXFILL_SOLID: glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); break;
+            }
+            return TRUE;
+        }
         default:
             fprintf(stderr, "unhandled render state %s -> %d\n", rstytostr(State), Value);
             return FALSE;

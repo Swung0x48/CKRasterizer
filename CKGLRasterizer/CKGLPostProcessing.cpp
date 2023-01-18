@@ -136,8 +136,6 @@ void CKGLPostProcessingStage::draw(CKGLPostProcessingPipeline *pipeline)
 {
     GLCall(glUseProgram(program));
     send_uniform(pipeline);
-    GLCall(glDisable(GL_CULL_FACE));
-    GLCall(glDisable(GL_DEPTH_TEST));
     GLCall(glActiveTexture(GL_TEXTURE0));
     GLCall(glBindTexture(GL_TEXTURE_2D, tex[COLOR]));
     GLCall(glActiveTexture(GL_TEXTURE1));
