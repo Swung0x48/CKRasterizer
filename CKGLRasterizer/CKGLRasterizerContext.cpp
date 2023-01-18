@@ -244,6 +244,12 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     {
         return 0;
     }
+    ULONG_PTR style = GetClassLongPtr((HWND)Window, GCL_STYLE);
+    style &= (~CS_VREDRAW);
+    style &= (~CS_HREDRAW);
+    SetClassLongPtr((HWND)Window, GCL_STYLE, style);
+    HBRUSH brush = (HBRUSH)GetStockObject(NULL_BRUSH);
+    SetClassLongPtr((HWND)Window, GCLP_HBRBACKGROUND, (LONG_PTR)brush);
     wglSwapIntervalEXT = reinterpret_cast<PFNWGLSWAPINTERVALEXTPROC>(wglGetProcAddress("wglSwapIntervalEXT"));
     if (wglSwapIntervalEXT)
         wglSwapIntervalEXT(m_Vsync ? 1 : 0);
