@@ -54,7 +54,7 @@ CKGLPostProcessingStage::CKGLPostProcessingStage(const std::string &_fshsrc) :
         GLCall(glAttachShader(program, pvsh));
         GLCall(glAttachShader(program, pfsh));
         GLCall(glBindFragDataLocation(program, 0, "color"));
-        GLCall(glBindFragDataLocation(program, 1, "normal"));
+        GLCall(glBindFragDataLocation(program, 1, "norpth"));
         GLCall(glLinkProgram(program));
         //GLCall(glValidateProgram(program));
         //mark for deletion... won't actually delete until program is deleted
@@ -82,13 +82,13 @@ void CKGLPostProcessingStage::setup_fbo(bool has_depth, bool has_normal, int wid
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
     GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex[COLOR], 0));
 
-    if (has_normal)
+    if (has_normal || has_depth)
     {
-        GLCall(glBindTexture(GL_TEXTURE_2D, tex[NORMAL]));
-        GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_INT, NULL));
+        GLCall(glBindTexture(GL_TEXTURE_2D, tex[NORPTH]));
+        GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, NULL));
         GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
         GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
-        GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, tex[NORMAL], 0));
+        GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, tex[NORPTH], 0));
         GLenum db[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
         GLCall(glNamedFramebufferDrawBuffers(fbo, 2, db));
     }
@@ -117,10 +117,8 @@ void CKGLPostProcessingStage::send_uniform(CKGLPostProcessingPipeline *pipeline)
 {
     if (~get_uniform_location("color_in"))
         GLCall(glUniform1i(get_uniform_location("color_in"), COLOR));
-    if (~get_uniform_location("normal_in"))
-        GLCall(glUniform1i(get_uniform_location("normal_in"), NORMAL));
-    if (~get_uniform_location("depth_in"))
-        GLCall(glUniform1i(get_uniform_location("depth_in"), DEPTH));
+    if (~get_uniform_location("norpth_in"))
+        GLCall(glUniform1i(get_uniform_location("norpth_in"), NORPTH));
     float v[2];
     pipeline->get_screen_size(v);
     if (~get_uniform_location("screen_size"))
@@ -143,7 +141,7 @@ void CKGLPostProcessingStage::draw(CKGLPostProcessingPipeline *pipeline)
     GLCall(glActiveTexture(GL_TEXTURE0));
     GLCall(glBindTexture(GL_TEXTURE_2D, tex[COLOR]));
     GLCall(glActiveTexture(GL_TEXTURE1));
-    GLCall(glBindTexture(GL_TEXTURE_2D, tex[NORMAL]));
+    GLCall(glBindTexture(GL_TEXTURE_2D, tex[NORPTH]));
     GLCall(glActiveTexture(GL_TEXTURE2));
     GLCall(glBindTexture(GL_TEXTURE_2D, tex[DEPTH]));
     GLCall(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));

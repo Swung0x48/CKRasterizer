@@ -25,7 +25,7 @@ private:
 	void send_uniform(CKGLPostProcessingPipeline *pipeline);
 
 	static const int COLOR  = 0;
-	static const int NORMAL = 1;
+	static const int NORPTH = 1;
 	static const int DEPTH  = 2;
 
 public:

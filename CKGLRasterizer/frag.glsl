@@ -51,7 +51,7 @@ uniform vec3 fog_parameters; //start, end, density
 uniform vec3 vpos; //camera position
 uniform vec2 depth_range; //near-far plane distances for fog calculation
 out vec4 color;
-out vec3 normal;
+out vec4 norpth;
 layout (std140) uniform MatUniformBlock
 {
     mat_t material;
@@ -211,7 +211,7 @@ void main()
 {
     vec3 norm = normalize(fnormal);
     vec3 vdir = normalize(vpos - fpos);
-    normal = normalize(fnormal);
+    norpth = vec4(norm, gl_FragCoord.z);
 
     float ffactor = 1.;
     if ((fog_flags & 0x80U) != 0U)

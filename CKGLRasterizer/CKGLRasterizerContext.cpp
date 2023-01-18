@@ -286,7 +286,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     GLCall(glAttachShader(m_CurrentProgram, vs->GLShader));
     GLCall(glAttachShader(m_CurrentProgram, ps->GLShader));
     GLCall(glBindFragDataLocation(m_CurrentProgram, 0, "color"));
-    GLCall(glBindFragDataLocation(m_CurrentProgram, 1, "normal"));
+    GLCall(glBindFragDataLocation(m_CurrentProgram, 1, "norpth"));
     GLCall(glLinkProgram(m_CurrentProgram));
     GLCall(glValidateProgram(m_CurrentProgram));
     GLCall(glUseProgram(m_CurrentProgram));
