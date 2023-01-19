@@ -25,6 +25,29 @@ endif()
 
 include_directories(${CKRASTERIZER_LIB_DIR}/include)
 
+set(FVF_HEADER_PATH ${CMAKE_CURRENT_LIST_DIR}/../vendor/DirectXMesh/Utilities/FlexibleVertexFormat.h)
+if (NOT EXISTS ${FVF_HEADER_PATH})
+    file(DOWNLOAD
+        https://raw.githubusercontent.com/microsoft/DirectXMesh/main/Utilities/FlexibleVertexFormat.h
+        ${FVF_HEADER_PATH}
+        SHOW_PROGRESS LOG FVF_HEADER_LOG STATUS DOWNLOAD_STATUS)
+
+    message(STATUS "Download FlexibleVertexFormat.h from DirectXMesh: ${FVF_HEADER_LOG}")
+
+    list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+    list(GET DOWNLOAD_STATUS 1 ERROR_MESSAGE)
+
+    if(${STATUS_CODE} EQUAL 0)
+      message(STATUS "FlexibleVertexFormat.h from DirectXMesh downloaded.")
+    else()
+      file(REMOVE ${FVF_HEADER_PATH})
+      message(FATAL_ERROR "Error occurred during downloading FlexibleVertexFormat.h from DirectXMesh: ${ERROR_MESSAGE}\nYou may download it manually and place it under ${FVF_HEADER_PATH}")
+    endif()
+else()
+    
+endif()
+
+
 file(GLOB CKDX11_RASTERIZER_SRC
     "*.h"
     "*.cpp"
@@ -33,6 +56,7 @@ file(GLOB CKDX11_RASTERIZER_SRC
 message(STATUS "DirectX11_INCLUDE_DIR=${DirectX11_INCLUDE_DIR}")
 message(STATUS "DirectX11_LIBRARY=${DirectX11_LIBRARIES}")
 include_directories(${DirectX11_INCLUDE_DIRS})
+include_directories(${CMAKE_CURRENT_LIST_DIR}/../vendor/DirectXMesh/Utilities/)
 add_library(${PROJECT_NAME} SHARED ${CKDX11_RASTERIZER_SRC})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${DirectX11_LIBRARY})
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)

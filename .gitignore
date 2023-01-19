@@ -369,3 +369,4 @@ build/
 /cmake-build-minsizerel
 /cmake-build-release
 /cmake-build-relwithdebinfo
+/vendor/DirectXMesh/Utilities/FlexibleVertexFormat.h

@@ -11,10 +11,11 @@
 #include <wrl.h>
 #include <dxgi1_5.h>
 
-
 #ifdef _DEBUG
     #include <dxgidebug.h>
 #endif
+
+#include "FlexibleVertexFormat.h"
 
 class CKDX11Rasterizer : public CKRasterizer
 {
