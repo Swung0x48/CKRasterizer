@@ -28,9 +28,9 @@ struct vertex
 };
 
 vertex triangle[] = {
-    {0.0f, 0.5f, 0.0f, {1.0f, 0.0f, 0.0f, 1.0f} },
-    {0.45f, -0.5, 0.0f, {0.0f, 1.0f, 0.0f, 1.0f} },
-    {-0.45f, -0.5f, 0.0f, {0.0f, 0.0f, 1.0f, 1.0f} }
+    {0.0f, 0.5f, 1.0f, {1.0f, 0.0f, 0.0f, 1.0f} },
+    {0.45f, -0.5, 1.0f, {0.0f, 1.0f, 0.0f, 1.0f} },
+    {-0.45f, -0.5f, 1.0f, {0.0f, 0.0f, 1.0f, 1.0f} }
 };
 ID3D11Buffer *vb;
 ID3D11InputLayout *layout;
@@ -53,7 +53,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     DXGI_SWAP_CHAIN_DESC scd;
     ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
 
-    scd.BufferCount = 2;
+    scd.BufferCount = 1;
     scd.BufferDesc.Width = Width;
     scd.BufferDesc.Height = Height;
     scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // just use 32-bit color here, too lazy to check if valid
@@ -61,7 +61,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     scd.OutputWindow = (HWND)Window;
     scd.SampleDesc.Count = 1; // ignore multisample for now
     scd.Windowed = !Fullscreen;
-    scd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
     UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
                                          D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1};
@@ -145,8 +145,8 @@ CKBOOL CKDX11RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
 {
     if (!m_BackBuffer)
         return FALSE;
-    //if (Flags & CKRST_CTXCLEAR_COLOR)
-        //m_DeviceContext->ClearRenderTargetView(m_BackBuffer.Get(), m_ClearColor);
+    if (Flags & CKRST_CTXCLEAR_COLOR)
+        m_DeviceContext->ClearRenderTargetView(m_BackBuffer.Get(), m_ClearColor);
     /* if (Flags & CKRST_CTXCLEAR_STENCIL)
         D3DCall(m_DeviceContext->ClearDepthStencilView());
     if (Flags & CKRST_)
