@@ -12,9 +12,9 @@ CKGLRasterizerContext *r;
 
 LRESULT CALLBACK keyboard_handler(int code, WPARAM kc, LPARAM rc)
 {
-	if ((rc & 0x20000000) && !(rc & 0x40000000)) //ALT, key press
+    if ((rc & 0x20000000) && !(rc & 0x40000000)) //ALT, key press
     {
-		switch (kc)
+        switch (kc)
         {
             case 'Q': r->toggle_console(); break;
             case 'A': r->set_step_mode(1); break;
@@ -23,14 +23,14 @@ LRESULT CALLBACK keyboard_handler(int code, WPARAM kc, LPARAM rc)
             case 'S': r->toggle_specular_handling(); break;
             case 'E': r->toggle_2d_rendering(); break;
             case 'D': r->cycle_post_processing_shader(); break;
-		}
-	}
+        }
+    }
 
-	return CallNextHookEx(NULL, code, kc, rc);
+    return CallNextHookEx(NULL, code, kc, rc);
 }
 
 void debug_setup(CKGLRasterizerContext *rst)
 {
-	r = rst;
-	hook = SetWindowsHookExA(WH_KEYBOARD, &keyboard_handler, NULL, main_thread_id);
+    r = rst;
+    hook = SetWindowsHookExA(WH_KEYBOARD, &keyboard_handler, NULL, main_thread_id);
 }
