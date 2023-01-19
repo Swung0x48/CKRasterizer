@@ -6,15 +6,6 @@
 
 #define GLZoneName(x) (#x " @ " __FUNCTION__)
 
-#define GLCall(x) {GLClearError(); \
-    {TracyGpuZone(GLZoneName(x));\
-    x;}\
-    GLLogCall(#x, __FILE__, __LINE__);}
-
-bool GLLogCall(const char* function, const char* file, int line);
-
-void GLClearError();
-
 class CKContext;
 extern CKContext *rst_ckctx;
 

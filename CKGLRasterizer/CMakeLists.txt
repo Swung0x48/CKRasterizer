@@ -44,6 +44,9 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
             $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
             $<$<C_COMPILER_ID:MSVC>:_CRT_NONSTDC_NO_WARNINGS>
             )
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+            $<$<CONFIG:Debug>:GL_DEBUG>
+            )
 if(DEFINED BALLANCE_DIR)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND "${CMAKE_COMMAND}" -E
 		copy "$<TARGET_FILE:${PROJECT_NAME}>"

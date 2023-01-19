@@ -14,26 +14,26 @@ CKDWORD CKGLPixelShaderDesc::Create(CKGLRasterizerContext *Ctx, CKPixelShaderDes
     this->m_Function = Format->m_Function;
     this->m_FunctionSize = Format->m_FunctionSize;
     this->GLShader = glCreateShader(GL_FRAGMENT_SHADER);
-    GLCall(glShaderSource(GLShader, 1, (const char**)&m_Function, (const GLint*)&m_FunctionSize));
-    GLCall(glCompileShader(GLShader));
+    glShaderSource(GLShader, 1, (const char**)&m_Function, (const GLint*)&m_FunctionSize);
+    glCompileShader(GLShader);
 
     int result;
-    GLCall(glGetShaderiv(GLShader, GL_COMPILE_STATUS, &result));
+    glGetShaderiv(GLShader, GL_COMPILE_STATUS, &result);
     if (result == GL_FALSE)
     {
         int length;
-        GLCall(glGetShaderiv(GLShader, GL_INFO_LOG_LENGTH, &length));
+        glGetShaderiv(GLShader, GL_INFO_LOG_LENGTH, &length);
         std::string msg(length, '\0');
-        GLCall(glGetShaderInfoLog(GLShader, length, &length, (char*)msg.data()));
-        MessageBoxA(NULL, msg.c_str(), "Fragment shader", NULL);
-        GLCall(glDeleteShader(GLShader));
+        glGetShaderInfoLog(GLShader, length, &length, (char*)msg.data());
+        fprintf(stderr, "fragment shader compilation error: %s\n", msg.c_str());
+        glDeleteShader(GLShader);
     }
     return GLShader;
 }
 
 CKGLPixelShaderDesc::~CKGLPixelShaderDesc()
 {
-    GLCall(glDeleteShader(GLShader));
+    glDeleteShader(GLShader);
     GLShader = 0;
 }
 

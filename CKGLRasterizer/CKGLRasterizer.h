@@ -46,32 +46,32 @@ class CKGLRasterizerContext;
 class CKGLRasterizer : public CKRasterizer
 {
 public:
-	CKGLRasterizer(void);
-	virtual ~CKGLRasterizer(void);
+    CKGLRasterizer(void);
+    virtual ~CKGLRasterizer(void);
 
-	virtual XBOOL Start(WIN_HANDLE AppWnd);
-	virtual void Close(void);
+    virtual XBOOL Start(WIN_HANDLE AppWnd);
+    virtual void Close(void);
 
 public:
-	XBOOL m_Init;
-	WNDCLASSEXA m_WndClass;
+    XBOOL m_Init;
+    WNDCLASSEXA m_WndClass;
 };
 
 
 class CKGLRasterizerDriver: public CKRasterizerDriver
 {
 public:
-	CKGLRasterizerDriver(CKGLRasterizer *rst);
+    CKGLRasterizerDriver(CKGLRasterizer *rst);
     virtual ~CKGLRasterizerDriver();
-	virtual CKRasterizerContext *CreateContext();
-	
+    virtual CKRasterizerContext *CreateContext();
+
     CKBOOL InitializeCaps();
-	
+
 public:
     CKBOOL m_Inited;
     UINT m_AdapterIndex;
     DISPLAY_DEVICEA m_Adapter;
-	WNDCLASSEXA m_WndClass;
+    WNDCLASSEXA m_WndClass;
     HWND m_HWND;
     HDC m_DC;
     HGLRC m_RC;
@@ -86,7 +86,7 @@ public:
 public:
     CKGLTextureDesc() { tex = 0; glfmt = gltyp = GL_INVALID_ENUM; }
     CKGLTextureDesc(CKTextureDesc *texdesc);
-    ~CKGLTextureDesc() { GLCall(glDeleteTextures(1, &tex)); }
+    ~CKGLTextureDesc() { glDeleteTextures(1, &tex); }
 
     void Create();
     void Bind(CKGLRasterizerContext *ctx);
@@ -314,7 +314,7 @@ public:
     //--- Utils
     virtual int CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc);
     virtual int CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, const VxImageDescEx &img_desc);
-    
+
     virtual CKBOOL SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane &PlaneEquation);
     virtual CKBOOL GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane &PlaneEquation);
 

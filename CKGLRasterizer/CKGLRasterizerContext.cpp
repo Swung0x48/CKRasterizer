@@ -26,23 +26,12 @@ static int vbibbat = 0;
 
 extern void debug_setup(CKGLRasterizerContext *rst);
 
-void GLClearError()
+void GLAPIENTRY debug_callback(GLenum src, GLenum typ, GLuint id, GLenum severity,
+    GLsizei len, const GLchar *msg, const void *_user)
 {
-    while (glGetError() != GL_NO_ERROR);
-}
-
-bool GLLogCall(const char* function, const char* file, int line)
-{
-    while (GLenum error = glGetError())
-    {
-        std::string str = std::to_string(error) + ": at " + 
-            function + " " + file + ":" + std::to_string(line);
-        MessageBoxA(NULL, str.c_str(), "OpenGL Error", NULL);
-        return false;
-    }
-
-    
-    return true;
+    fprintf(stderr, "OpenGL message: source 0x%x type 0x%x id 0x%x severity 0x%x: %s\n", src, typ, id, severity, msg);
+    if (severity == GL_DEBUG_SEVERITY_HIGH)
+        MessageBoxA(NULL, msg, "OpenGL Error", 0);
 }
 
 VxMatrix inv(const VxMatrix &m);
@@ -219,10 +208,16 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     DescribePixelFormat(DC, pixelFormatID, sizeof(PFD), &PFD);
     SetPixelFormat(DC, pixelFormatID, &PFD);
     const int major_min = 4, minor_min = 5;
+#ifdef GL_DEBUG
+    const int context_flag = WGL_CONTEXT_DEBUG_BIT_ARB;
+#else
+    const int context_flag = 0;
+#endif
     int  contextAttribs[] = {
         WGL_CONTEXT_MAJOR_VERSION_ARB, major_min,
         WGL_CONTEXT_MINOR_VERSION_ARB, minor_min,
         WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+        WGL_CONTEXT_FLAGS_ARB, context_flag,
         0
     };
 
@@ -244,6 +239,10 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     {
         return 0;
     }
+#ifdef GL_DEBUG
+    glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(debug_callback, nullptr);
+#endif
     ULONG_PTR style = GetClassLongPtr((HWND)Window, GCL_STYLE);
     style &= (~CS_VREDRAW);
     style &= (~CS_HREDRAW);
@@ -289,28 +288,28 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     CKGLVertexShaderDesc* vs = static_cast<CKGLVertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShader]);
     CKGLPixelShaderDesc* ps = static_cast<CKGLPixelShaderDesc*>(m_PixelShaders[m_CurrentPixelShader]);
     m_CurrentProgram = glCreateProgram();
-    GLCall(glAttachShader(m_CurrentProgram, vs->GLShader));
-    GLCall(glAttachShader(m_CurrentProgram, ps->GLShader));
-    GLCall(glBindFragDataLocation(m_CurrentProgram, 0, "color"));
-    GLCall(glBindFragDataLocation(m_CurrentProgram, 1, "norpth"));
-    GLCall(glLinkProgram(m_CurrentProgram));
-    GLCall(glValidateProgram(m_CurrentProgram));
-    GLCall(glUseProgram(m_CurrentProgram));
+    glAttachShader(m_CurrentProgram, vs->GLShader);
+    glAttachShader(m_CurrentProgram, ps->GLShader);
+    glBindFragDataLocation(m_CurrentProgram, 0, "color");
+    glBindFragDataLocation(m_CurrentProgram, 1, "norpth");
+    glLinkProgram(m_CurrentProgram);
+    glValidateProgram(m_CurrentProgram);
+    glUseProgram(m_CurrentProgram);
     for (int i = 0; i < 8; ++i)
-    GLCall(glUniform1i(get_uniform_location(("tex[" + std::to_string(i) + "]").c_str()), i));
+    glUniform1i(get_uniform_location(("tex[" + std::to_string(i) + "]").c_str()), i);
 
     m_lighting_flags = LSW_LIGHTING_ENABLED | LSW_VRTCOLOR_ENABLED;
-    GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
+    glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags);
     m_alpha_test_flags = 8; //alpha test off, alpha function always
-    GLCall(glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags));
+    glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags);
     m_fog_flags = 0; //fog off, fog type none. We do not support vertex fog.
     VxColor init_fog_color = VxColor();
     m_fog_parameters[0] = 0.;
     m_fog_parameters[1] = 1.;
     m_fog_parameters[2] = 1.;
-    GLCall(glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags));
-    GLCall(glUniform4fv(get_uniform_location("fog_color"), 1, (float*)&init_fog_color.col));
-    GLCall(glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters));
+    glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags);
+    glUniform4fv(get_uniform_location("fog_color"), 1, (float*)&init_fog_color.col);
+    glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters);
     //setup blank texture
     {
         CKTextureDesc blank;
@@ -325,23 +324,23 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     //setup material uniform block
     {
         int idx = glGetUniformBlockIndex(m_CurrentProgram, "MatUniformBlock");
-        GLCall(glUniformBlockBinding(m_CurrentProgram, idx, 0));
-        GLCall(glGenBuffers(1, &m_ubo_mat));
-        GLCall(glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_ubo_mat));
+        glUniformBlockBinding(m_CurrentProgram, idx, 0);
+        glGenBuffers(1, &m_ubo_mat);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_ubo_mat);
     }
     //setup lights uniform block
     {
         int idx = glGetUniformBlockIndex(m_CurrentProgram, "LightsUniformBlock");
-        GLCall(glUniformBlockBinding(m_CurrentProgram, idx, 2));
-        GLCall(glGenBuffers(1, &m_ubo_lights));
-        GLCall(glBindBufferBase(GL_UNIFORM_BUFFER, 2, m_ubo_lights));
+        glUniformBlockBinding(m_CurrentProgram, idx, 2);
+        glGenBuffers(1, &m_ubo_lights);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 2, m_ubo_lights);
     }
     //setup texture combinator uniform block
     {
         int idx = glGetUniformBlockIndex(m_CurrentProgram, "TexCombinatorUniformBlock");
-        GLCall(glUniformBlockBinding(m_CurrentProgram, idx, 1));
-        GLCall(glGenBuffers(1, &m_ubo_texc));
-        GLCall(glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_ubo_texc));
+        glUniformBlockBinding(m_CurrentProgram, idx, 1);
+        glGenBuffers(1, &m_ubo_texc);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_ubo_texc);
     }
     //initialize texture combinator stuff
     m_texcombo[0] = CKGLTexCombinatorUniform::make(
@@ -353,13 +352,13 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
             TexOp::disable, TexArg::texture, TexArg::current, TexArg::current,
             TexOp::disable, TexArg::diffuse, TexArg::current, TexArg::current,
             TexArg::current, ~0U);
-    GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc));
-    GLCall(glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW));
+    glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc);
+    glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW);
     for (int i = 0; i < 8; ++i)
-        GLCall(glUniform1ui(get_uniform_location(("texp[" + std::to_string(i) + "]").c_str()), m_tex_vp[i]));
+        glUniform1ui(get_uniform_location(("texp[" + std::to_string(i) + "]").c_str()), m_tex_vp[i]);
 
-    GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights));
-    GLCall(glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW));
+    glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights);
+    glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW);
 
     SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&VxMatrix::Identity());
     SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&VxMatrix::Identity());
@@ -411,29 +410,29 @@ CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
         mask |= GL_STENCIL_BUFFER_BIT;
     if ((Flags & CKRST_CTXCLEAR_DEPTH) != 0 && m_ZBpp)
     {
-        GLCall(glDepthMask(true));
+        glDepthMask(true);
         mask |= GL_DEPTH_BUFFER_BIT;
     }
 #if USE_FBO_AND_POSTPROCESSING
-    GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 #endif
     VxColor c(Ccol);
-    GLCall(glClearColor(c.r, c.g, c.b, c.a));
-    GLCall(glClearDepth(Z));
-    GLCall(glClearStencil(Stencil));
-    GLCall(glClear(mask));
+    glClearColor(c.r, c.g, c.b, c.a);
+    glClearDepth(Z);
+    glClearStencil(Stencil);
+    glClear(mask);
     if (m_step_mode == 2)
     {
         BackToFront(FALSE);
-        GLCall(glClear(mask));
+        glClear(mask);
         BackToFront(FALSE);
     }
 #if USE_FBO_AND_POSTPROCESSING
     m_3dpp->set_as_target();
-    GLCall(glClear(mask));
+    glClear(mask);
     m_2dpp->set_as_target();
-    GLCall(glClearColor(c.r, c.g, c.b, 0));
-    GLCall(glClear(mask));
+    glClearColor(c.r, c.g, c.b, 0);
+    glClear(mask);
 #endif
     return 1;
 }
@@ -459,7 +458,7 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
     m_current_vf = ~0U;
     if (!m_renderst[VXRENDERSTATE_ALPHABLENDENABLE])
         _SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, TRUE);
-    GLCall(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     if (m_renderst[VXRENDERSTATE_ZENABLE])
         _SetRenderState(VXRENDERSTATE_ZENABLE, FALSE);
     if (m_renderst[VXRENDERSTATE_CULLMODE] != VXCULL_NONE)
@@ -475,7 +474,7 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
     m_3dpp->draw();
     if (m_2d_enabled)
         m_2dpp->draw();
-    GLCall(glUseProgram(m_CurrentProgram));
+    glUseProgram(m_CurrentProgram);
 
     //restore to whatever the state was before
     if (!m_renderst[VXRENDERSTATE_ALPHABLENDENABLE])
@@ -518,7 +517,7 @@ CKBOOL CKGLRasterizerContext::BeginScene()
 {
     FrameMark;
 #if USE_FBO_AND_POSTPROCESSING
-    //GLCall(glUseProgram(m_CurrentProgram));
+    //glUseProgram(m_CurrentProgram);
 #endif
     return 1;
 }
@@ -537,8 +536,8 @@ CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
     if (m_lights[Light].first < MAX_ACTIVE_LIGHTS)
     {
         m_lights_data[m_lights[Light].first] = CKGLLightUniform(*data);
-        GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights));
-        GLCall(glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW));
+        glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights);
+        glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW);
     }
     return TRUE;
 }
@@ -566,8 +565,8 @@ CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
         if (m_lights[Light].first < MAX_ACTIVE_LIGHTS)
             m_lights_data[m_lights[Light].first].type = 0;
     }
-    GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights));
-    GLCall(glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW));
+    glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights);
+    glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW);
     return TRUE;
 }
 
@@ -575,16 +574,16 @@ CKBOOL CKGLRasterizerContext::SetMaterial(CKMaterialData *mat)
 {
     ZoneScopedN(__FUNCTION__);
     CKGLMaterialUniform mu(*mat);
-    GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_mat));
-    GLCall(glBufferData(GL_UNIFORM_BUFFER, sizeof(CKGLMaterialUniform), &mu, GL_DYNAMIC_DRAW));
+    glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_mat);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(CKGLMaterialUniform), &mu, GL_DYNAMIC_DRAW);
     return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::SetViewport(CKViewportData *data)
 {
     ZoneScopedN(__FUNCTION__);
-    GLCall(glViewport(data->ViewX, data->ViewY, data->ViewWidth, data->ViewHeight));
-    GLCall(glDepthRangef(data->ViewZMin, data->ViewZMax));
+    glViewport(data->ViewX, data->ViewY, data->ViewWidth, data->ViewHeight);
+    glDepthRangef(data->ViewZMin, data->ViewZMax);
     VxMatrix _m = VxMatrix::Identity();
     float (*m)[4] = (float(*)[4])&_m;
     m[0][0] = 2. / data->ViewWidth;
@@ -628,7 +627,7 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
             VxMatrix t, im, tim;
             Vx3DInverseMatrix(t, Mat);
             m_viewpos = VxVector(t[3][0], t[3][1], t[3][2]);
-            GLCall(glUniform3fv(get_uniform_location("vpos"), 1, (float*)&m_viewpos));
+            glUniform3fv(get_uniform_location("vpos"), 1, (float*)&m_viewpos);
             Vx3DTransposeMatrix(tim, m_ModelViewMatrix);
             im = inv(tim);
             SetUniformMatrix4fv("tiworldview", 1, GL_FALSE, (float*)&im);
@@ -643,7 +642,7 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
             float A = m[2][2];
             float B = m[3][2];
             float zp[2] = {-B / A, B / (1 - A)}; //for eye-distance fog calculation
-            GLCall(glUniform2fv(get_uniform_location("depth_range"), 1, (float*)&zp));
+            glUniform2fv(get_uniform_location("depth_range"), 1, (float*)&zp);
             m_MatrixUptodate = 0;
             break;
         }
@@ -719,15 +718,15 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
     auto update_depth_switches = [this]() {
         if (m_renderst[VXRENDERSTATE_ZENABLE] || m_renderst[VXRENDERSTATE_ZWRITEENABLE])
         {
-            GLCall(glEnable(GL_DEPTH_TEST));
+            glEnable(GL_DEPTH_TEST);
         }
         else
         {
-            GLCall(glDisable(GL_DEPTH_TEST));
+            glDisable(GL_DEPTH_TEST);
         }
     };
     auto send_light_switches = [this]() {
-        GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
+        glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags);
     };
     auto toggle_flag = [](CKDWORD *flags, CKDWORD flag, bool enabled) {
         if (enabled) *flags |= flag;
@@ -741,14 +740,14 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
             if (Value)
             {
                 if (previous_zfunc != GL_INVALID_ENUM)
-                    GLCall(glDepthFunc(previous_zfunc))
+                    glDepthFunc(previous_zfunc);
             }
             else
-                GLCall(glDepthFunc(GL_ALWAYS))
+                glDepthFunc(GL_ALWAYS);
             update_depth_switches();
             return TRUE;
         case VXRENDERSTATE_ZWRITEENABLE:
-            GLCall(glDepthMask(Value));
+            glDepthMask(Value);
             update_depth_switches();
             return TRUE;
         case VXRENDERSTATE_ZFUNC:
@@ -763,13 +762,13 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
                 case VXCMP_GREATEREQUAL: previous_zfunc = GL_GEQUAL;   break;
                 case VXCMP_ALWAYS      : previous_zfunc = GL_ALWAYS;   break;
             }
-            GLCall(glDepthFunc(previous_zfunc));
+            glDepthFunc(previous_zfunc);
             return TRUE;
         case VXRENDERSTATE_ALPHABLENDENABLE:
             if (Value)
-                GLCall(glEnable(GL_BLEND))
+                glEnable(GL_BLEND);
             else
-                GLCall(glDisable(GL_BLEND))
+                glDisable(GL_BLEND);
             return TRUE;
         case VXRENDERSTATE_BLENDOP:
         {
@@ -782,7 +781,7 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
                 case VXBLENDOP_MIN: beq = GL_MIN; break;
                 case VXBLENDOP_MAX: beq = GL_MAX; break;
             }
-            GLCall(glBlendEquation(beq));
+            glBlendEquation(beq);
             return TRUE;
         }
         case VXRENDERSTATE_SRCBLEND:
@@ -791,11 +790,11 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
 #if USE_FBO_AND_POSTPROCESSING
             if (m_target_mode == -1)
             {
-                GLCall(glBlendFuncSeparate(srcblend, dstblend, GL_ONE_MINUS_DST_ALPHA, GL_ONE));
+                glBlendFuncSeparate(srcblend, dstblend, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
             }
             else
 #endif
-                GLCall(glBlendFunc(srcblend, dstblend));
+                glBlendFunc(srcblend, dstblend);
             return TRUE;
         }
         case VXRENDERSTATE_DESTBLEND:
@@ -804,11 +803,11 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
 #if USE_FBO_AND_POSTPROCESSING
             if (m_target_mode == -1)
             {
-                GLCall(glBlendFuncSeparate(srcblend, dstblend, GL_ONE_MINUS_DST_ALPHA, GL_ONE));
+                glBlendFuncSeparate(srcblend, dstblend, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
             }
             else
 #endif
-                GLCall(glBlendFunc(srcblend, dstblend));
+                glBlendFunc(srcblend, dstblend);
             return TRUE;
         }
         case VXRENDERSTATE_INVERSEWINDING:
@@ -824,17 +823,17 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
             switch (Value)
             {
                 case VXCULL_NONE:
-                    GLCall(glDisable(GL_CULL_FACE));
+                    glDisable(GL_CULL_FACE);
                     break;
                 case VXCULL_CCW:
-                    GLCall(glEnable(GL_CULL_FACE));
-                    GLCall(glFrontFace(GL_CW));
-                    GLCall(glCullFace(m_InverseWinding ? GL_FRONT : GL_BACK));
+                    glEnable(GL_CULL_FACE);
+                    glFrontFace(GL_CW);
+                    glCullFace(m_InverseWinding ? GL_FRONT : GL_BACK);
                     break;
                 case VXCULL_CW:
-                    GLCall(glEnable(GL_CULL_FACE));
-                    GLCall(glFrontFace(GL_CCW));
-                    GLCall(glCullFace(m_InverseWinding ? GL_FRONT : GL_BACK));
+                    glEnable(GL_CULL_FACE);
+                    glFrontFace(GL_CCW);
+                    glCullFace(m_InverseWinding ? GL_FRONT : GL_BACK);
                     break;
             }
             prev_cull = cull_combo;
@@ -861,54 +860,54 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         case VXRENDERSTATE_ALPHAFUNC:
         {
             m_alpha_test_flags = (m_alpha_test_flags & 0x80) | Value;
-            GLCall(glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags));
+            glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags);
             return TRUE;
         }
         case VXRENDERSTATE_ALPHATESTENABLE:
         {
             toggle_flag(&m_alpha_test_flags, 0x80, Value);
-            GLCall(glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags));
+            glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags);
             return TRUE;
         }
         case VXRENDERSTATE_ALPHAREF:
         {
-            GLCall(glUniform1f(get_uniform_location("alpha_thresh"), Value / 255.));
+            glUniform1f(get_uniform_location("alpha_thresh"), Value / 255.);
             return TRUE;
         }
         case VXRENDERSTATE_FOGENABLE:
         {
             toggle_flag(&m_fog_flags, 0x80, Value);
-            GLCall(glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags));
+            glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags);
             return TRUE;
         }
         case VXRENDERSTATE_FOGCOLOR:
         {
             VxColor col(Value);
-            GLCall(glUniform4fv(get_uniform_location("fog_color"), 1, (float*)&col.col));
+            glUniform4fv(get_uniform_location("fog_color"), 1, (float*)&col.col);
             return TRUE;
         }
         case VXRENDERSTATE_FOGPIXELMODE:
         {
             m_fog_flags = (m_fog_flags & 0x80) | Value;
-            GLCall(glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags));
+            glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags);
             return TRUE;
         }
         case VXRENDERSTATE_FOGSTART:
         {
             m_fog_parameters[0] = reinterpret_cast<float&>(Value);
-            GLCall(glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters));
+            glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters);
             return TRUE;
         }
         case VXRENDERSTATE_FOGEND:
         {
             m_fog_parameters[1] = reinterpret_cast<float&>(Value);
-            GLCall(glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters));
+            glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters);
             return TRUE;
         }
         case VXRENDERSTATE_FOGDENSITY:
         {
             m_fog_parameters[2] = reinterpret_cast<float&>(Value);
-            GLCall(glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters));
+            glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters);
             return TRUE;
         }
         case VXRENDERSTATE_SHADEMODE:
@@ -1026,7 +1025,7 @@ void CKGLRasterizerContext::toggle_specular_handling()
     else next = LSW_SPCL_OVERR_FORCE;
     m_lighting_flags &= ~0U ^ (LSW_SPCL_OVERR_FORCE | LSW_SPCL_OVERR_ONLY);
     m_lighting_flags |= next;
-    GLCall(glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags));
+    glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags);
 }
 
 void CKGLRasterizerContext::toggle_2d_rendering()
@@ -1056,11 +1055,11 @@ CKBOOL CKGLRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
     ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
-    GLCall(glActiveTexture(GL_TEXTURE0 + Stage));
+    glActiveTexture(GL_TEXTURE0 + Stage);
     CKGLTextureDesc *desc = static_cast<CKGLTextureDesc *>(m_Textures[Texture]);
     if (!desc)
     {
-        GLCall(glBindTexture(GL_TEXTURE_2D, 0));
+        glBindTexture(GL_TEXTURE_2D, 0);
         return TRUE;
     }
     desc->Bind(this);
@@ -1086,20 +1085,20 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
     switch (Tss)
     {
         case CKRST_TSS_ADDRESS:
-            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
-            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
-            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value));
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value));
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value));
             return TRUE;
         case CKRST_TSS_ADDRESSU:
-            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value));
             return TRUE;
         case CKRST_TSS_ADDRESSV:
-            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value)));
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value));
             return TRUE;
         case CKRST_TSS_BORDERCOLOR:
         {
             VxColor c(Value);
-            GLCall(glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, (float*)&c.col));
+            glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, (float*)&c.col);
             return TRUE;
         }
         case CKRST_TSS_MINFILTER:
@@ -1131,8 +1130,8 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             if (valid)
             {
                 m_texcombo[Stage] = tc;
-                GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc));
-                GLCall(glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW));
+                glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc);
+                glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW);
             }
             return valid;
         }
@@ -1178,8 +1177,8 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             if (valid)
             {
                 m_texcombo[Stage] = tc;
-                GLCall(glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc));
-                GLCall(glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW));
+                glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc);
+                glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW);
             }
             return valid;
         }
@@ -1193,7 +1192,7 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
                 tvp |= TVP_TC_PROJECTED;
             else tvp &= ~0U ^ TVP_TC_PROJECTED;
             if (tvp != m_tex_vp[Stage])
-                GLCall(glUniform1ui(get_uniform_location(("texp[" + std::to_string(Stage) + "]").c_str()), tvp));
+                glUniform1ui(get_uniform_location(("texp[" + std::to_string(Stage) + "]").c_str()), tvp);
             m_tex_vp[Stage] = tvp;
             return TRUE;
         }
@@ -1209,7 +1208,7 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
                 default: return FALSE;
             }
             if (tvp != m_tex_vp[Stage])
-                GLCall(glUniform1ui(get_uniform_location(("texp[" + std::to_string(Stage) + "]").c_str()), tvp));
+                glUniform1ui(get_uniform_location(("texp[" + std::to_string(Stage) + "]").c_str()), tvp);
             m_tex_vp[Stage] = tvp;
             return TRUE;
         }
@@ -1339,9 +1338,9 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
             m_target_mode = -1;
             m_2dpp->set_as_target();
             GLint s, d;
-            GLCall(glGetIntegerv(GL_BLEND_SRC_RGB, &s));
-            GLCall(glGetIntegerv(GL_BLEND_DST_RGB, &d));
-            GLCall(glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE));
+            glGetIntegerv(GL_BLEND_SRC_RGB, &s);
+            glGetIntegerv(GL_BLEND_DST_RGB, &d);
+            glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
         }
     }
     else
@@ -1351,9 +1350,9 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
             m_target_mode = 1;
             m_3dpp->set_as_target();
             GLint s, d;
-            GLCall(glGetIntegerv(GL_BLEND_SRC_RGB, &s));
-            GLCall(glGetIntegerv(GL_BLEND_DST_RGB, &d));
-            GLCall(glBlendFunc(s, d));
+            glGetIntegerv(GL_BLEND_SRC_RGB, &s);
+            glGetIntegerv(GL_BLEND_DST_RGB, &d);
+            glBlendFunc(s, d);
         }
     }
 #endif
@@ -1390,11 +1389,11 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
         default:
             break;
     }
-    GLCall(glDrawElementsBaseVertex(glpt, Indexcount, GL_UNSIGNED_SHORT, (void*)(2 * StartIndex), MinVIndex));
+    glDrawElementsBaseVertex(glpt, Indexcount, GL_UNSIGNED_SHORT, (void*)(2 * StartIndex), MinVIndex);
     if (m_step_mode == 2)
     {
         BackToFront(FALSE);
-        GLCall(glDrawElementsBaseVertex(glpt, Indexcount, GL_UNSIGNED_SHORT, (void*)(2 * StartIndex), MinVIndex));
+        glDrawElementsBaseVertex(glpt, Indexcount, GL_UNSIGNED_SHORT, (void*)(2 * StartIndex), MinVIndex);
         BackToFront(FALSE);
         set_title_status("stepping - DrawPrimitiveVBIB | X in console = quit step mode | Any key = next");
         step_mode_wait();
@@ -1414,9 +1413,9 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
             m_target_mode = -1;
             m_2dpp->set_as_target();
             GLint s, d;
-            GLCall(glGetIntegerv(GL_BLEND_SRC_RGB, &s));
-            GLCall(glGetIntegerv(GL_BLEND_DST_RGB, &d));
-            GLCall(glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE));
+            glGetIntegerv(GL_BLEND_SRC_RGB, &s);
+            glGetIntegerv(GL_BLEND_DST_RGB, &d);
+            glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
         }
     }
     else
@@ -1426,9 +1425,9 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
             m_target_mode = 1;
             m_3dpp->set_as_target();
             GLint s, d;
-            GLCall(glGetIntegerv(GL_BLEND_SRC_RGB, &s));
-            GLCall(glGetIntegerv(GL_BLEND_DST_RGB, &d));
-            GLCall(glBlendFunc(s, d));
+            glGetIntegerv(GL_BLEND_SRC_RGB, &s);
+            glGetIntegerv(GL_BLEND_DST_RGB, &d);
+            glBlendFunc(s, d);
         }
     }
 #endif
@@ -1504,19 +1503,19 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
     }
     if (idx)
     {
-        GLCall(glDrawElementsBaseVertex(glpt, icnt, GL_UNSIGNED_SHORT, (void*)ibbase, vbase));
+        glDrawElementsBaseVertex(glpt, icnt, GL_UNSIGNED_SHORT, (void*)ibbase, vbase);
     }
     else
-        GLCall(glDrawArrays(glpt, vbase, vcnt));
+        glDrawArrays(glpt, vbase, vcnt);
     if (m_step_mode == 2)
     {
         BackToFront(FALSE);
         if (idx)
         {
-            GLCall(glDrawElementsBaseVertex(glpt, icnt, GL_UNSIGNED_SHORT, (void*)ibbase, vbase));
+            glDrawElementsBaseVertex(glpt, icnt, GL_UNSIGNED_SHORT, (void*)ibbase, vbase);
         }
         else
-            GLCall(glDrawArrays(glpt, vbase, vcnt));
+            glDrawArrays(glpt, vbase, vcnt);
         BackToFront(FALSE);
         set_title_status("stepping - %s | X in console = quit step mode | Any key = next",
             pType & 0x100 ? "DrawPrimitiveVB" : "DrawPrimitive");
@@ -1707,7 +1706,7 @@ void CKGLRasterizerContext::set_position_transformed(bool transformed)
     {
         m_cur_vp &= ~0U ^ VP_IS_TRANSFORMED;
         if (transformed) m_cur_vp |= VP_IS_TRANSFORMED;
-        GLCall(glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp));
+        glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp);
     }
 }
 
@@ -1717,7 +1716,7 @@ void CKGLRasterizerContext::set_vertex_has_color(bool color)
     {
         m_cur_vp &= ~0U ^ VP_HAS_COLOR;
         if (color) m_cur_vp |= VP_HAS_COLOR;
-        GLCall(glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp));
+        glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp);
     }
 }
 
@@ -1727,7 +1726,7 @@ void CKGLRasterizerContext::set_num_textures(CKDWORD ntex)
     {
         m_cur_vp &= ~VP_TEXTURE_MASK;
         m_cur_vp |= ntex;
-        GLCall(glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp));
+        glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp);
     }
 }
 
@@ -1754,7 +1753,7 @@ void CKGLRasterizerContext::set_title_status(const char *fmt, ...)
 BOOL CKGLRasterizerContext::SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose,
                                                 const GLfloat *value)
 {
-    GLCall(glUniformMatrix4fv(get_uniform_location(name.c_str()), count, transpose, value));
+    glUniformMatrix4fv(get_uniform_location(name.c_str()), count, transpose, value);
     return TRUE;
 }
 
