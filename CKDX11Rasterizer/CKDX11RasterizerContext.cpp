@@ -4,21 +4,20 @@
 static const char* shader = 
     "struct VOut\n"
     "{\n"
-    "float4 position : SV_POSITION;\n"
-    "float4 color : COLOR;\n"
+    "    float4 position : SV_POSITION;\n"
+    "    float4 color : COLOR;\n"
     "};\n"
 
     "VOut VShader(float4 position : POSITION, float4 color : COLOR)\n"
     "{\n"
-    "VOut output;\n"
-
-    "output.position = position;\n"
-    "output.color = color;\n"
-    "return output;\n"
+    "    VOut output;\n"
+    "    output.position = position;\n"
+    "    output.color = color;\n"
+    "    return output;\n"
     "}\n"
     "float4 PShader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET\n"
     "{\n"
-    "return color;\n"
+    "    return color;\n"
     "}";
 
 struct vertex
@@ -53,7 +52,8 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     DXGI_SWAP_CHAIN_DESC scd;
     ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
 
-    scd.BufferCount = 1;
+    m_AllowTearing = static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
+    scd.BufferCount = 2;
     scd.BufferDesc.Width = Width;
     scd.BufferDesc.Height = Height;
     scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // just use 32-bit color here, too lazy to check if valid
@@ -61,12 +61,13 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     scd.OutputWindow = (HWND)Window;
     scd.SampleDesc.Count = 1; // ignore multisample for now
     scd.Windowed = !Fullscreen;
-    scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    scd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    scd.Flags = m_AllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
     UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
                                          D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1};
-#ifdef _DEBUG
-    //creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
+#if defined(DEBUG) || defined(_DEBUG)
+    creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
     hr = D3D11CreateDeviceAndSwapChain(static_cast<CKDX11RasterizerDriver *>(m_Driver)->m_Adapter.Get(),
                                        D3D_DRIVER_TYPE_UNKNOWN, nullptr, creationFlags, featureLevels,
@@ -155,6 +156,7 @@ CKBOOL CKDX11RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
 }
 CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
     HRESULT hr;
+    m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
 
     UINT stride = sizeof(vertex);
     UINT offset = 0;
@@ -164,7 +166,7 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
 
     m_DeviceContext->Draw(3, 0);
 
-    D3DCall(m_Swapchain->Present(vsync ? 1 : 0, 0));
+    D3DCall(m_Swapchain->Present(vsync ? 1 : 0, (m_AllowTearing && !m_Fullscreen && !vsync) ? DXGI_PRESENT_ALLOW_TEARING : 0));
     return SUCCEEDED(hr);
 }
 

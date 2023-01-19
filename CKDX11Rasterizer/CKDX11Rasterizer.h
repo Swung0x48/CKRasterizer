@@ -9,6 +9,8 @@
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
 #include <wrl.h>
+#include <dxgi1_5.h>
+
 
 #ifdef _DEBUG
     #include <dxgidebug.h>
@@ -25,6 +27,7 @@ public:
 
 public:
     Microsoft::WRL::ComPtr<IDXGIFactory1> m_Factory;
+    CKBOOL m_TearingSupport;
 };
 
 class CKDX11RasterizerDriver : public CKRasterizerDriver
@@ -179,6 +182,7 @@ public:
         1.0f,
     };
     D3D11_VIEWPORT m_Viewport;
+    CKBOOL m_AllowTearing;
         //    IDirect3DDevice9Ex *m_Device;
 //    D3DPRESENT_PARAMETERS m_PresentParams;
 //    VxDirectXData m_DirectXData;
