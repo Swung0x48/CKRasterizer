@@ -95,6 +95,9 @@ CKGLRasterizerContext::~CKGLRasterizerContext()
         delete dib.second;
     m_dynibo.clear();
 
+    GLuint ubos[3] = {m_ubo_mat, m_ubo_texc, m_ubo_lights};
+    glDeleteBuffers(3, ubos);
+
     m_DirtyRects.Clear();
     m_PixelShaders.Clear();
     m_VertexShaders.Clear();
@@ -345,26 +348,23 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         blanktex->Bind();
         blanktex->Load(&white);
     }
+    GLuint ubos[3];
+    glCreateBuffers(3, ubos);
     //setup material uniform block
     {
         int idx = glGetUniformBlockIndex(m_CurrentProgram, "MatUniformBlock");
         glUniformBlockBinding(m_CurrentProgram, idx, 0);
-        glGenBuffers(1, &m_ubo_mat);
+        m_ubo_mat = ubos[0];
+        glNamedBufferStorage(m_ubo_mat, sizeof(CKGLMaterialUniform), nullptr, GL_DYNAMIC_STORAGE_BIT);
         glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_ubo_mat);
     }
     //setup lights uniform block
     {
         int idx = glGetUniformBlockIndex(m_CurrentProgram, "LightsUniformBlock");
         glUniformBlockBinding(m_CurrentProgram, idx, 2);
-        glGenBuffers(1, &m_ubo_lights);
+        m_ubo_lights = ubos[1];
+        glNamedBufferStorage(m_ubo_lights, MAX_ACTIVE_LIGHTS * sizeof(CKGLLightUniform), m_lights_data, GL_DYNAMIC_STORAGE_BIT);
         glBindBufferBase(GL_UNIFORM_BUFFER, 2, m_ubo_lights);
-    }
-    //setup texture combinator uniform block
-    {
-        int idx = glGetUniformBlockIndex(m_CurrentProgram, "TexCombinatorUniformBlock");
-        glUniformBlockBinding(m_CurrentProgram, idx, 1);
-        glGenBuffers(1, &m_ubo_texc);
-        glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_ubo_texc);
     }
     //initialize texture combinator stuff
     m_texcombo[0] = CKGLTexCombinatorUniform::make(
@@ -376,13 +376,16 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
             TexOp::disable, TexArg::texture, TexArg::current, TexArg::current,
             TexOp::disable, TexArg::diffuse, TexArg::current, TexArg::current,
             TexArg::current, ~0U);
-    glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc);
-    glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW);
+    //setup texture combinator uniform block
+    {
+        int idx = glGetUniformBlockIndex(m_CurrentProgram, "TexCombinatorUniformBlock");
+        glUniformBlockBinding(m_CurrentProgram, idx, 1);
+        m_ubo_texc = ubos[2];
+        glNamedBufferStorage(m_ubo_texc, CKRST_MAX_STAGES * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_STORAGE_BIT);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_ubo_texc);
+    }
     for (int i = 0; i < 8; ++i)
         glUniform1ui(get_uniform_location(("texp[" + std::to_string(i) + "]").c_str()), m_tex_vp[i]);
-
-    glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights);
-    glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW);
 
     SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&VxMatrix::Identity());
     SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&VxMatrix::Identity());
@@ -562,8 +565,7 @@ CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
     if (m_lights[Light].first < MAX_ACTIVE_LIGHTS)
     {
         m_lights_data[m_lights[Light].first] = CKGLLightUniform(*data);
-        glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights);
-        glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW);
+        glNamedBufferSubData(m_ubo_lights, m_lights[Light].first * sizeof(CKGLLightUniform), sizeof(CKGLLightUniform), &m_lights_data[m_lights[Light].first]);
     }
     return TRUE;
 }
@@ -591,8 +593,7 @@ CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
         if (m_lights[Light].first < MAX_ACTIVE_LIGHTS)
             m_lights_data[m_lights[Light].first].type = 0;
     }
-    glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_lights);
-    glBufferData(GL_UNIFORM_BUFFER, 16 * sizeof(CKGLLightUniform), m_lights_data, GL_STATIC_DRAW);
+    glNamedBufferSubData(m_ubo_lights, m_lights[Light].first * sizeof(CKGLLightUniform), sizeof(CKGLLightUniform), &m_lights_data[m_lights[Light].first]);
     return TRUE;
 }
 
@@ -600,8 +601,7 @@ CKBOOL CKGLRasterizerContext::SetMaterial(CKMaterialData *mat)
 {
     ZoneScopedN(__FUNCTION__);
     CKGLMaterialUniform mu(*mat);
-    glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_mat);
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(CKGLMaterialUniform), &mu, GL_DYNAMIC_DRAW);
+    glNamedBufferSubData(m_ubo_mat, 0, sizeof(CKGLMaterialUniform), &mu);
     return TRUE;
 }
 
@@ -1204,8 +1204,7 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             if (valid)
             {
                 m_texcombo[Stage] = tc;
-                glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc);
-                glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW);
+                glNamedBufferSubData(m_ubo_texc, Stage * sizeof(CKGLTexCombinatorUniform), sizeof(CKGLTexCombinatorUniform), m_texcombo);
             }
             return valid;
         }
@@ -1251,8 +1250,7 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             if (valid)
             {
                 m_texcombo[Stage] = tc;
-                glBindBuffer(GL_UNIFORM_BUFFER, m_ubo_texc);
-                glBufferData(GL_UNIFORM_BUFFER, 8 * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_DRAW);
+                glNamedBufferSubData(m_ubo_texc, Stage * sizeof(CKGLTexCombinatorUniform), sizeof(CKGLTexCombinatorUniform), m_texcombo);
             }
             return valid;
         }
