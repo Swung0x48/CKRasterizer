@@ -1,8 +1,46 @@
 #include "CKDX11Rasterizer.h"
 #include "CKDX11RasterizerCommon.h"
 
+static const char* shader = 
+    "struct VOut\n"
+    "{\n"
+    "float4 position : SV_POSITION;\n"
+    "float4 color : COLOR;\n"
+    "};\n"
+
+    "VOut VShader(float4 position : POSITION, float4 color : COLOR)\n"
+    "{\n"
+    "VOut output;\n"
+
+    "output.position = position;\n"
+    "output.color = color;\n"
+    "return output;\n"
+    "}\n"
+    "float4 PShader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET\n"
+    "{\n"
+    "return color;\n"
+    "}";
+
+struct vertex
+{
+    float X, Y, Z;
+    float Color[4];
+};
+
+vertex triangle[] = {
+    {0.0f, 0.5f, 0.0f, {1.0f, 0.0f, 0.0f, 1.0f} },
+    {0.45f, -0.5, 0.0f, {0.0f, 1.0f, 0.0f, 1.0f} },
+    {-0.45f, -0.5f, 0.0f, {0.0f, 0.0f, 1.0f, 1.0f} }
+};
+ID3D11Buffer *vb;
+ID3D11InputLayout *layout;
+
 CKDX11RasterizerContext::CKDX11RasterizerContext() {}
 CKDX11RasterizerContext::~CKDX11RasterizerContext() {}
+
+static ID3DBlob *vsBlob = nullptr, *psBlob = nullptr;
+static ID3D11VertexShader* vshader;
+static ID3D11PixelShader *pshader;
 CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
                                        CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
@@ -28,9 +66,8 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
                                          D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1};
 #ifdef _DEBUG
-    creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    //creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
-    auto *adapter = static_cast<CKDX11RasterizerDriver *>(m_Driver)->m_Adapter.Get();
     hr = D3D11CreateDeviceAndSwapChain(static_cast<CKDX11RasterizerDriver *>(m_Driver)->m_Adapter.Get(),
                                        D3D_DRIVER_TYPE_UNKNOWN, nullptr, creationFlags, featureLevels,
                                        _countof(featureLevels), D3D11_SDK_VERSION,
@@ -64,6 +101,37 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     m_Height = Height;
     if (m_Fullscreen)
         m_Driver->m_Owner->m_FullscreenContext = this;
+
+    D3DCall(D3DCompile(shader, strlen(shader), nullptr, nullptr, nullptr, "VShader", "vs_4_0", 0, 0, &vsBlob, nullptr));
+    D3DCall(D3DCompile(shader, strlen(shader), nullptr, nullptr, nullptr, "PShader", "ps_4_0", 0, 0, &psBlob, nullptr));
+    D3DCall(m_Device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &vshader));
+    D3DCall(m_Device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &pshader));
+    m_DeviceContext->VSSetShader(vshader, nullptr, 0);
+    m_DeviceContext->PSSetShader(pshader, nullptr, 0);
+
+    D3D11_INPUT_ELEMENT_DESC desc[] = {
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+    };
+    m_Device->CreateInputLayout(desc, 2, vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &layout);
+    m_DeviceContext->IASetInputLayout(layout);
+
+    D3D11_BUFFER_DESC bd;
+    ZeroMemory(&bd, sizeof(bd));
+
+    bd.Usage = D3D11_USAGE_DYNAMIC;
+    bd.ByteWidth = sizeof(vertex) * 3;
+    bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    D3DCall(m_Device->CreateBuffer(&bd, nullptr, &vb));
+    D3D11_MAPPED_SUBRESOURCE ms;
+    D3DCall(m_DeviceContext->Map(vb, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
+    memcpy(ms.pData, triangle, sizeof(triangle));
+    m_DeviceContext->Unmap(vb, NULL);
+
+    
+
     m_InCreateDestroy = FALSE;
 
     return SUCCEEDED(hr);
@@ -77,8 +145,8 @@ CKBOOL CKDX11RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
 {
     if (!m_BackBuffer)
         return FALSE;
-    if (Flags & CKRST_CTXCLEAR_COLOR)
-        m_DeviceContext->ClearRenderTargetView(m_BackBuffer.Get(), m_ClearColor);
+    //if (Flags & CKRST_CTXCLEAR_COLOR)
+        //m_DeviceContext->ClearRenderTargetView(m_BackBuffer.Get(), m_ClearColor);
     /* if (Flags & CKRST_CTXCLEAR_STENCIL)
         D3DCall(m_DeviceContext->ClearDepthStencilView());
     if (Flags & CKRST_)
@@ -87,6 +155,15 @@ CKBOOL CKDX11RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
 }
 CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
     HRESULT hr;
+
+    UINT stride = sizeof(vertex);
+    UINT offset = 0;
+    m_DeviceContext->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+
+    m_DeviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    m_DeviceContext->Draw(3, 0);
+
     D3DCall(m_Swapchain->Present(vsync ? 1 : 0, 0));
     return SUCCEEDED(hr);
 }
