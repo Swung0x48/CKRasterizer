@@ -42,8 +42,7 @@ bool CKGLVertexBuffer::operator==(const CKVertexBufferDesc & that) const
 
 void CKGLVertexBuffer::Create()
 {
-    glGenBuffers(1, &GLBuffer);
-    glBindBuffer(GL_ARRAY_BUFFER, GLBuffer);
+    glCreateBuffers(1, &GLBuffer);
     GLenum flags = GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT;
     if (!(m_Flags & CKRST_VB_WRITEONLY)) //virtools header says this bit is always set, but just in case...
         flags |= GL_MAP_READ_BIT;
@@ -61,8 +60,8 @@ void CKGLVertexBuffer::Create()
     for (unsigned int i = 0; i < elements.size(); ++i)
     {
         const auto& element = elements[i];
-        GLCall(glVertexAttribPointer(element.index, element.count,
-            element.type, element.normalized, GLLayout.GetStride(), (const GLvoid*)offset));
+        glVertexAttribPointer(element.index, element.count,
+            element.type, element.normalized, GLLayout.GetStride(), (const GLvoid*)offset);
         glEnableVertexAttribArray(element.index);
         offset += element.count * GLVertexBufferElement::GetSizeOfType(element.type);
     }
@@ -145,17 +144,16 @@ void CKGLVertexBuffer::Unlock()
 
 CKGLVertexFormat::CKGLVertexFormat(CKRST_VERTEXFORMAT vf) : ckvf(vf)
 {
-    glGenVertexArrays(1, &GLVertexArray);
-    glBindVertexArray(GLVertexArray);
+    glCreateVertexArrays(1, &GLVertexArray);
     auto GLLayout = GLVertexBufferLayout::GetLayoutFromFVF(vf);
     const auto& elements = GLLayout.GetElements();
     unsigned int offset = 0;
     for (unsigned int i = 0; i < elements.size(); ++i)
     {
         const auto& element = elements[i];
-        glVertexAttribFormat(element.index, element.count, element.type, element.normalized, offset);
-        glVertexAttribBinding(element.index, 0);
-        glEnableVertexAttribArray(element.index);
+        glVertexArrayAttribFormat(GLVertexArray, element.index, element.count, element.type, element.normalized, offset);
+        glVertexArrayAttribBinding(GLVertexArray, element.index, 0);
+        glEnableVertexArrayAttrib(GLVertexArray, element.index);
         offset += element.count * GLVertexBufferElement::GetSizeOfType(element.type);
     }
 }

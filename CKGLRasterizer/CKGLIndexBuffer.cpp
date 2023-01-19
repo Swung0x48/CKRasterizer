@@ -34,8 +34,7 @@ bool CKGLIndexBuffer::operator==(const CKIndexBufferDesc & that) const
 
 void CKGLIndexBuffer::Create()
 {
-    glGenBuffers(1, &GLBuffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, GLBuffer);
+    glCreateBuffers(1, &GLBuffer);
     GLenum flags = GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT;
     if (!(m_Flags & CKRST_VB_WRITEONLY)) //virtools header says this bit is always set, but just in case...
         flags |= GL_MAP_READ_BIT;
@@ -44,7 +43,7 @@ void CKGLIndexBuffer::Create()
         client_side_data = VirtualAlloc(nullptr, 2 * m_MaxIndexCount, MEM_RESERVE | MEM_COMMIT | MEM_WRITE_WATCH, PAGE_READWRITE);
     }
     else
-        glBufferStorage(GL_ELEMENT_ARRAY_BUFFER, 2 * this->m_MaxIndexCount, NULL, flags);
+        glNamedBufferStorage(GLBuffer, 2 * this->m_MaxIndexCount, NULL, flags);
     m_Flags |= CKRST_VB_VALID;
 }
 
@@ -70,7 +69,7 @@ void *CKGLIndexBuffer::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
         return client_side_locked_data;
     }
     void* ret = nullptr;
-    ret = glMapBufferRange(GL_ELEMENT_ARRAY_BUFFER, offset, len, GL_MAP_WRITE_BIT | (overwrite ? GL_MAP_INVALIDATE_RANGE_BIT : 0));
+    ret = glMapNamedBufferRange(GLBuffer, offset, len, GL_MAP_WRITE_BIT | (overwrite ? GL_MAP_INVALIDATE_RANGE_BIT : 0));
     return ret;
 }
 
@@ -82,9 +81,9 @@ void CKGLIndexBuffer::Unlock()
         if (!client_side_locked_data) //the entire buffer locked
         {
             GetWriteWatch(WRITE_WATCH_FLAG_RESET, client_side_data, lock_length, (void**)&x, (ULONG_PTR*)&c, &_g);
-            if (c > 0){
-                glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * m_MaxIndexCount, client_side_data, GL_STATIC_DRAW);
-                }
+            if (c > 0) {
+                glNamedBufferData(GLBuffer, 2 * m_MaxIndexCount, client_side_data, GL_STATIC_DRAW);
+            }
         }
         else
         {
@@ -92,7 +91,7 @@ void CKGLIndexBuffer::Unlock()
             if (c > 0)
             {
                 memcpy((uint8_t*)client_side_data + lock_offset, client_side_locked_data, lock_length);
-                glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * m_MaxIndexCount, client_side_data, GL_STATIC_DRAW);
+                glNamedBufferData(GLBuffer, 2 * m_MaxIndexCount, client_side_data, GL_STATIC_DRAW);
             }
             VirtualFree(client_side_locked_data, 0, MEM_RELEASE);
             client_side_locked_data = nullptr;
@@ -102,7 +101,7 @@ void CKGLIndexBuffer::Unlock()
         return;
     }
     int locked = 0;
-    glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_MAPPED, &locked);
+    glGetNamedBufferParameteriv(GLBuffer, GL_BUFFER_MAPPED, &locked);
     if (!locked) return;
-    glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
+    glUnmapNamedBuffer(GLBuffer);
 }
