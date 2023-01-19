@@ -1,26 +1,48 @@
+#include "CKGLTexture.h"
 #include "CKGLRasterizer.h"
 
-CKGLTextureDesc::CKGLTextureDesc(CKTextureDesc *texdesc) : CKTextureDesc(*texdesc)
+#include <VxColor.h>
+
+CKGLTexture::CKGLTexture(CKTextureDesc *texdesc) : CKTextureDesc(*texdesc)
 {
     tex = 0;
     glfmt = GL_RGBA;
     gltyp = GL_UNSIGNED_BYTE;
 }
 
-void CKGLTextureDesc::Create()
+void CKGLTexture::set_parameter(GLenum p, int pv)
 {
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    if (params.find(p) == params.end() || params[p] != pv)
+    {
+        glTextureParameteri(tex, p, pv);
+        params[p] = pv;
+    }
 }
 
-void CKGLTextureDesc::Bind(CKGLRasterizerContext *ctx)
+void CKGLTexture::set_border_color(int color)
+{
+    if (params.find(GL_TEXTURE_BORDER_COLOR) == params.end() || params[GL_TEXTURE_BORDER_COLOR] != color)
+    {
+        VxColor c((CKDWORD)color);
+        glTextureParameterfv(tex, GL_TEXTURE_BORDER_COLOR, (float*)&c.col);
+        params[GL_TEXTURE_BORDER_COLOR] = color;
+    }
+}
+
+void CKGLTexture::Create()
+{
+    glCreateTextures(GL_TEXTURE_2D, 1, &tex);
+    glTextureStorage2D(tex, 1, GL_RGBA8, Format.Width, Format.Height);
+    set_parameter(GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    set_parameter(GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+}
+
+void CKGLTexture::Bind()
 {
     glBindTexture(GL_TEXTURE_2D, tex);
 }
 
-void CKGLTextureDesc::Load(void *data)
+void CKGLTexture::Load(void *data)
 {
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Format.Width, Format.Height, 0, glfmt, gltyp, data);
+    glTextureSubImage2D(tex, 0, 0, 0, Format.Width, Format.Height, glfmt, gltyp, data);
 }

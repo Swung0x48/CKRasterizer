@@ -77,22 +77,6 @@ public:
     HGLRC m_RC;
 };
 
-typedef struct CKGLTextureDesc : public CKTextureDesc
-{
-public:
-    GLuint tex;
-    GLenum glfmt;
-    GLenum gltyp;
-public:
-    CKGLTextureDesc() { tex = 0; glfmt = gltyp = GL_INVALID_ENUM; }
-    CKGLTextureDesc(CKTextureDesc *texdesc);
-    ~CKGLTextureDesc() { glDeleteTextures(1, &tex); }
-
-    void Create();
-    void Bind(CKGLRasterizerContext *ctx);
-    void Load(void *data);
-} CKGLTextureDesc;
-
 struct pair_hash
 {
     template<class S, class T>
@@ -387,7 +371,9 @@ private:
     std::unordered_map<CKDWORD, CKGLIndexBuffer*> m_dynibo;
     DWORD m_noibo_draw_counter = 0;
     CKDWORD m_cur_vp = 0;
-    CKGLTexCombinatorUniform m_texcombo[8];
+    CKDWORD m_cur_ts = ~0U;
+    CKDWORD m_ts_texture[CKRST_MAX_STAGES] = {~0U};
+    CKGLTexCombinatorUniform m_texcombo[CKRST_MAX_STAGES];
     CKDWORD m_tex_vp[8] = {0};
     GLuint m_ubo_mat = 0;
     GLuint m_ubo_texc = 0;

@@ -1,6 +1,7 @@
 #include "CKGLRasterizer.h"
 #include "CKGLVertexBuffer.h"
 #include "CKGLIndexBuffer.h"
+#include "CKGLTexture.h"
 #include "CKGLPostProcessing.h"
 #include "EnumMaps.h"
 
@@ -245,6 +246,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     if (glewInit() != GLEW_OK)
         return FALSE;
     //check for required extensions...
+    //!!TODO: also needs checking: >=4.2 || ARB_texture_storage
     if (!( GLEW_VERSION_4_5 ||
           (GLEW_VERSION_4_3 && GLEW_ARB_direct_state_access) ||
           (GLEW_VERSION_3_3 && GLEW_ARB_direct_state_access && GLEW_ARB_vertex_attrib_binding)))
@@ -339,8 +341,8 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         blank.Format.Height = 1;
         CKDWORD white = ~0U;
         CreateTexture(0, &blank);
-        CKGLTextureDesc* blanktex = static_cast<CKGLTextureDesc*>(m_Textures[0]);
-        blanktex->Bind(this);
+        CKGLTexture* blanktex = static_cast<CKGLTexture*>(m_Textures[0]);
+        blanktex->Bind();
         blanktex->Load(&white);
     }
     //setup material uniform block
@@ -509,6 +511,8 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
         _SetRenderState(VXRENDERSTATE_CULLMODE, m_renderst[VXRENDERSTATE_CULLMODE]);
     if (m_renderst[VXRENDERSTATE_FILLMODE] != VXFILL_SOLID)
         _SetRenderState(VXRENDERSTATE_ZENABLE, m_renderst[VXRENDERSTATE_FILLMODE]);
+    m_cur_ts = ~0U;
+    memset(m_ts_texture, 0xFF, sizeof(m_ts_texture));
 
     if (m_ppsh_switch_pending)
     {
@@ -1077,21 +1081,25 @@ CKBOOL CKGLRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
     ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
-    glActiveTexture(GL_TEXTURE0 + Stage);
-    CKGLTextureDesc *desc = static_cast<CKGLTextureDesc *>(m_Textures[Texture]);
+    if (Stage != m_cur_ts)
+    {
+        glActiveTexture(GL_TEXTURE0 + Stage);
+        m_cur_ts = Stage;
+    }
+    m_ts_texture[Stage] = Texture;
+    CKGLTexture *desc = static_cast<CKGLTexture *>(m_Textures[Texture]);
     if (!desc)
     {
         glBindTexture(GL_TEXTURE_2D, 0);
         return TRUE;
     }
-    desc->Bind(this);
+    desc->Bind();
     return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
     ZoneScopedN(__FUNCTION__);
-    //Currently, we ignore the Stage parameter (we only support 1 stage as of yet)
     auto vxaddrmode2glwrap = [](VXTEXTURE_ADDRESSMODE am) -> GLenum
     {
         switch (am)
@@ -1104,28 +1112,72 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             default: return GL_INVALID_ENUM;
         }
     };
+    auto vxfiltermode2glfilter = [](VXTEXTURE_FILTERMODE fm) -> GLenum
+    {
+        switch (fm)
+        {
+            case VXTEXTUREFILTER_NEAREST: return GL_NEAREST;
+            case VXTEXTUREFILTER_LINEAR: return GL_LINEAR;
+            //we don't generate mipmap yet
+            case VXTEXTUREFILTER_MIPNEAREST: return GL_LINEAR;
+            case VXTEXTUREFILTER_MIPLINEAR: return GL_LINEAR;
+            case VXTEXTUREFILTER_LINEARMIPNEAREST: return GL_LINEAR;
+            case VXTEXTUREFILTER_LINEARMIPLINEAR: return GL_LINEAR;
+            //needs ARB_texture_filter_anisotropic or EXT_texture_filter_anisotropic...
+            case VXTEXTUREFILTER_ANISOTROPIC: return GL_LINEAR;
+            default: return GL_INVALID_ENUM;
+        }
+    };
     switch (Tss)
     {
         case CKRST_TSS_ADDRESS:
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value));
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value));
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value));
+            if (~m_ts_texture[Stage])
+            {
+                CKGLTexture *t = static_cast<CKGLTexture*>(m_Textures[m_ts_texture[Stage]]);
+                int glwrapval = vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value);
+                t->set_parameter(GL_TEXTURE_WRAP_S, glwrapval);
+                t->set_parameter(GL_TEXTURE_WRAP_T, glwrapval);
+                t->set_parameter(GL_TEXTURE_WRAP_R, glwrapval);
+            }
             return TRUE;
         case CKRST_TSS_ADDRESSU:
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value));
+            if (~m_ts_texture[Stage])
+            {
+                CKGLTexture *t = static_cast<CKGLTexture*>(m_Textures[m_ts_texture[Stage]]);
+                int glwrapval = vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value);
+                t->set_parameter(GL_TEXTURE_WRAP_S, glwrapval);
+            }
             return TRUE;
         case CKRST_TSS_ADDRESSV:
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value));
+            if (~m_ts_texture[Stage])
+            {
+                CKGLTexture *t = static_cast<CKGLTexture*>(m_Textures[m_ts_texture[Stage]]);
+                int glwrapval = vxaddrmode2glwrap((VXTEXTURE_ADDRESSMODE)Value);
+                t->set_parameter(GL_TEXTURE_WRAP_T, glwrapval);
+            }
             return TRUE;
         case CKRST_TSS_BORDERCOLOR:
-        {
-            VxColor c(Value);
-            glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, (float*)&c.col);
+            if (~m_ts_texture[Stage])
+            {
+                CKGLTexture *t = static_cast<CKGLTexture*>(m_Textures[m_ts_texture[Stage]]);
+                t->set_border_color((int)Value);
+            }
             return TRUE;
-        }
         case CKRST_TSS_MINFILTER:
+            if (~m_ts_texture[Stage])
+            {
+                CKGLTexture *t = static_cast<CKGLTexture*>(m_Textures[m_ts_texture[Stage]]);
+                int glfilterval = vxfiltermode2glfilter((VXTEXTURE_FILTERMODE)Value);
+                t->set_parameter(GL_TEXTURE_MIN_FILTER, glfilterval);
+            }
+            return TRUE;
         case CKRST_TSS_MAGFILTER:
-            //!!TODO
+            if (~m_ts_texture[Stage])
+            {
+                CKGLTexture *t = static_cast<CKGLTexture*>(m_Textures[m_ts_texture[Stage]]);
+                int glfilterval = vxfiltermode2glfilter((VXTEXTURE_FILTERMODE)Value);
+                t->set_parameter(GL_TEXTURE_MAG_FILTER, glfilterval);
+            }
             return TRUE;
         case CKRST_TSS_STAGEBLEND:
         {
@@ -1220,6 +1272,9 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
         }
         case CKRST_TSS_TEXCOORDINDEX:
         {
+            //we currently ignore the texture coords index encoded in Value...
+            //because we simply don't have that in our frag shader...
+            //we only care about automatic texture coords generation for now.
             CKDWORD tvp = m_tex_vp[Stage] & (~0U ^ 0x07000000U);
             switch (Value >> 16)
             {
@@ -1616,7 +1671,7 @@ CKBOOL CKGLRasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &
     ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
-    CKGLTextureDesc *desc = static_cast<CKGLTextureDesc *>(m_Textures[Texture]);
+    CKGLTexture *desc = static_cast<CKGLTexture *>(m_Textures[Texture]);
     if (!desc)
         return FALSE;
     VxImageDescEx dst;
@@ -1633,7 +1688,7 @@ CKBOOL CKGLRasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &
     dst.Image = new uint8_t[dst.Width * dst.Height * (dst.BitsPerPixel / 8)];
     VxDoBlitUpsideDown(SurfDesc, dst);
     if (!(SurfDesc.AlphaMask || SurfDesc.Flags >= _DXT1)) VxDoAlphaBlit(dst, 255);
-    desc->Bind(this);
+    desc->Bind();
     desc->Load(dst.Image);
     delete dst.Image;
     return TRUE;
@@ -1790,7 +1845,7 @@ CKBOOL CKGLRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Desi
     fprintf(stderr, "create texture %d %dx%d %x\n", Texture, DesiredFormat->Format.Width, DesiredFormat->Format.Height, DesiredFormat->Flags);
 #endif
 
-    CKGLTextureDesc *desc = new CKGLTextureDesc(DesiredFormat);
+    CKGLTexture *desc = new CKGLTexture(DesiredFormat);
     m_Textures[Texture] = desc;
     desc->Create();
     return TRUE;
