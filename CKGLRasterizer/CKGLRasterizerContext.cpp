@@ -72,10 +72,16 @@ CKGLRasterizerContext::~CKGLRasterizerContext()
 {
     glDeleteProgram(m_CurrentProgram);
 #if USE_FBO_AND_POSTPROCESSING
-    m_2dpp->clear_stages();
-    delete m_2dpp;
-    m_3dpp->clear_stages();
-    delete m_3dpp;
+    if (m_2dpp)
+    {
+        m_2dpp->clear_stages();
+        delete m_2dpp;
+    }
+    if (m_3dpp)
+    {
+        m_3dpp->clear_stages();
+        delete m_3dpp;
+    }
 #endif
     if (m_Owner->m_FullscreenContext == this)
         m_Owner->m_FullscreenContext = NULL;
@@ -166,9 +172,6 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         return 0;
     }
 
-    m_DC = fakeDC;
-    m_RC = fakeRC;
-    m_HWND = fakeWND;
     PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = nullptr;
     wglChoosePixelFormatARB = reinterpret_cast<PFNWGLCHOOSEPIXELFORMATARBPROC>(wglGetProcAddress("wglChoosePixelFormatARB"));
     if (wglChoosePixelFormatARB == nullptr) {
@@ -207,37 +210,56 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     PIXELFORMATDESCRIPTOR PFD;
     DescribePixelFormat(DC, pixelFormatID, sizeof(PFD), &PFD);
     SetPixelFormat(DC, pixelFormatID, &PFD);
-    const int major_min = 4, minor_min = 5;
-#ifdef GL_DEBUG
-    const int context_flag = WGL_CONTEXT_DEBUG_BIT_ARB;
-#else
-    const int context_flag = 0;
-#endif
-    int  contextAttribs[] = {
-        WGL_CONTEXT_MAJOR_VERSION_ARB, major_min,
-        WGL_CONTEXT_MINOR_VERSION_ARB, minor_min,
-        WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-        WGL_CONTEXT_FLAGS_ARB, context_flag,
-        0
-    };
-
-    HGLRC RC = wglCreateContextAttribsARB(DC, NULL, contextAttribs);
-    if (RC == NULL) {
-        return 0;
-    }
-    wglMakeCurrent(NULL, NULL);
-    wglDeleteContext(m_RC);
-    ReleaseDC(m_HWND, m_DC);
-    DestroyWindow(m_HWND);
-    m_DC = DC;
-    m_RC = RC;
-    m_Window = Window;
-    if (!wglMakeCurrent(DC, RC)) {
-        return 0;
-    }
-    if (glewInit() != GLEW_OK)
+    const std::vector<std::pair<int, int>> gl_versions =
+        {{4, 6}, {4, 5}, {4, 4}, {4, 3}, {4, 2}, {4, 1}, {4, 0},
+         {3, 3}, {3, 2}, {3, 1}, {3, 0}};
+    HGLRC RC = NULL;
+    for (auto ver : gl_versions)
     {
-        return 0;
+#ifdef GL_DEBUG
+        const int context_flag = WGL_CONTEXT_DEBUG_BIT_ARB;
+#else
+        const int context_flag = 0;
+#endif
+        int  contextAttribs[] = {
+            WGL_CONTEXT_MAJOR_VERSION_ARB, ver.first,
+            WGL_CONTEXT_MINOR_VERSION_ARB, ver.second,
+            WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+            WGL_CONTEXT_FLAGS_ARB, context_flag,
+            0
+        };
+
+        RC = wglCreateContextAttribsARB(DC, NULL, contextAttribs);
+        if (RC != NULL) break;
+    }
+    if (RC == NULL)
+        return FALSE;
+    wglMakeCurrent(NULL, NULL);
+    wglDeleteContext(fakeRC);
+    ReleaseDC(fakeWND, fakeDC);
+    DestroyWindow(fakeWND);
+    m_Window = Window;
+    m_DC = DC;
+    if (!wglMakeCurrent(DC, RC))
+        return FALSE;
+    if (glewInit() != GLEW_OK)
+        return FALSE;
+    //check for required extensions...
+    if (!( GLEW_VERSION_4_5 ||
+          (GLEW_VERSION_4_3 && GLEW_ARB_direct_state_access) ||
+          (GLEW_VERSION_3_3 && GLEW_ARB_direct_state_access && GLEW_ARB_vertex_attrib_binding)))
+    {
+        std::string glver = std::string((char*)glGetString(GL_VERSION));
+        int response = MessageBoxA((HWND)m_Window,
+            ("Unsupported OpenGL version (" + glver + "). Do you want to try using this context anyway?").c_str(),
+            "Cannot start rasterizer context",
+            MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+        if (response == IDNO)
+        {
+            wglDeleteContext(RC);
+            ReleaseDC((HWND)Window, DC);
+            return FALSE;
+        }
     }
 #ifdef GL_DEBUG
     glEnable(GL_DEBUG_OUTPUT);

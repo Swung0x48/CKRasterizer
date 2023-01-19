@@ -362,10 +362,8 @@ protected:
 
 public:
     CKGLRasterizer *m_Owner;
-    HDC m_DC;
-    HGLRC m_RC;
-    HWND m_HWND;
 private:
+    HDC m_DC = NULL;
     CKBOOL m_Vsync = FALSE;
     constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
     CKDWORD m_CurrentVertexShader = INVALID_VALUE;

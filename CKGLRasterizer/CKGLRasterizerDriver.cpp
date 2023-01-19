@@ -16,9 +16,6 @@ CKRasterizerContext *CKGLRasterizerDriver::CreateContext() {
     CKGLRasterizerContext* context = new CKGLRasterizerContext;
     context->m_Driver = this;
     context->m_Owner = static_cast<CKGLRasterizer *>(m_Owner);
-    context->m_DC = m_DC;
-    context->m_RC = m_RC;
-    context->m_HWND = m_HWND;
     m_Contexts.PushBack(context);
     return context;
 }
