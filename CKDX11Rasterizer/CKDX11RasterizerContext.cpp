@@ -247,7 +247,44 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
 }
 CKBOOL CKDX11RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
 {
-    return CKRasterizerContext::CreateObject(ObjIndex, Type, DesiredFormat);
+    int result;
+
+    if (ObjIndex >= m_Textures.Size())
+        return FALSE;
+    switch (Type)
+    {
+        case CKRST_OBJ_TEXTURE:
+            result = CreateTexture(ObjIndex, static_cast<CKTextureDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_SPRITE:
+            {
+                return 0;
+                result = CreateSprite(ObjIndex, static_cast<CKSpriteDesc *>(DesiredFormat));
+                CKSpriteDesc *desc = m_Sprites[ObjIndex];
+                fprintf(stderr, "idx: %d\n", ObjIndex);
+                for (auto it = desc->Textures.Begin(); it != desc->Textures.End(); ++it)
+                {
+                    fprintf(stderr, "(%d,%d) WxH: %dx%d, SWxSH: %dx%d\n", it->x, it->y, it->w, it->h, it->sw, it->sh);
+                }
+                fprintf(stderr, "---\n");
+                break;
+            }
+        case CKRST_OBJ_VERTEXBUFFER:
+            result = CreateVertexBuffer(ObjIndex, static_cast<CKVertexBufferDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_INDEXBUFFER:
+            result = CreateIndexBuffer(ObjIndex, static_cast<CKIndexBufferDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_VERTEXSHADER:
+            result = CreateVertexShader(ObjIndex, static_cast<CKVertexShaderDesc *>(DesiredFormat));
+            break;
+        case CKRST_OBJ_PIXELSHADER:
+            result = CreatePixelShader(ObjIndex, static_cast<CKPixelShaderDesc *>(DesiredFormat));
+            break;
+        default:
+            return 0;
+    }
+    return result;
 }
 void *CKDX11RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
                                                 CKRST_LOCKFLAGS Lock)
