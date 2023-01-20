@@ -338,7 +338,7 @@ CKBOOL CKDX11RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShad
     d11desc = new CKDX11VertexShaderDesc;
     d11desc->m_Function = DesiredFormat->m_Function;
     d11desc->m_FunctionSize = DesiredFormat->m_FunctionSize;
-    CKBOOL succeeded = d11desc->Create();
+    CKBOOL succeeded = d11desc->Create(this);
     if (succeeded)
         m_VertexShaders[VShader] = d11desc;
     return succeeded;
@@ -366,7 +366,7 @@ CKBOOL CKDX11RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShader
     d11desc = new CKDX11PixelShaderDesc;
     d11desc->m_Function = DesiredFormat->m_Function;
     d11desc->m_FunctionSize = DesiredFormat->m_FunctionSize;
-    CKBOOL succeeded = d11desc->Create();
+    CKBOOL succeeded = d11desc->Create(this);
     if (succeeded)
         m_PixelShaders[PShader] = d11desc;
     return succeeded;
