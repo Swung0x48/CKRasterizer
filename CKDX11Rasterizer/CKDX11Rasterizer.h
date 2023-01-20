@@ -16,6 +16,7 @@
 #endif
 
 #include "FlexibleVertexFormat.h"
+using Microsoft::WRL::ComPtr;
 
 class CKDX11Rasterizer : public CKRasterizer
 {
@@ -27,8 +28,8 @@ public:
 	virtual void Close(void);
 
 public:
-    Microsoft::WRL::ComPtr<IDXGIFactory1> m_Factory;
-    CKBOOL m_TearingSupport;
+    ComPtr<IDXGIFactory1> m_Factory;
+    CKBOOL m_TearingSupport = FALSE;
 };
 
 class CKDX11RasterizerDriver : public CKRasterizerDriver
@@ -40,12 +41,12 @@ public:
     //--- Contexts
     virtual CKRasterizerContext *CreateContext();
     
-    CKBOOL InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapter1> Adapter, Microsoft::WRL::ComPtr<IDXGIOutput> Output);
+    CKBOOL InitializeCaps(ComPtr<IDXGIAdapter1> Adapter, ComPtr<IDXGIOutput> Output);
 
 public:
     CKBOOL m_Inited;
-    Microsoft::WRL::ComPtr<IDXGIAdapter1> m_Adapter;
-    Microsoft::WRL::ComPtr<IDXGIOutput> m_Output;
+    ComPtr<IDXGIAdapter1> m_Adapter;
+    ComPtr<IDXGIOutput> m_Output;
     DXGI_ADAPTER_DESC1 m_AdapterDesc;
     DXGI_OUTPUT_DESC m_OutputDesc;
 };
@@ -170,10 +171,10 @@ protected:
 //    LPDIRECT3DSURFACE9 GetTempZBuffer(int Width, int Height);
 
 public:
-    Microsoft::WRL::ComPtr<IDXGISwapChain> m_Swapchain;
-    Microsoft::WRL::ComPtr<ID3D11Device> m_Device;
-    Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_DeviceContext;
-    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_BackBuffer;
+    ComPtr<IDXGISwapChain> m_Swapchain;
+    ComPtr<ID3D11Device> m_Device;
+    ComPtr<ID3D11DeviceContext> m_DeviceContext;
+    ComPtr<ID3D11RenderTargetView> m_BackBuffer;
 
     D3D_FEATURE_LEVEL m_FeatureLevel;
     const float m_ClearColor[4] = {
@@ -236,24 +237,42 @@ public:
     CKDX11Rasterizer *m_Owner;
 };
 
+
+
 typedef struct CKDX11VertexBufferDesc : public CKVertexBufferDesc
 {
 public:
-    Microsoft::WRL::ComPtr<ID3D11Buffer> DxBuffer;
+    ComPtr<ID3D11Buffer> DxBuffer;
     D3D11_BUFFER_DESC DxDesc;
     CKDX11VertexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
+    virtual CKBOOL Create(CKDX11RasterizerContext* ctx);
 } CKDX11VertexBufferDesc;
 
 typedef struct CKDX11IndexBufferDesc : public CKIndexBufferDesc
 {
 public:
-    Microsoft::WRL::ComPtr<ID3D11Buffer> DxBuffer;
+    ComPtr<ID3D11Buffer> DxBuffer;
     D3D11_BUFFER_DESC DxDesc;
     CKDX11IndexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
+    virtual CKBOOL Create(CKDX11RasterizerContext* ctx);
 } CKDX11IndexBufferDesc;
 
 typedef struct CKDX11VertexShaderDesc: public CKVertexShaderDesc
 {
-    Microsoft::WRL::ComPtr<ID3DBlob> DxBlob;
-    Microsoft::WRL::ComPtr<ID3D11VertexShader> DxShader;
+    ComPtr<ID3DBlob> DxBlob;
+    ComPtr<ID3D11VertexShader> DxShader;
+    LPCSTR DxEntryPoint = "VShader";
+    LPCSTR DxTarget = "vs_4_0";
+    ComPtr<ID3DBlob> DxErrorMsgs;
+    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
 } CKDX11VertexShaderDesc;
+
+typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
+{
+    ComPtr<ID3DBlob> DxBlob;
+    ComPtr<ID3D11PixelShader> DxShader;
+    LPCSTR DxEntryPoint = "PShader";
+    LPCSTR DxTarget = "vs_4_0";
+    ComPtr<ID3DBlob> DxErrorMsgs;
+    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
+} CKDX11PixelShaderDesc;

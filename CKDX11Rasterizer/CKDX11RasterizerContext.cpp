@@ -56,10 +56,10 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     scd.BufferCount = 2;
     scd.BufferDesc.Width = Width;
     scd.BufferDesc.Height = Height;
-    scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // just use 32-bit color here, too lazy to check if valid
+    scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // TODO: just use 32-bit color here, too lazy to check if valid
     scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     scd.OutputWindow = (HWND)Window;
-    scd.SampleDesc.Count = 1; // ignore multisample for now
+    scd.SampleDesc.Count = 1; // TODO: multisample support
     scd.Windowed = !Fullscreen;
     scd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
     scd.Flags = m_AllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
@@ -130,8 +130,6 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(m_DeviceContext->Map(vb, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
     memcpy(ms.pData, triangle, sizeof(triangle));
     m_DeviceContext->Unmap(vb, NULL);
-
-    
 
     m_InCreateDestroy = FALSE;
 
@@ -292,39 +290,149 @@ CKBOOL CKDX11RasterizerContext::GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane
 }
 void *CKDX11RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
 {
-    return CKRasterizerContext::LockIndexBuffer(IB, StartIndex, IndexCount, Lock);
+    if (IB > m_IndexBuffers.Size())
+        return nullptr;
+    auto *desc = static_cast<CKDX11IndexBufferDesc *>(m_IndexBuffers[IB]);
+    if (!desc)
+        return nullptr;
+    HRESULT hr;
+    D3D11_MAPPED_SUBRESOURCE ms;
+    D3DCall(m_DeviceContext->Map(desc->DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms)); // only lock a portion??
+    if (SUCCEEDED(hr))
+        return ms.pData;
+    return nullptr;
 }
-CKBOOL CKDX11RasterizerContext::UnlockIndexBuffer(CKDWORD IB) { return CKRasterizerContext::UnlockIndexBuffer(IB); }
+CKBOOL CKDX11RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
+{
+    if (IB > m_IndexBuffers.Size())
+        return FALSE;
+    auto *desc = static_cast<CKDX11IndexBufferDesc *>(m_IndexBuffers[IB]);
+    if (!desc)
+        return FALSE;
+    m_DeviceContext->Unmap(desc->DxBuffer.Get(), NULL); // subresource??
+    return TRUE;
+}
 CKBOOL CKDX11RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat) { return 0; }
+
+bool operator==(CKVertexShaderDesc a, CKVertexShaderDesc b)
+{
+    return a.m_FunctionSize == b.m_FunctionSize &&
+        (a.m_Function == b.m_Function || 
+            memcmp(a.m_Function, b.m_Function, a.m_FunctionSize) == 0);
+}
+
 CKBOOL CKDX11RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat) { 
     if (VShader >= m_VertexShaders.Size() || !DesiredFormat)
         return FALSE;
-    CKVertexShaderDesc *desc = m_VertexShaders[VShader];
-    if (DesiredFormat == desc) {
-        CKDX11VertexShaderDesc *d11desc = static_cast<CKDX11VertexShaderDesc *>(desc);
-        // 
+    auto *desc = m_VertexShaders[VShader];
+    CKDX11VertexShaderDesc *d11desc = nullptr;
+
+    if (*DesiredFormat == *desc)
+    {
+        d11desc = dynamic_cast<CKDX11VertexShaderDesc *>(desc); // Check if object got from array is actually valid
+        if (d11desc && d11desc->DxBlob) // A valid, while identical object already exists
+            return TRUE;
     }
-    return TRUE;
+    delete desc;
+    m_VertexShaders[VShader] = nullptr;
+    d11desc = new CKDX11VertexShaderDesc;
+    d11desc->m_Function = DesiredFormat->m_Function;
+    d11desc->m_FunctionSize = DesiredFormat->m_FunctionSize;
+    CKBOOL succeeded = d11desc->Create();
+    if (succeeded)
+        m_VertexShaders[VShader] = d11desc;
+    return succeeded;
 }
-CKBOOL CKDX11RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat) { return 0; }
+
+bool operator==(CKPixelShaderDesc a, CKPixelShaderDesc b)
+{
+    return a.m_FunctionSize == b.m_FunctionSize &&
+        (a.m_Function == b.m_Function || memcmp(a.m_Function, b.m_Function, a.m_FunctionSize) == 0);
+}
+
+CKBOOL CKDX11RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat) {
+    if (PShader >= m_PixelShaders.Size() || !DesiredFormat)
+        return FALSE;
+    auto *desc = m_PixelShaders[PShader];
+    CKDX11PixelShaderDesc *d11desc = nullptr;
+    if (*DesiredFormat == *desc)
+    {
+        d11desc = dynamic_cast<CKDX11PixelShaderDesc *>(desc); // Check if object got from array is actually valid
+        if (d11desc && d11desc->DxBlob) // A valid, while identical object already exists
+            return TRUE;
+    }
+    delete desc;
+    m_PixelShaders[PShader] = nullptr;
+    d11desc = new CKDX11PixelShaderDesc;
+    d11desc->m_Function = DesiredFormat->m_Function;
+    d11desc->m_FunctionSize = DesiredFormat->m_FunctionSize;
+    CKBOOL succeeded = d11desc->Create();
+    if (succeeded)
+        m_PixelShaders[PShader] = d11desc;
+    return succeeded;
+}
+
+bool operator==(const CKVertexBufferDesc& a, const CKVertexBufferDesc& b){
+    return a.m_CurrentVCount == b.m_CurrentVCount && a.m_Flags == b.m_Flags &&
+        a.m_MaxVertexCount == b.m_MaxVertexCount && a.m_VertexFormat == b.m_VertexFormat &&
+        a.m_VertexSize == b.m_VertexSize;
+}
+
 CKBOOL CKDX11RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat)
 {
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
         return FALSE;
-    HRESULT hr;
-    D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
-    if (DesiredFormat->m_Flags & CKRST_VB_DYNAMIC)
-        usage = D3D11_USAGE_DYNAMIC;
+    
     auto *vbDesc = m_VertexBuffers[VB];
-    if (vbDesc)
-        delete vbDesc;
-    auto *desc = new CKDX11VertexBufferDesc;
-    desc->DxDesc.Usage = usage;
-    desc->DxDesc.ByteWidth = DesiredFormat->m_MaxVertexCount;
-    desc->DxDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    desc->DxDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-    D3DCall(m_Device->CreateBuffer(&desc->DxDesc, nullptr, desc->DxBuffer.GetAddressOf()));
-    m_VertexBuffers[VB] = desc;
-    return SUCCEEDED(hr);
+    CKDX11VertexBufferDesc *dx11vb = nullptr;
+    if (*DesiredFormat == *vbDesc)
+    {
+        dx11vb = dynamic_cast<CKDX11VertexBufferDesc *>(vbDesc);
+        if (dx11vb && dx11vb->DxBuffer)
+            return TRUE;
+    }
+    delete vbDesc;
+    m_VertexBuffers[VB] = nullptr;
+    
+    dx11vb = new CKDX11VertexBufferDesc;
+    dx11vb->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
+    dx11vb->m_Flags = DesiredFormat->m_Flags;
+    dx11vb->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount;
+
+    CKBOOL succeeded = dx11vb->Create(this);
+    if (succeeded)
+        m_VertexBuffers[VB] = dx11vb;
+    return succeeded;
 }
-CKBOOL CKDX11RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat) { return 0; }
+
+bool operator==(const CKIndexBufferDesc &a, const CKIndexBufferDesc &b)
+{
+    return a.m_Flags == b.m_Flags && a.m_CurrentICount == b.m_CurrentICount &&
+        a.m_MaxIndexCount == b.m_MaxIndexCount;
+}
+
+CKBOOL CKDX11RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat) {
+    if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
+        return FALSE;
+
+    auto *vbDesc = m_IndexBuffers[IB];
+    CKDX11IndexBufferDesc *dx11ib = nullptr;
+    if (*DesiredFormat == *vbDesc)
+    {
+        dx11ib = dynamic_cast<CKDX11IndexBufferDesc *>(vbDesc);
+        if (dx11ib && dx11ib->DxBuffer)
+            return TRUE;
+    }
+    delete vbDesc;
+    m_IndexBuffers[IB] = nullptr;
+
+    dx11ib = new CKDX11IndexBufferDesc;
+    dx11ib->m_CurrentICount = DesiredFormat->m_CurrentICount;
+    dx11ib->m_Flags = DesiredFormat->m_Flags;
+    dx11ib->m_MaxIndexCount = DesiredFormat->m_MaxIndexCount;
+
+    CKBOOL succeeded = dx11ib->Create(this);
+    if (succeeded)
+        m_IndexBuffers[IB] = dx11ib;
+    return succeeded;
+}
