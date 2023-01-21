@@ -6,12 +6,12 @@ uniform float frame_time;
 uniform sampler2D color_in;
 uniform sampler2D norpth_in;
 in vec2 texcoords;
-out vec4 color;
-out vec3 normal;
+layout(location = 0) out vec4 color;
+layout(location = 1) out vec4 norpth;
 void main()
 {
-    normal = texture(norpth_in, texcoords).xyz;
-    vec3 posnormal = (normal + vec3(1.)) / 2;
+    norpth = texture(norpth_in, texcoords);
+    vec3 posnormal = (norpth.xyz + vec3(1.)) / 2;
     color = vec4(posnormal, 1.);
     gl_FragDepth = texture(norpth_in, texcoords).w;
 }

@@ -11,17 +11,18 @@
 
 class CKInputManager;
 class CKGLPostProcessingPipeline;
+class CKGLProgram;
 
 class CKGLPostProcessingStage
 {
 private:
     std::string fshsrc;
-    GLuint program;
+    CKGLProgram *program;
     GLuint fbo;
     GLuint tex[3];
-    std::unordered_map<std::string, GLint> uniform_loc;
+    int width;
+    int height;
 
-    GLint get_uniform_location(const std::string &name);
     void send_uniform(CKGLPostProcessingPipeline *pipeline);
 
     static const int COLOR  = 0;
@@ -31,7 +32,7 @@ private:
 public:
     CKGLPostProcessingStage(const std::string &_fshsrc);
     ~CKGLPostProcessingStage();
-    void setup_fbo(bool has_depth, bool has_normal, int width, int height);
+    void setup_fbo(bool has_depth, bool has_normal, int _width, int _height);
     bool valid();
     void set_as_target();
     void draw(CKGLPostProcessingPipeline *pipeline);

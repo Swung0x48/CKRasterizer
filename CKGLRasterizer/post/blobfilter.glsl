@@ -6,8 +6,8 @@ uniform float frame_time;
 uniform sampler2D color_in;
 uniform sampler2D norpth_in;
 in vec2 texcoords;
-out vec4 color;
-out vec3 normal;
+layout(location = 0) out vec4 color;
+layout(location = 1) out vec4 norpth;
 vec2 clamp2(vec2 x) { return vec2(clamp(x.x, 0., 1.), clamp(x.y, 0., 1.)); }
 void main()
 {
@@ -28,6 +28,6 @@ void main()
             vec4 c2 = max(cc[2], cc[3]);
             color = mix(color, max(color, max(c1, c2)), w);
         }
-    normal = texture(norpth_in, texcoords).xyz;
+    norpth = texture(norpth_in, texcoords);
     gl_FragDepth = texture(norpth_in, texcoords).w;
 }

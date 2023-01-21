@@ -105,25 +105,25 @@ void CKGLProgram::send_uniform()
         switch (u->type())
         {
             case UniformType::f32:
-                glUniform1fv(loc, u->count(), (GLfloat*)u->data());
+                glProgramUniform1fv(program, loc, u->count(), (GLfloat*)u->data());
                 break;
             case UniformType::f32v2:
-                glUniform2fv(loc, u->count(), (GLfloat*)u->data());
+                glProgramUniform2fv(program, loc, u->count(), (GLfloat*)u->data());
                 break;
             case UniformType::f32v3:
-                glUniform3fv(loc, u->count(), (GLfloat*)u->data());
+                glProgramUniform3fv(program, loc, u->count(), (GLfloat*)u->data());
                 break;
             case UniformType::f32v4:
-                glUniform4fv(loc, u->count(), (GLfloat*)u->data());
+                glProgramUniform4fv(program, loc, u->count(), (GLfloat*)u->data());
                 break;
             case UniformType::i32:
-                glUniform1iv(loc, u->count(), (GLint*)u->data());
+                glProgramUniform1iv(program, loc, u->count(), (GLint*)u->data());
                 break;
             case UniformType::u32:
-                glUniform1uiv(loc, u->count(), (GLuint*)u->data());
+                glProgramUniform1uiv(program, loc, u->count(), (GLuint*)u->data());
                 break;
             case UniformType::f32m4:
-                glUniformMatrix4fv(loc, u->count(), u->transposed(), (GLfloat*)u->data());
+                glProgramUniformMatrix4fv(program, loc, u->count(), u->transposed(), (GLfloat*)u->data());
                 break;
         }
     }

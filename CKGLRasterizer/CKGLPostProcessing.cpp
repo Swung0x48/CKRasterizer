@@ -1,67 +1,20 @@
 #include "CKGLPostProcessing.h"
 #include "CKGLRasterizerCommon.h"
+#include "CKGLProgram.h"
 
 #include <CKInputManager.h>
 #include <CKContext.h>
 #include <CKEnums.h>
 
-GLint CKGLPostProcessingStage::get_uniform_location(const std::string &name)
-{
-    if (uniform_loc.find(name) != uniform_loc.end())
-        return uniform_loc[name];
-    uniform_loc[name] = glGetUniformLocation(program, name.c_str());
-    return uniform_loc[name];
-}
-
 CKGLPostProcessingStage::CKGLPostProcessingStage(const std::string &_fshsrc) :
-    fshsrc(_fshsrc), program(0), fbo(0), tex{0, 0, 0}
+    fshsrc(_fshsrc), program(nullptr), fbo(0), tex{0, 0, 0}
 {
-    GLuint pvsh = glCreateShader(GL_VERTEX_SHADER);
-    int l = get_resource_size("CKGLRPP_VERT_SHDR", (char*)1);
-    const char* vshsrc = (char*)get_resource_data("CKGLRPP_VERT_SHDR", (char*)1);
-    glShaderSource(pvsh, 1, &vshsrc, &l);
-    glCompileShader(pvsh);
-    glGetShaderiv(pvsh, GL_COMPILE_STATUS, &l);
-    if (!l)
+    program = new CKGLProgram(get_resource("CKGLRPP_VERT_SHDR", (char*)1), fshsrc);
+    if (program->validate())
     {
-        glGetShaderiv(pvsh, GL_INFO_LOG_LENGTH, &l);
-        std::string info(l, '\0');
-        glGetShaderInfoLog(pvsh, l, NULL, info.data());
-        fprintf(stderr, "post processing stage %p vertex shader error: %s\n", this, info.c_str());
-        glDeleteShader(pvsh);
-        pvsh = 0;
-    }
-    GLuint pfsh = glCreateShader(GL_FRAGMENT_SHADER);
-    const char* fshsrcc = fshsrc.c_str();
-    l = fshsrc.length();
-    glShaderSource(pfsh, 1, &fshsrcc, &l);
-    glCompileShader(pfsh);
-    glGetShaderiv(pfsh, GL_COMPILE_STATUS, &l);
-    if (!l)
-    {
-        glGetShaderiv(pvsh, GL_INFO_LOG_LENGTH, &l);
-        std::string info(l, '\0');
-        glGetShaderInfoLog(pfsh, l, NULL, info.data());
-        fprintf(stderr, "post processing stage %p fragment shader error: %s\n", this, info.c_str());
-        glDeleteShader(pvsh);
-        glDeleteShader(pfsh);
-        pvsh = 0;
-        pfsh = 0;
-    }
-    if (pvsh && pfsh)
-    {
-        program = glCreateProgram();
-        glAttachShader(program, pvsh);
-        glAttachShader(program, pfsh);
-        glBindFragDataLocation(program, 0, "color");
-        glBindFragDataLocation(program, 1, "norpth");
-        glLinkProgram(program);
-        //glValidateProgram(program);
-        //mark for deletion... won't actually delete until program is deleted
-        glDeleteShader(pvsh);
-        glDeleteShader(pfsh);
-        glGenFramebuffers(1, &fbo);
-        glGenTextures(3, tex);
+        program->stage_uniform("color_in", CKGLUniformValue::make_i32(COLOR));
+        program->stage_uniform("norpth_in", CKGLUniformValue::make_i32(NORPTH));
+        program->send_uniform();
     }
 }
 
@@ -69,26 +22,35 @@ CKGLPostProcessingStage::~CKGLPostProcessingStage()
 {
     glDeleteTextures(3, tex);
     glDeleteFramebuffers(1, &fbo);
-    glDeleteProgram(program);
+    delete program;
 }
 
-void CKGLPostProcessingStage::setup_fbo(bool has_depth, bool has_normal, int width, int height)
+void CKGLPostProcessingStage::setup_fbo(bool has_depth, bool has_normal, int _width, int _height)
 {
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    if (fbo)
+    {
+        if (_width != width || _height != height)
+        {
+            glDeleteTextures(3, tex);
+            glDeleteFramebuffers(1, &fbo);
+        } else return;
+    }
+    glCreateFramebuffers(1, &fbo);
+    glCreateTextures(GL_TEXTURE_2D, 3, tex);
+    width = _width;
+    height = _height;
 
-    glBindTexture(GL_TEXTURE_2D, tex[COLOR]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_INT, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex[COLOR], 0);
+    glTextureStorage2D(tex[COLOR], 1, GL_RGBA8, width, height);
+    glTextureParameteri(tex[COLOR], GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(tex[COLOR], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, tex[COLOR], 0);
 
     if (has_normal || has_depth)
     {
-        glBindTexture(GL_TEXTURE_2D, tex[NORPTH]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, tex[NORPTH], 0);
+        glTextureStorage2D(tex[NORPTH], 1, GL_RGBA32F, width, height);
+        glTextureParameteri(tex[NORPTH], GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(tex[NORPTH], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT1, tex[NORPTH], 0);
         GLenum db[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
         glNamedFramebufferDrawBuffers(fbo, 2, db);
     }
@@ -96,10 +58,10 @@ void CKGLPostProcessingStage::setup_fbo(bool has_depth, bool has_normal, int wid
     if (has_depth)
     {
         glBindTexture(GL_TEXTURE_2D, tex[DEPTH]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, tex[DEPTH], 0);
+        glTextureStorage2D(tex[DEPTH], 1, GL_DEPTH_COMPONENT32F, width, height);
+        glTextureParameteri(tex[DEPTH], GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(tex[DEPTH], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glNamedFramebufferTexture(fbo, GL_DEPTH_ATTACHMENT, tex[DEPTH], 0);
     }
 }
 
@@ -115,26 +77,19 @@ void CKGLPostProcessingStage::set_as_target()
 
 void CKGLPostProcessingStage::send_uniform(CKGLPostProcessingPipeline *pipeline)
 {
-    if (~get_uniform_location("color_in"))
-        glUniform1i(get_uniform_location("color_in"), COLOR);
-    if (~get_uniform_location("norpth_in"))
-        glUniform1i(get_uniform_location("norpth_in"), NORPTH);
     float v[2];
     pipeline->get_screen_size(v);
-    if (~get_uniform_location("screen_size"))
-        glUniform2fv(get_uniform_location("screen_size"), 1, v);
+    program->stage_uniform("screen_size", CKGLUniformValue::make_f32v2v(1, v, true));
     pipeline->get_mouse_position(v);
-    if (~get_uniform_location("mouse_pos"))
-        glUniform2fv(get_uniform_location("mouse_pos"), 1, v);
-    if (~get_uniform_location("time"))
-        glUniform1f(get_uniform_location("time"), pipeline->time_since_startup());
-    if (~get_uniform_location("frame_time"))
-        glUniform1f(get_uniform_location("frame_time"), pipeline->time_between_frames());
+    program->stage_uniform("mouse_pos", CKGLUniformValue::make_f32v2v(1, v, true));
+    program->stage_uniform("time", CKGLUniformValue::make_f32(pipeline->time_since_startup()));
+    program->stage_uniform("frame_time", CKGLUniformValue::make_f32(pipeline->time_between_frames()));
+    program->send_uniform();
 }
 
 void CKGLPostProcessingStage::draw(CKGLPostProcessingPipeline *pipeline)
 {
-    glUseProgram(program);
+    program->use();
     send_uniform(pipeline);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex[COLOR]);
