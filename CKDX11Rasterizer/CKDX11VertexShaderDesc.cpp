@@ -10,3 +10,7 @@ CKBOOL CKDX11VertexShaderDesc::Create(CKDX11RasterizerContext *ctx)
     
     return SUCCEEDED(hr);
 }
+
+void CKDX11VertexShaderDesc::Bind(CKDX11RasterizerContext *ctx) {
+    ctx->m_DeviceContext->VSSetShader(DxShader.Get(), nullptr, 0);
+}

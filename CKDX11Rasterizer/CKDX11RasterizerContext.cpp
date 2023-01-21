@@ -103,7 +103,27 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     if (m_Fullscreen)
         m_Driver->m_Owner->m_FullscreenContext = this;
 
-    D3DCall(D3DCompile(shader, strlen(shader), nullptr, nullptr, nullptr, "VShader", "vs_4_0", 0, 0, &vsBlob, nullptr));
+    CKDWORD vs_idx = 0, ps_idx = 1;
+    CKVertexShaderDesc vs_desc;
+    vs_desc.m_Function = (CKDWORD*)shader;
+    vs_desc.m_FunctionSize = strlen(shader);
+    CreateObject(vs_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc);
+
+    CKPixelShaderDesc ps_desc;
+    vs_desc.m_Function = (CKDWORD *)shader;
+    vs_desc.m_FunctionSize = strlen(shader);
+    CreateObject(ps_idx, CKRST_OBJ_PIXELSHADER, &ps_desc);
+
+    m_CurrentVShader = vs_idx;
+    m_CurrentPShader = ps_idx;
+
+    auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[vs_idx]);
+    auto *ps = static_cast<CKDX11PixelShaderDesc *>(m_PixelShaders[ps_idx]);
+
+    vs->Bind(this);
+    ps->Bind(this);
+
+    /*D3DCall(D3DCompile(shader, strlen(shader), nullptr, nullptr, nullptr, "VShader", "vs_4_0", 0, 0, &vsBlob, nullptr));
     D3DCall(D3DCompile(shader, strlen(shader), nullptr, nullptr, nullptr, "PShader", "ps_4_0", 0, 0, &psBlob, nullptr));
     D3DCall(m_Device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &vshader));
     D3DCall(m_Device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &pshader));
@@ -129,7 +149,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3D11_MAPPED_SUBRESOURCE ms;
     D3DCall(m_DeviceContext->Map(vb, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
     memcpy(ms.pData, triangle, sizeof(triangle));
-    m_DeviceContext->Unmap(vb, NULL);
+    m_DeviceContext->Unmap(vb, NULL);*/
 
     m_InCreateDestroy = FALSE;
 
@@ -233,17 +253,130 @@ CKBOOL CKDX11RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const v
 CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
                                               VxDrawPrimitiveData *data)
 {
-    return CKRasterizerContext::DrawPrimitive(pType, indices, indexcount, data);
+    ZoneScopedN(__FUNCTION__);
+    if (!m_SceneBegined)
+        BeginScene();
+    CKBOOL clip = 0;
+    CKDWORD vertexSize;
+    CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
+    if ((data->Flags & CKRST_DP_DOCLIP))
+    {
+        SetRenderState(VXRENDERSTATE_CLIPPING, 1);
+        clip = 1;
+    }
+    else
+    {
+        SetRenderState(VXRENDERSTATE_CLIPPING, 0);
+    }
+
+    CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
+    CKDX11VertexBufferDesc *vertexBufferDesc = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
+    if (vertexBufferDesc == NULL)
+        return FALSE;
+    void *pbData = NULL;
+    CKDWORD startIndex = 0;
+    if (vertexBufferDesc->m_CurrentVCount + data->VertexCount <= vertexBufferDesc->m_MaxVertexCount)
+    {
+        ZoneScopedN("Lock");
+        pbData = LockVertexBuffer(VB, vertexBufferDesc->m_CurrentVCount, data->VertexCount, CKRST_LOCK_NOOVERWRITE);
+        startIndex = vertexBufferDesc->m_CurrentVCount;
+        vertexBufferDesc->m_CurrentVCount += data->VertexCount;
+    }
+    else
+    {
+        ZoneScopedN("Lock");
+        pbData = LockVertexBuffer(VB, 0, data->VertexCount, CKRST_LOCK_NOOVERWRITE);
+        vertexBufferDesc->m_CurrentVCount = data->VertexCount;
+    }
+    CKRSTLoadVertexBuffer(reinterpret_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
+    CKBOOL result = UnlockVertexBuffer(VB);
+    assert(result);
+    return DrawPrimitiveVB(pType, VB, startIndex, data->VertexCount, indices, indexcount);
 }
-CKBOOL CKDX11RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
+
+CKBOOL CKDX11RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD StartVIndex,
                                                 CKDWORD VertexCount, CKWORD *indices, int indexcount)
 {
-    return CKRasterizerContext::DrawPrimitiveVB(pType, VertexBuffer, StartIndex, VertexCount, indices, indexcount);
+    if (!indices)
+        return DrawPrimitiveVBIB(pType, VB, -1, StartVIndex, VertexCount, 0, 0);
+
+    CKDWORD IB = m_IBCounter++;
+    int ibase = 0;
+    // Prepare index buffer for given IB index
+    auto* ibo = m_IndexBuffers[IB];
+    if (!ibo || ibo->m_MaxIndexCount < indexcount)
+    {
+        CKIndexBufferDesc desc;
+        desc.m_MaxIndexCount = indexcount + 100 < 4096 ? 4096 : indexcount + 100;
+        desc.m_CurrentICount = 0;
+        desc.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+        if (!CreateIndexBuffer(IB, &desc))
+            return FALSE;
+    }
+    void *pData = nullptr;
+    if (indexcount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
+    {
+        pData = LockIndexBuffer(IB, ibo->m_CurrentICount, indexcount, CKRST_LOCK_NOOVERWRITE);
+        ibase = ibo->m_CurrentICount;
+        ibo->m_CurrentICount += indexcount;
+    } else
+    {
+        pData = LockIndexBuffer(IB, 0, indexcount, CKRST_LOCK_DISCARD);
+        ibo->m_CurrentICount = indexcount;
+    }
+    if (pData)
+        memcpy(pData, indices, indexcount * sizeof(CKWORD));
+    UnlockIndexBuffer(IB);
+    return DrawPrimitiveVBIB(pType, VB, IB, StartVIndex, VertexCount, ibase, indexcount);
 }
 CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                                   CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
-    return CKRasterizerContext::DrawPrimitiveVBIB(pType, VB, IB, MinVIndex, VertexCount, StartIndex, Indexcount);
+    auto *dxvbo = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
+    if (!dxvbo)
+        return FALSE;
+    HRESULT hr;
+
+    m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
+    
+    m_DeviceContext->IASetVertexBuffers(0, 1, 
+        dxvbo->DxBuffer.GetAddressOf(), (UINT*) &dxvbo->m_VertexSize, (UINT*)&MinVIndex);
+
+    D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+    switch (pType & 0xf)
+    {
+        case VX_LINELIST:
+            topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
+            break;
+        case VX_LINESTRIP:
+            topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
+            break;
+        case VX_TRIANGLELIST:
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+            break;
+        case VX_TRIANGLESTRIP:
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+            break;
+        case VX_TRIANGLEFAN:
+            // D3D11 does not support triangle fan, leave it here.
+            topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+            break;
+        default:
+            break;
+    }
+    m_DeviceContext->IASetPrimitiveTopology(topology);
+
+    SetupStreams(VB, m_CurrentVShader);
+
+    if (IB == -1) // In this case an IB is not required
+    {
+        m_DeviceContext->Draw(VertexCount, MinVIndex); // seems sus, we passed in MinVIndex again here
+        return TRUE;
+    }
+    auto *dxibo = static_cast<CKDX11IndexBufferDesc *>(m_IndexBuffers[IB]);
+    m_DeviceContext->IASetIndexBuffer(dxibo->DxBuffer.Get(), DXGI_FORMAT_R16_UINT, StartIndex);
+    m_DeviceContext->DrawIndexed(Indexcount, StartIndex, MinVIndex);
+    return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
 {
@@ -286,12 +419,7 @@ CKBOOL CKDX11RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE 
     }
     return result;
 }
-void *CKDX11RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
-                                                CKRST_LOCKFLAGS Lock)
-{
-    return CKRasterizerContext::LockVertexBuffer(VB, StartVertex, VertexCount, Lock);
-}
-CKBOOL CKDX11RasterizerContext::UnlockVertexBuffer(CKDWORD VB) { return CKRasterizerContext::UnlockVertexBuffer(VB); }
+
 CKBOOL CKDX11RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
 {
     return CKRasterizerContext::LoadTexture(Texture, SurfDesc, miplevel);
@@ -325,6 +453,39 @@ CKBOOL CKDX11RasterizerContext::GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane
 {
     return CKRasterizerContext::GetUserClipPlane(ClipPlaneIndex, PlaneEquation);
 }
+
+void *CKDX11RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
+                                                CKRST_LOCKFLAGS Lock)
+{
+    if (VB > m_VertexBuffers.Size())
+        return nullptr;
+    auto *desc = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
+    if (!desc)
+        return nullptr;
+    D3D11_MAP mapType = D3D11_MAP_WRITE_DISCARD;
+    if (Lock == CKRST_LOCK_DISCARD)
+        mapType = D3D11_MAP_WRITE_DISCARD;
+    else if (Lock == CKRST_LOCK_DEFAULT)
+        mapType = D3D11_MAP_WRITE_NO_OVERWRITE;
+
+    HRESULT hr;
+    D3D11_MAPPED_SUBRESOURCE ms;
+    D3DCall(m_DeviceContext->Map(desc->DxBuffer.Get(), NULL, mapType, NULL, &ms));
+    if (SUCCEEDED(hr))
+        // seems like d3d11 does not give us an option to map a portion of data...
+        return (char*)ms.pData + StartVertex * desc->m_VertexSize;
+    return nullptr;
+}
+CKBOOL CKDX11RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
+    if (VB > m_IndexBuffers.Size())
+        return FALSE;
+    auto *desc = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
+    if (!desc)
+        return FALSE;
+    m_DeviceContext->Unmap(desc->DxBuffer.Get(), NULL);
+    return TRUE;
+}
+
 void *CKDX11RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
 {
     if (IB > m_IndexBuffers.Size())
@@ -332,11 +493,18 @@ void *CKDX11RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, C
     auto *desc = static_cast<CKDX11IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return nullptr;
+    D3D11_MAP mapType = D3D11_MAP_WRITE_DISCARD;
+    if (Lock == CKRST_LOCK_DISCARD)
+        mapType = D3D11_MAP_WRITE_DISCARD;
+    else if (Lock == CKRST_LOCK_DEFAULT)
+        mapType = D3D11_MAP_WRITE_NO_OVERWRITE;
+
     HRESULT hr;
     D3D11_MAPPED_SUBRESOURCE ms;
-    D3DCall(m_DeviceContext->Map(desc->DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms)); // only lock a portion??
+    D3DCall(m_DeviceContext->Map(desc->DxBuffer.Get(), NULL, mapType, NULL, &ms));
     if (SUCCEEDED(hr))
-        return ms.pData;
+        // seems like d3d11 does not give us an option to map a portion of data...
+        return (char*)ms.pData + StartIndex * sizeof(CKWORD);
     return nullptr;
 }
 CKBOOL CKDX11RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
@@ -346,7 +514,7 @@ CKBOOL CKDX11RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
     auto *desc = static_cast<CKDX11IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return FALSE;
-    m_DeviceContext->Unmap(desc->DxBuffer.Get(), NULL); // subresource??
+    m_DeviceContext->Unmap(desc->DxBuffer.Get(), NULL);
     return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat) { return 0; }
@@ -472,4 +640,18 @@ CKBOOL CKDX11RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc 
     if (succeeded)
         m_IndexBuffers[IB] = dx11ib;
     return succeeded;
+}
+
+void CKDX11RasterizerContext::SetupStreams(CKDWORD VB, CKDWORD VShader)
+{
+    auto *vbo = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
+    if (m_FVF == vbo->m_VertexFormat)
+        return; // no need to re-set input layout
+    auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
+    if (!vbo || !vs)
+        return;
+    HRESULT hr;
+    D3DCall(m_Device->CreateInputLayout(vbo->DxInputElementDesc.data(), vbo->DxInputElementDesc.size(),
+        vs->DxBlob->GetBufferPointer(), vs->DxBlob->GetBufferSize(), m_InputLayout.GetAddressOf()));
+    m_DeviceContext->IASetInputLayout(m_InputLayout.Get());
 }

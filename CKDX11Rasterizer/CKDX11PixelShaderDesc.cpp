@@ -9,3 +9,7 @@ CKBOOL CKDX11PixelShaderDesc::Create(CKDX11RasterizerContext *ctx)
     D3DCall(ctx->m_Device->CreatePixelShader(DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(), nullptr, &DxShader));
     return SUCCEEDED(hr);
 }
+
+void CKDX11PixelShaderDesc::Bind(CKDX11RasterizerContext *ctx) {
+    ctx->m_DeviceContext->PSSetShader(DxShader.Get(), nullptr, 0);
+}

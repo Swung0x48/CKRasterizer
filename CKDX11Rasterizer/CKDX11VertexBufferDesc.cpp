@@ -14,5 +14,7 @@ CKBOOL CKDX11VertexBufferDesc::Create(CKDX11RasterizerContext* ctx)
     DxDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
     D3DCall(ctx->m_Device->CreateBuffer(&DxDesc, nullptr, DxBuffer.GetAddressOf()));
-    return SUCCEEDED(hr);
+
+    bool succeeded = FVF::CreateInputLayoutFromFVF(m_VertexFormat, DxInputElementDesc);
+    return SUCCEEDED(hr) && succeeded;
 }

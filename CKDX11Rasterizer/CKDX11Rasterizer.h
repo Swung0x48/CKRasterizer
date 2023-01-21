@@ -51,6 +51,10 @@ public:
     DXGI_OUTPUT_DESC m_OutputDesc;
 };
 
+struct CKDX11VertexBufferDesc;
+struct CKDX11IndexBufferDesc;
+struct CKDX11VertexShaderDesc;
+struct CKDX11PixelShaderDesc;
 class CKDX11RasterizerContext : public CKRasterizerContext
 {
 public:
@@ -98,7 +102,7 @@ public:
 
     //--- Drawing
     virtual CKBOOL DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount, VxDrawPrimitiveData *data);
-    virtual CKBOOL DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex, CKDWORD VertexCount,
+    virtual CKBOOL DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD StartVIndex, CKDWORD VertexCount,
                                    CKWORD *indices = NULL, int indexcount = NULL);
     virtual CKBOOL DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                      CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount);
@@ -155,6 +159,7 @@ protected:
     CKBOOL CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat);
     CKBOOL CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat);
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
+    void SetupStreams(CKDWORD VB, CKDWORD VShader);
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 #endif
@@ -185,6 +190,11 @@ public:
     };
     D3D11_VIEWPORT m_Viewport;
     CKBOOL m_AllowTearing;
+    CKDWORD m_IBCounter = 0;
+    CKDWORD m_CurrentVShader = -1;
+    CKDWORD m_CurrentPShader = -1;
+    CKDWORD m_FVF = 0;
+    ComPtr<ID3D11InputLayout> m_InputLayout;
         //    IDirect3DDevice9Ex *m_Device;
 //    D3DPRESENT_PARAMETERS m_PresentParams;
 //    VxDirectXData m_DirectXData;
@@ -207,16 +217,16 @@ public:
 //    //--- a copy of what is currently on screen)
 //    LPDIRECT3DSURFACE9 m_ScreenBackup;
 //
-//    //-------------------------------------------------
-//    //--- to avoid redoundant calls to SetVertexShader & SetStreamSource :
-//    //--- a cache with the current vertex format and source VB
-//    CKDWORD m_CurrentVertexShaderCache;
-//    CKDWORD m_CurrentVertexFormatCache;
-//    LPDIRECT3DVERTEXBUFFER9 m_CurrentVertexBufferCache;
-//    CKDWORD m_CurrentVertexSizeCache;
-//
-//    XBitArray m_StateCacheHitMask;
-//    XBitArray m_StateCacheMissMask;
+    //-------------------------------------------------
+    //--- to avoid redoundant calls to SetVertexShader & SetStreamSource :
+    //--- a cache with the current vertex format and source VB
+    // CKDWORD m_CurrentVertexShaderCache;
+    // CKDWORD m_CurrentVertexFormatCache;
+    // LPDIRECT3DVERTEXBUFFER9 m_CurrentVertexBufferCache;
+    // CKDWORD m_CurrentVertexSizeCache;
+
+    // XBitArray m_StateCacheHitMask;
+    // XBitArray m_StateCacheMissMask;
 //
 //    //--------------------------------------------------
 //    // Render states which must be disabled or which values must be translated...
@@ -244,8 +254,9 @@ typedef struct CKDX11VertexBufferDesc : public CKVertexBufferDesc
 public:
     ComPtr<ID3D11Buffer> DxBuffer;
     D3D11_BUFFER_DESC DxDesc;
+    std::vector<D3D11_INPUT_ELEMENT_DESC> DxInputElementDesc;
     CKDX11VertexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
-    virtual CKBOOL Create(CKDX11RasterizerContext* ctx);
+    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
 } CKDX11VertexBufferDesc;
 
 typedef struct CKDX11IndexBufferDesc : public CKIndexBufferDesc
@@ -265,6 +276,7 @@ typedef struct CKDX11VertexShaderDesc: public CKVertexShaderDesc
     LPCSTR DxTarget = "vs_4_0";
     ComPtr<ID3DBlob> DxErrorMsgs;
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
+    virtual void Bind(CKDX11RasterizerContext *ctx);
 } CKDX11VertexShaderDesc;
 
 typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
@@ -275,4 +287,5 @@ typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
     LPCSTR DxTarget = "vs_4_0";
     ComPtr<ID3DBlob> DxErrorMsgs;
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
+    virtual void Bind(CKDX11RasterizerContext *ctx);
 } CKDX11PixelShaderDesc;
