@@ -1,6 +1,8 @@
 #ifndef CKGLRASTERIZERCOMMON_H
 #define CKGLRASTERIZERCOMMON_H
 
+#include <string>
+
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyOpenGL.hpp"
 
@@ -11,5 +13,6 @@ extern CKContext *rst_ckctx;
 
 unsigned int get_resource_size(const char* type, const char* name);
 void* get_resource_data(const char* type, const char* name);
+std::string get_resource(const char* type, const char* name);
 
 #endif

@@ -2,6 +2,7 @@
 #include "CKGLVertexBuffer.h"
 #include "CKGLIndexBuffer.h"
 #include "CKGLTexture.h"
+#include "CKGLProgram.h"
 #include "CKGLPostProcessing.h"
 #include "EnumMaps.h"
 
@@ -65,13 +66,19 @@ void* get_resource_data(const char* type, const char* name)
     return LockResource(hrdat);
 }
 
+std::string get_resource(const char* type, const char* name)
+{
+    size_t sz = get_resource_size(type, name);
+    if (!sz) return std::string();
+    return std::string((char*)get_resource_data(type, name), sz);
+}
+
 CKGLRasterizerContext::CKGLRasterizerContext()
 {
 }
 
 CKGLRasterizerContext::~CKGLRasterizerContext()
 {
-    glDeleteProgram(m_CurrentProgram);
 #if USE_FBO_AND_POSTPROCESSING
     if (m_2dpp)
     {
@@ -95,8 +102,8 @@ CKGLRasterizerContext::~CKGLRasterizerContext()
         delete dib.second;
     m_dynibo.clear();
 
-    GLuint ubos[3] = {m_ubo_mat, m_ubo_texc, m_ubo_lights};
-    glDeleteBuffers(3, ubos);
+    if (m_prgm)
+        delete m_prgm;
 
     m_DirtyRects.Clear();
     m_PixelShaders.Clear();
@@ -248,7 +255,12 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         return FALSE;
     if (glewInit() != GLEW_OK)
         return FALSE;
-    //check for required extensions...
+    //check GL version and required extensions...
+    //required extension                core since
+    //ARB_explicit_attrib_location      3.3
+    //ARB_texture_storage               4.2
+    //ARB_vertex_attrib_binding         4.3
+    //ARB_direct_state_access           4.5
     //!!TODO: also needs checking: >=4.2 || ARB_texture_storage
     if (!( GLEW_VERSION_4_5 ||
           (GLEW_VERSION_4_3 && GLEW_ARB_direct_state_access) ||
@@ -301,42 +313,25 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     memset(m_lights_data, 0, sizeof(m_lights_data));
 
     // TODO: Shader compilation and binding may be moved elsewhere
-    CKDWORD vs_idx = 0, ps_idx = 1;
-    CKVertexShaderDesc vs_desc;
-    vs_desc.m_Function = (CKDWORD*)get_resource_data("CKGLR_VERT_SHADER", "BUILTIN_VERTEX_SHADER");
-    vs_desc.m_FunctionSize = get_resource_size("CKGLR_VERT_SHADER", "BUILTIN_VERTEX_SHADER");
-    CreateObject(vs_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc);
-    CKPixelShaderDesc ps_desc;
-    ps_desc.m_Function = (CKDWORD*)get_resource_data("CKGLR_FRAG_SHADER", "BUILTIN_FRAGMENT_SHADER");
-    ps_desc.m_FunctionSize = get_resource_size("CKGLR_FRAG_SHADER", "BUILTIN_FRAGMENT_SHADER");
-    CreateObject(ps_idx, CKRST_OBJ_PIXELSHADER, &ps_desc);
-    m_CurrentVertexShader = vs_idx;
-    m_CurrentPixelShader = ps_idx;
-    CKGLVertexShaderDesc* vs = static_cast<CKGLVertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShader]);
-    CKGLPixelShaderDesc* ps = static_cast<CKGLPixelShaderDesc*>(m_PixelShaders[m_CurrentPixelShader]);
-    m_CurrentProgram = glCreateProgram();
-    glAttachShader(m_CurrentProgram, vs->GLShader);
-    glAttachShader(m_CurrentProgram, ps->GLShader);
-    glBindFragDataLocation(m_CurrentProgram, 0, "color");
-    glBindFragDataLocation(m_CurrentProgram, 1, "norpth");
-    glLinkProgram(m_CurrentProgram);
-    glValidateProgram(m_CurrentProgram);
-    glUseProgram(m_CurrentProgram);
-    for (int i = 0; i < 8; ++i)
-    glUniform1i(get_uniform_location(("tex[" + std::to_string(i) + "]").c_str()), i);
+    m_prgm = new CKGLProgram(get_resource("CKGLR_VERT_SHADER", "BUILTIN_VERTEX_SHADER"),
+                             get_resource("CKGLR_FRAG_SHADER", "BUILTIN_FRAGMENT_SHADER"));
+    m_prgm->validate();
+    m_prgm->use();
+    for (int i = 0; i < CKRST_MAX_STAGES; ++i)
+        m_prgm->stage_uniform("tex[" + std::to_string(i) + "]", CKGLUniformValue::make_i32(i));
 
     m_lighting_flags = LSW_LIGHTING_ENABLED | LSW_VRTCOLOR_ENABLED;
-    glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags);
+    m_prgm->stage_uniform("lighting_switches", CKGLUniformValue::make_u32v(1, &m_lighting_flags));
     m_alpha_test_flags = 8; //alpha test off, alpha function always
-    glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags);
+    m_prgm->stage_uniform("alphatest_flags", CKGLUniformValue::make_u32v(1, &m_alpha_test_flags));
     m_fog_flags = 0; //fog off, fog type none. We do not support vertex fog.
     VxColor init_fog_color = VxColor();
     m_fog_parameters[0] = 0.;
     m_fog_parameters[1] = 1.;
     m_fog_parameters[2] = 1.;
-    glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags);
-    glUniform4fv(get_uniform_location("fog_color"), 1, (float*)&init_fog_color.col);
-    glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters);
+    m_prgm->stage_uniform("fog_flags", CKGLUniformValue::make_u32v(1, &m_fog_flags));
+    m_prgm->stage_uniform("fog_color", CKGLUniformValue::make_f32v4v(1, (float*)&init_fog_color.col, true));
+    m_prgm->stage_uniform("fog_parameters", CKGLUniformValue::make_f32v3v(1, (float*)&m_fog_parameters));
     //setup blank texture
     {
         CKTextureDesc blank;
@@ -348,24 +343,10 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         blanktex->Bind();
         blanktex->Load(&white);
     }
-    GLuint ubos[3];
-    glCreateBuffers(3, ubos);
     //setup material uniform block
-    {
-        int idx = glGetUniformBlockIndex(m_CurrentProgram, "MatUniformBlock");
-        glUniformBlockBinding(m_CurrentProgram, idx, 0);
-        m_ubo_mat = ubos[0];
-        glNamedBufferStorage(m_ubo_mat, sizeof(CKGLMaterialUniform), nullptr, GL_DYNAMIC_STORAGE_BIT);
-        glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_ubo_mat);
-    }
+    m_ubo_mat = m_prgm->define_uniform_block("MatUniformBlock", sizeof(CKGLMaterialUniform), nullptr);
     //setup lights uniform block
-    {
-        int idx = glGetUniformBlockIndex(m_CurrentProgram, "LightsUniformBlock");
-        glUniformBlockBinding(m_CurrentProgram, idx, 2);
-        m_ubo_lights = ubos[1];
-        glNamedBufferStorage(m_ubo_lights, MAX_ACTIVE_LIGHTS * sizeof(CKGLLightUniform), m_lights_data, GL_DYNAMIC_STORAGE_BIT);
-        glBindBufferBase(GL_UNIFORM_BUFFER, 2, m_ubo_lights);
-    }
+    m_ubo_lights = m_prgm->define_uniform_block("LightsUniformBlock", MAX_ACTIVE_LIGHTS * sizeof(CKGLLightUniform), m_lights_data);
     //initialize texture combinator stuff
     m_texcombo[0] = CKGLTexCombinatorUniform::make(
         TexOp::modulate, TexArg::texture, TexArg::current, TexArg::current,
@@ -377,24 +358,31 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
             TexOp::disable, TexArg::diffuse, TexArg::current, TexArg::current,
             TexArg::current, ~0U);
     //setup texture combinator uniform block
-    {
-        int idx = glGetUniformBlockIndex(m_CurrentProgram, "TexCombinatorUniformBlock");
-        glUniformBlockBinding(m_CurrentProgram, idx, 1);
-        m_ubo_texc = ubos[2];
-        glNamedBufferStorage(m_ubo_texc, CKRST_MAX_STAGES * sizeof(CKGLTexCombinatorUniform), m_texcombo, GL_DYNAMIC_STORAGE_BIT);
-        glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_ubo_texc);
-    }
-    for (int i = 0; i < 8; ++i)
-        glUniform1ui(get_uniform_location(("texp[" + std::to_string(i) + "]").c_str()), m_tex_vp[i]);
+    m_ubo_texc = m_prgm->define_uniform_block("TexCombinatorUniformBlock", CKRST_MAX_STAGES * sizeof(CKGLTexCombinatorUniform), m_texcombo);
 
-    SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&VxMatrix::Identity());
-    SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&VxMatrix::Identity());
-    SetUniformMatrix4fv("world", 1, GL_FALSE, (float*)&VxMatrix::Identity());
-    SetUniformMatrix4fv("tiworld", 1, GL_FALSE, (float*)&VxMatrix::Identity());
-    SetUniformMatrix4fv("tiworldview", 1, GL_FALSE, (float*)&VxMatrix::Identity());
+    for (int i = 0; i < CKRST_MAX_STAGES; ++i)
+        m_prgm->stage_uniform("texp[" + std::to_string(i) + "]", CKGLUniformValue::make_u32v(1, (uint32_t*)&m_tex_vp[i]));
+
+    m_ProjectionMatrix = VxMatrix::Identity();
+    m_ViewMatrix = VxMatrix::Identity();
+    m_WorldMatrix = VxMatrix::Identity();
+    m_ModelViewMatrix = VxMatrix::Identity();
+    m_2dvpmtx = VxMatrix::Identity();
+    m_tiworldmtx = VxMatrix::Identity();
+    m_tiworldviewmtx = VxMatrix::Identity();
+    for (int i = 0; i < CKRST_MAX_STAGES; ++i)
+        m_textrmtx[i] = VxMatrix::Identity();
+    m_prgm->stage_uniform("proj", CKGLUniformValue::make_f32mat4(1, (float*)&m_ProjectionMatrix));
+    m_prgm->stage_uniform("view", CKGLUniformValue::make_f32mat4(1, (float*)&m_ViewMatrix));
+    m_prgm->stage_uniform("world", CKGLUniformValue::make_f32mat4(1, (float*)&m_WorldMatrix));
+    m_prgm->stage_uniform("tiworld", CKGLUniformValue::make_f32mat4(1, (float*)&m_tiworldmtx));
+    m_prgm->stage_uniform("tiworldview", CKGLUniformValue::make_f32mat4(1, (float*)&m_tiworldviewmtx));
+    m_prgm->stage_uniform("mvp2d", CKGLUniformValue::make_f32mat4(1, (float*)&m_2dvpmtx));
+    m_prgm->stage_uniform("textr", CKGLUniformValue::make_f32mat4(CKRST_MAX_STAGES, (float*)&m_textrmtx[0]));
 
     set_position_transformed(true);
     set_vertex_has_color(true);
+    m_prgm->send_uniform();
 
     m_renderst[VXRENDERSTATE_SRCBLEND] = VXBLEND_ONE;
     m_renderst[VXRENDERSTATE_DESTBLEND] = VXBLEND_ZERO;
@@ -501,7 +489,7 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
     m_3dpp->draw();
     if (m_2d_enabled)
         m_2dpp->draw();
-    glUseProgram(m_CurrentProgram);
+    m_prgm->use();
 
     //restore to whatever the state was before
     if (!m_renderst[VXRENDERSTATE_ALPHABLENDENABLE])
@@ -565,7 +553,7 @@ CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
     if (m_lights[Light].first < MAX_ACTIVE_LIGHTS)
     {
         m_lights_data[m_lights[Light].first] = CKGLLightUniform(*data);
-        glNamedBufferSubData(m_ubo_lights, m_lights[Light].first * sizeof(CKGLLightUniform), sizeof(CKGLLightUniform), &m_lights_data[m_lights[Light].first]);
+        m_prgm->update_uniform_block(m_ubo_lights, m_lights[Light].first * sizeof(CKGLLightUniform), sizeof(CKGLLightUniform), &m_lights_data[m_lights[Light].first]);
     }
     return TRUE;
 }
@@ -593,7 +581,7 @@ CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
         if (m_lights[Light].first < MAX_ACTIVE_LIGHTS)
             m_lights_data[m_lights[Light].first].type = 0;
     }
-    glNamedBufferSubData(m_ubo_lights, m_lights[Light].first * sizeof(CKGLLightUniform), sizeof(CKGLLightUniform), &m_lights_data[m_lights[Light].first]);
+    m_prgm->update_uniform_block(m_ubo_lights, m_lights[Light].first * sizeof(CKGLLightUniform), sizeof(CKGLLightUniform), &m_lights_data[m_lights[Light].first]);
     return TRUE;
 }
 
@@ -601,7 +589,7 @@ CKBOOL CKGLRasterizerContext::SetMaterial(CKMaterialData *mat)
 {
     ZoneScopedN(__FUNCTION__);
     CKGLMaterialUniform mu(*mat);
-    glNamedBufferSubData(m_ubo_mat, 0, sizeof(CKGLMaterialUniform), &mu);
+    m_prgm->update_uniform_block(m_ubo_mat, 0, sizeof(CKGLMaterialUniform), &mu);
     return TRUE;
 }
 
@@ -610,14 +598,14 @@ CKBOOL CKGLRasterizerContext::SetViewport(CKViewportData *data)
     ZoneScopedN(__FUNCTION__);
     glViewport(data->ViewX, data->ViewY, data->ViewWidth, data->ViewHeight);
     glDepthRangef(data->ViewZMin, data->ViewZMax);
-    VxMatrix _m = VxMatrix::Identity();
-    float (*m)[4] = (float(*)[4])&_m;
+    m_2dvpmtx = VxMatrix::Identity();
+    float (*m)[4] = (float(*)[4])&m_2dvpmtx;
     m[0][0] = 2. / data->ViewWidth;
     m[1][1] = 2. / data->ViewHeight;
     m[2][2] = 0;
     m[3][0] = -(-2. * data->ViewX + data->ViewWidth) / data->ViewWidth;
     m[3][1] =  (-2. * data->ViewY + data->ViewHeight) / data->ViewHeight;
-    SetUniformMatrix4fv("mvp2d", 1, GL_FALSE, (float*)m);
+    m_prgm->stage_uniform("mvp2d", CKGLUniformValue::make_f32mat4(1, (float*)&m_2dvpmtx));
     return TRUE;
 }
 
@@ -632,14 +620,14 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
             m_WorldMatrix = Mat;
             UnityMatrixMask = WORLD_TRANSFORM;
             Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-            SetUniformMatrix4fv("world", 1, GL_FALSE, (float*)&Mat);
-            VxMatrix im, tim;
-            Vx3DTransposeMatrix(tim, Mat); //row-major to column-major conversion madness
-            im = inv(tim);
-            SetUniformMatrix4fv("tiworld", 1, GL_FALSE, (float*)&im);
-            Vx3DTransposeMatrix(tim, m_ModelViewMatrix);
-            im = inv(tim);
-            SetUniformMatrix4fv("tiworldview", 1, GL_FALSE, (float*)&im);
+            m_prgm->stage_uniform("world", CKGLUniformValue::make_f32mat4(1, (float*)&m_WorldMatrix));
+            VxMatrix tmat;
+            Vx3DTransposeMatrix(tmat, Mat); //row-major to column-major conversion madness
+            m_tiworldmtx = inv(tmat);
+            m_prgm->stage_uniform("tiworld", CKGLUniformValue::make_f32mat4(1, (float*)&m_tiworldmtx));
+            Vx3DTransposeMatrix(tmat, m_ModelViewMatrix);
+            m_tiworldviewmtx = inv(tmat);
+            m_prgm->stage_uniform("tiworldview", CKGLUniformValue::make_f32mat4(1, (float*)&m_tiworldviewmtx));
             m_MatrixUptodate &= ~0U ^ WORLD_TRANSFORM;
             break;
         }
@@ -648,27 +636,27 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
             m_ViewMatrix = Mat;
             UnityMatrixMask = VIEW_TRANSFORM;
             Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-            SetUniformMatrix4fv("view", 1, GL_FALSE, (float*)&Mat);
+            m_prgm->stage_uniform("view", CKGLUniformValue::make_f32mat4(1, (float*)&m_ViewMatrix));
             m_MatrixUptodate = 0;
-            VxMatrix t, im, tim;
-            Vx3DInverseMatrix(t, Mat);
-            m_viewpos = VxVector(t[3][0], t[3][1], t[3][2]);
-            glUniform3fv(get_uniform_location("vpos"), 1, (float*)&m_viewpos);
-            Vx3DTransposeMatrix(tim, m_ModelViewMatrix);
-            im = inv(tim);
-            SetUniformMatrix4fv("tiworldview", 1, GL_FALSE, (float*)&im);
+            VxMatrix tmat;
+            Vx3DInverseMatrix(tmat, Mat);
+            m_viewpos = VxVector(tmat[3][0], tmat[3][1], tmat[3][2]);
+            m_prgm->stage_uniform("vpos", CKGLUniformValue::make_f32v3v(1, (float*)&m_viewpos));
+            Vx3DTransposeMatrix(tmat, m_ModelViewMatrix);
+            m_tiworldviewmtx = inv(tmat);
+            m_prgm->stage_uniform("tiworldview", CKGLUniformValue::make_f32mat4(1, (float*)&m_tiworldviewmtx));
             break;
         }
         case VXMATRIX_PROJECTION:
         {
             m_ProjectionMatrix = Mat;
             UnityMatrixMask = PROJ_TRANSFORM;
-            SetUniformMatrix4fv("proj", 1, GL_FALSE, (float*)&Mat);
+            m_prgm->stage_uniform("proj", CKGLUniformValue::make_f32mat4(1, (float*)&m_ProjectionMatrix));
             float (*m)[4] = (float(*)[4])&Mat;
             float A = m[2][2];
             float B = m[3][2];
             float zp[2] = {-B / A, B / (1 - A)}; //for eye-distance fog calculation
-            glUniform2fv(get_uniform_location("depth_range"), 1, (float*)&zp);
+            m_prgm->stage_uniform("depth_range", CKGLUniformValue::make_f32v2v(1, zp, true));
             m_MatrixUptodate = 0;
             break;
         }
@@ -682,7 +670,8 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
         case VXMATRIX_TEXTURE7:
         {
             CKDWORD tex = Type - VXMATRIX_TEXTURE0;
-            SetUniformMatrix4fv("textr[" + std::to_string(tex) + "]", 1, GL_FALSE, (float*)&Mat);
+            m_textrmtx[tex] = Mat;
+            m_prgm->stage_uniform("textr[" + std::to_string(tex) + "]", CKGLUniformValue::make_f32mat4(1, (float*)&m_textrmtx[tex]));
             UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
             break;
         }
@@ -752,9 +741,9 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         }
     };
     auto send_light_switches = [this]() {
-        glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags);
+        m_prgm->stage_uniform("lighting_switches", CKGLUniformValue::make_u32v(1, &m_lighting_flags));
     };
-    auto toggle_flag = [](CKDWORD *flags, CKDWORD flag, bool enabled) {
+    auto toggle_flag = [](uint32_t *flags, uint32_t flag, bool enabled) {
         if (enabled) *flags |= flag;
         else *flags &= ~0U ^ flag;
     };
@@ -886,54 +875,54 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         case VXRENDERSTATE_ALPHAFUNC:
         {
             m_alpha_test_flags = (m_alpha_test_flags & 0x80) | Value;
-            glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags);
+            m_prgm->stage_uniform("alphatest_flags", CKGLUniformValue::make_u32v(1, &m_alpha_test_flags));
             return TRUE;
         }
         case VXRENDERSTATE_ALPHATESTENABLE:
         {
             toggle_flag(&m_alpha_test_flags, 0x80, Value);
-            glUniform1ui(get_uniform_location("alphatest_flags"), m_alpha_test_flags);
+            m_prgm->stage_uniform("alphatest_flags", CKGLUniformValue::make_u32v(1, &m_alpha_test_flags));
             return TRUE;
         }
         case VXRENDERSTATE_ALPHAREF:
         {
-            glUniform1f(get_uniform_location("alpha_thresh"), Value / 255.);
+            m_prgm->stage_uniform("alpha_thresh", CKGLUniformValue::make_f32(Value / 255.));
             return TRUE;
         }
         case VXRENDERSTATE_FOGENABLE:
         {
             toggle_flag(&m_fog_flags, 0x80, Value);
-            glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags);
+            m_prgm->stage_uniform("fog_flags", CKGLUniformValue::make_u32v(1, &m_fog_flags));
             return TRUE;
         }
         case VXRENDERSTATE_FOGCOLOR:
         {
             VxColor col(Value);
-            glUniform4fv(get_uniform_location("fog_color"), 1, (float*)&col.col);
+            m_prgm->stage_uniform("fog_color", CKGLUniformValue::make_f32v4v(1, (float*)&col.col, true));
             return TRUE;
         }
         case VXRENDERSTATE_FOGPIXELMODE:
         {
             m_fog_flags = (m_fog_flags & 0x80) | Value;
-            glUniform1ui(get_uniform_location("fog_flags"), m_fog_flags);
+            m_prgm->stage_uniform("fog_flags", CKGLUniformValue::make_u32v(1, &m_fog_flags));
             return TRUE;
         }
         case VXRENDERSTATE_FOGSTART:
         {
             m_fog_parameters[0] = reinterpret_cast<float&>(Value);
-            glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters);
+            m_prgm->stage_uniform("fog_parameters", CKGLUniformValue::make_f32v3v(1, (float*)&m_fog_parameters));
             return TRUE;
         }
         case VXRENDERSTATE_FOGEND:
         {
             m_fog_parameters[1] = reinterpret_cast<float&>(Value);
-            glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters);
+            m_prgm->stage_uniform("fog_parameters", CKGLUniformValue::make_f32v3v(1, (float*)&m_fog_parameters));
             return TRUE;
         }
         case VXRENDERSTATE_FOGDENSITY:
         {
             m_fog_parameters[2] = reinterpret_cast<float&>(Value);
-            glUniform3fv(get_uniform_location("fog_parameters"), 1, (float*)&m_fog_parameters);
+            m_prgm->stage_uniform("fog_parameters", CKGLUniformValue::make_f32v3v(1, (float*)&m_fog_parameters));
             return TRUE;
         }
         case VXRENDERSTATE_SHADEMODE:
@@ -1051,7 +1040,7 @@ void CKGLRasterizerContext::toggle_specular_handling()
     else next = LSW_SPCL_OVERR_FORCE;
     m_lighting_flags &= ~0U ^ (LSW_SPCL_OVERR_FORCE | LSW_SPCL_OVERR_ONLY);
     m_lighting_flags |= next;
-    glUniform1ui(get_uniform_location("lighting_switches"), m_lighting_flags);
+    m_prgm->stage_uniform("lighting_switches", CKGLUniformValue::make_u32v(1, &m_lighting_flags));
 }
 
 void CKGLRasterizerContext::toggle_2d_rendering()
@@ -1204,7 +1193,7 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             if (valid)
             {
                 m_texcombo[Stage] = tc;
-                glNamedBufferSubData(m_ubo_texc, Stage * sizeof(CKGLTexCombinatorUniform), sizeof(CKGLTexCombinatorUniform), m_texcombo);
+                m_prgm->update_uniform_block(m_ubo_texc, Stage * sizeof(CKGLTexCombinatorUniform), sizeof(CKGLTexCombinatorUniform), m_texcombo);
             }
             return valid;
         }
@@ -1250,7 +1239,7 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             if (valid)
             {
                 m_texcombo[Stage] = tc;
-                glNamedBufferSubData(m_ubo_texc, Stage * sizeof(CKGLTexCombinatorUniform), sizeof(CKGLTexCombinatorUniform), m_texcombo);
+                m_prgm->update_uniform_block(m_ubo_texc, Stage * sizeof(CKGLTexCombinatorUniform), sizeof(CKGLTexCombinatorUniform), m_texcombo);
             }
             return valid;
         }
@@ -1264,8 +1253,10 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
                 tvp |= TVP_TC_PROJECTED;
             else tvp &= ~0U ^ TVP_TC_PROJECTED;
             if (tvp != m_tex_vp[Stage])
-                glUniform1ui(get_uniform_location(("texp[" + std::to_string(Stage) + "]").c_str()), tvp);
-            m_tex_vp[Stage] = tvp;
+            {
+                m_tex_vp[Stage] = tvp;
+                m_prgm->stage_uniform("texp[" + std::to_string(Stage) + "]", CKGLUniformValue::make_u32v(1, (uint32_t*)&m_tex_vp[Stage]));
+            }
             return TRUE;
         }
         case CKRST_TSS_TEXCOORDINDEX:
@@ -1283,8 +1274,10 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
                 default: return FALSE;
             }
             if (tvp != m_tex_vp[Stage])
-                glUniform1ui(get_uniform_location(("texp[" + std::to_string(Stage) + "]").c_str()), tvp);
-            m_tex_vp[Stage] = tvp;
+            {
+                m_tex_vp[Stage] = tvp;
+                m_prgm->stage_uniform("texp[" + std::to_string(Stage) + "]", CKGLUniformValue::make_u32v(1, (uint32_t*)&m_tex_vp[Stage]));
+            }
             return TRUE;
         }
         default:
@@ -1443,6 +1436,8 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
 #endif
     ibo->Bind();
 
+    m_prgm->send_uniform();
+
     GLenum glpt = GL_NONE;
     switch (pType)
     {
@@ -1554,6 +1549,8 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
             memcpy(pdata, idx, 2 * icnt);
         ibo->Unlock();
     }
+
+    m_prgm->send_uniform();
 
     GLenum glpt = GL_NONE;
     switch (pType & 0xf)
@@ -1745,15 +1742,6 @@ CKBOOL CKGLRasterizerContext::UnlockIndexBuffer(CKDWORD IB)
     return TRUE;
 }
 
-int CKGLRasterizerContext::get_uniform_location(const char *name)
-{
-    ZoneScopedN(__FUNCTION__);
-    if (m_CurrentProgram == INVALID_VALUE) return ~0;
-    if (m_UniformLocationCache.find(name) == m_UniformLocationCache.end())
-        m_UniformLocationCache[name] = glGetUniformLocation(m_CurrentProgram, name);
-    return m_UniformLocationCache[name];
-}
-
 CKGLVertexFormat *CKGLRasterizerContext::get_vertex_format(CKRST_VERTEXFORMAT vf)
 {
     if (m_vertfmts.find(vf) == m_vertfmts.end())
@@ -1781,7 +1769,7 @@ void CKGLRasterizerContext::set_position_transformed(bool transformed)
     {
         m_cur_vp &= ~0U ^ VP_IS_TRANSFORMED;
         if (transformed) m_cur_vp |= VP_IS_TRANSFORMED;
-        glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp);
+        m_prgm->stage_uniform("vertex_properties", CKGLUniformValue::make_u32v(1, &m_cur_vp));
     }
 }
 
@@ -1791,7 +1779,7 @@ void CKGLRasterizerContext::set_vertex_has_color(bool color)
     {
         m_cur_vp &= ~0U ^ VP_HAS_COLOR;
         if (color) m_cur_vp |= VP_HAS_COLOR;
-        glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp);
+        m_prgm->stage_uniform("vertex_properties", CKGLUniformValue::make_u32v(1, &m_cur_vp));
     }
 }
 
@@ -1801,7 +1789,7 @@ void CKGLRasterizerContext::set_num_textures(CKDWORD ntex)
     {
         m_cur_vp &= ~VP_TEXTURE_MASK;
         m_cur_vp |= ntex;
-        glUniform1ui(get_uniform_location("vertex_properties"), m_cur_vp);
+        m_prgm->stage_uniform("vertex_properties", CKGLUniformValue::make_u32v(1, &m_cur_vp));
     }
 }
 
@@ -1822,14 +1810,6 @@ void CKGLRasterizerContext::set_title_status(const char *fmt, ...)
     } else ts = m_orig_title;
 
     SetWindowTextA(GetAncestor((HWND)m_Window, GA_ROOT), ts.c_str());
-}
-
-
-BOOL CKGLRasterizerContext::SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose,
-                                                const GLfloat *value)
-{
-    glUniformMatrix4fv(get_uniform_location(name.c_str()), count, transpose, value);
-    return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat)
