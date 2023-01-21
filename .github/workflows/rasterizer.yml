@@ -20,7 +20,7 @@ jobs:
       PROJECT_NAME: CKGLRasterizer
       GLEW_VERSION: "2.2.0"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - uses: lukka/get-cmake@latest
 
@@ -68,7 +68,7 @@ jobs:
       VENDOR_ROOT: ${{github.workspace}}/vendor
       PROJECT_NAME: CKDX9Rasterizer
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - uses: lukka/get-cmake@latest
 
@@ -115,7 +115,7 @@ jobs:
       VENDOR_ROOT: ${{github.workspace}}/vendor
       PROJECT_NAME: CKDX11Rasterizer
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - uses: lukka/get-cmake@latest
 
