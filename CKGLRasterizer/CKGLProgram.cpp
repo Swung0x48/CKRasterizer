@@ -93,6 +93,8 @@ void CKGLProgram::stage_uniform(const std::string &name, CKGLUniformValue *val)
 {
     int loc = get_uniform_location(name);
     if (!~loc) return;
+    if (pending_uniforms.find(loc) != pending_uniforms.end())
+        delete pending_uniforms[loc];
     pending_uniforms[loc] = val;
 }
 
