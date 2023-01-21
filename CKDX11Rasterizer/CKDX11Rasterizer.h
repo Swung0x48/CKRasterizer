@@ -284,7 +284,7 @@ typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
     ComPtr<ID3DBlob> DxBlob;
     ComPtr<ID3D11PixelShader> DxShader;
     LPCSTR DxEntryPoint = "PShader";
-    LPCSTR DxTarget = "vs_4_0";
+    LPCSTR DxTarget = "ps_4_0";
     ComPtr<ID3DBlob> DxErrorMsgs;
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
     virtual void Bind(CKDX11RasterizerContext *ctx);

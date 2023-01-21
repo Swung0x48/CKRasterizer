@@ -110,8 +110,8 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     CreateObject(vs_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc);
 
     CKPixelShaderDesc ps_desc;
-    vs_desc.m_Function = (CKDWORD *)shader;
-    vs_desc.m_FunctionSize = strlen(shader);
+    ps_desc.m_Function = (CKDWORD *)shader;
+    ps_desc.m_FunctionSize = strlen(shader);
     CreateObject(ps_idx, CKRST_OBJ_PIXELSHADER, &ps_desc);
 
     m_CurrentVShader = vs_idx;
@@ -299,8 +299,8 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
 {
     if (!indices)
         return DrawPrimitiveVBIB(pType, VB, -1, StartVIndex, VertexCount, 0, 0);
-
-    CKDWORD IB = m_IBCounter++;
+    m_IBCounter = (m_IBCounter + 1) % m_IndexBuffers.Size();
+    CKDWORD IB = m_IBCounter;
     int ibase = 0;
     // Prepare index buffer for given IB index
     auto* ibo = m_IndexBuffers[IB];
@@ -312,6 +312,7 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
         desc.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
         if (!CreateIndexBuffer(IB, &desc))
             return FALSE;
+        ibo = m_IndexBuffers[IB];
     }
     void *pData = nullptr;
     if (indexcount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
@@ -532,7 +533,7 @@ CKBOOL CKDX11RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShad
     auto *desc = m_VertexShaders[VShader];
     CKDX11VertexShaderDesc *d11desc = nullptr;
 
-    if (*DesiredFormat == *desc)
+    if (!desc || *DesiredFormat == *desc)
     {
         d11desc = dynamic_cast<CKDX11VertexShaderDesc *>(desc); // Check if object got from array is actually valid
         if (d11desc && d11desc->DxBlob) // A valid, while identical object already exists
@@ -560,7 +561,7 @@ CKBOOL CKDX11RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShader
         return FALSE;
     auto *desc = m_PixelShaders[PShader];
     CKDX11PixelShaderDesc *d11desc = nullptr;
-    if (*DesiredFormat == *desc)
+    if (!desc || *DesiredFormat == *desc)
     {
         d11desc = dynamic_cast<CKDX11PixelShaderDesc *>(desc); // Check if object got from array is actually valid
         if (d11desc && d11desc->DxBlob) // A valid, while identical object already exists
@@ -590,7 +591,7 @@ CKBOOL CKDX11RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDes
     
     auto *vbDesc = m_VertexBuffers[VB];
     CKDX11VertexBufferDesc *dx11vb = nullptr;
-    if (*DesiredFormat == *vbDesc)
+    if (!vbDesc || *DesiredFormat == *vbDesc)
     {
         dx11vb = dynamic_cast<CKDX11VertexBufferDesc *>(vbDesc);
         if (dx11vb && dx11vb->DxBuffer)
@@ -603,6 +604,8 @@ CKBOOL CKDX11RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDes
     dx11vb->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
     dx11vb->m_Flags = DesiredFormat->m_Flags;
     dx11vb->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount;
+    dx11vb->m_VertexFormat = DesiredFormat->m_VertexFormat;
+    dx11vb->m_VertexSize = FVF::ComputeVertexSize(dx11vb->m_VertexFormat);
 
     CKBOOL succeeded = dx11vb->Create(this);
     if (succeeded)
@@ -622,7 +625,7 @@ CKBOOL CKDX11RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc 
 
     auto *vbDesc = m_IndexBuffers[IB];
     CKDX11IndexBufferDesc *dx11ib = nullptr;
-    if (*DesiredFormat == *vbDesc)
+    if (!vbDesc || *DesiredFormat == *vbDesc)
     {
         dx11ib = dynamic_cast<CKDX11IndexBufferDesc *>(vbDesc);
         if (dx11ib && dx11ib->DxBuffer)
@@ -651,7 +654,15 @@ void CKDX11RasterizerContext::SetupStreams(CKDWORD VB, CKDWORD VShader)
     if (!vbo || !vs)
         return;
     HRESULT hr;
-    D3DCall(m_Device->CreateInputLayout(vbo->DxInputElementDesc.data(), vbo->DxInputElementDesc.size(),
-        vs->DxBlob->GetBufferPointer(), vs->DxBlob->GetBufferSize(), m_InputLayout.GetAddressOf()));
+    D3D11_INPUT_ELEMENT_DESC desc[] = {
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+    };
+    D3DCall(m_Device->CreateInputLayout(desc, 2,
+                                        vs->DxBlob->GetBufferPointer(), vs->DxBlob->GetBufferSize(),
+                                        m_InputLayout.GetAddressOf()));
+    // D3DCall(m_Device->CreateInputLayout(vbo->DxInputElementDesc.data(), vbo->DxInputElementDesc.size(),
+    //     vs->DxBlob->GetBufferPointer(), vs->DxBlob->GetBufferSize(), m_InputLayout.GetAddressOf()));
     m_DeviceContext->IASetInputLayout(m_InputLayout.Get());
+    m_FVF = vbo->m_VertexFormat;
 }

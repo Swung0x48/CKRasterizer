@@ -13,7 +13,7 @@ CKBOOL CKDX11IndexBufferDesc::Create(CKDX11RasterizerContext *ctx)
 
     DxDesc.Usage = usage;
     DxDesc.ByteWidth = m_MaxIndexCount * sizeof(CKWORD);
-    DxDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    DxDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
     DxDesc.CPUAccessFlags = flag;
 
     D3DCall(ctx->m_Device->CreateBuffer(&DxDesc, nullptr, DxBuffer.GetAddressOf()));
