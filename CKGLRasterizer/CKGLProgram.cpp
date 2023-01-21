@@ -37,6 +37,7 @@ CKGLProgram::CKGLProgram(const std::string &vshsrc, const std::string &fshsrc) :
     {
         glDeleteShader(vsh);
         glDeleteShader(fsh);
+        return;
     }
     program = glCreateProgram();
     glAttachShader(program, vsh);
@@ -53,6 +54,9 @@ CKGLProgram::CKGLProgram(const std::string &vshsrc, const std::string &fshsrc) :
         glDeleteProgram(program);
         program = 0;
     }
+    //only deletes after they have been detached from the program
+    glDeleteShader(vsh);
+    glDeleteShader(fsh);
 }
 
 CKGLProgram::~CKGLProgram()
