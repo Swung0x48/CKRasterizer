@@ -69,7 +69,7 @@ void *CKGLIndexBuffer::Lock(CKDWORD offset, CKDWORD len, bool overwrite)
         return client_side_locked_data;
     }
     void* ret = nullptr;
-    ret = glMapNamedBufferRange(GLBuffer, offset, len, GL_MAP_WRITE_BIT | (overwrite ? GL_MAP_INVALIDATE_RANGE_BIT : 0));
+    ret = glMapNamedBufferRange(GLBuffer, offset, len, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT | (overwrite ? 0 : GL_MAP_UNSYNCHRONIZED_BIT));
     return ret;
 }
 
