@@ -87,6 +87,7 @@ struct pair_hash
 class CKGLVertexFormat;
 struct CKGLVertexBuffer;
 struct CKGLIndexBuffer;
+class CKGLProgram;
 class CKGLPostProcessingPipeline;
 
 typedef struct CKGLVertexShaderDesc : public CKVertexShaderDesc
@@ -307,7 +308,6 @@ public:
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);
 
     static unsigned get_vertex_attrib_location(CKDWORD component);
-    int get_uniform_location(const char* name);
     CKGLVertexFormat* get_vertex_format(CKRST_VERTEXFORMAT vf);
 
     void set_position_transformed(bool transformed);
@@ -327,7 +327,6 @@ public:
     void cycle_post_processing_shader();
 
 protected:
-    BOOL SetUniformMatrix4fv(std::string name, GLsizei count, GLboolean transpose, const GLfloat *value);
     CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBuffer * vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt, bool vbbound = false);
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
@@ -350,19 +349,20 @@ private:
     HDC m_DC = NULL;
     CKBOOL m_Vsync = FALSE;
     constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
-    CKDWORD m_CurrentVertexShader = INVALID_VALUE;
-    CKDWORD m_CurrentPixelShader = INVALID_VALUE;
-    CKDWORD m_CurrentProgram = INVALID_VALUE;
+    CKGLProgram *m_prgm;
     CKDWORD m_CurrentIndexBuffer = INVALID_VALUE;
-    std::unordered_map<std::string, GLint> m_UniformLocationCache;
     std::vector<std::pair<CKDWORD, CKLightData>> m_lights;
     CKGLLightUniform m_lights_data[MAX_ACTIVE_LIGHTS];
+    VxMatrix m_2dvpmtx;
+    VxMatrix m_tiworldmtx;
+    VxMatrix m_tiworldviewmtx;
+    VxMatrix m_textrmtx[CKRST_MAX_STAGES];
     VxVector m_viewpos;
-    CKDWORD m_lighting_flags;
+    uint32_t m_lighting_flags;
     std::string m_orig_title;
     CKDWORD m_renderst[VXRENDERSTATE_MAXSTATE];
-    CKDWORD m_alpha_test_flags;
-    CKDWORD m_fog_flags;
+    uint32_t m_alpha_test_flags;
+    uint32_t m_fog_flags;
     float m_fog_parameters[3];
     std::unordered_map<std::pair<CKDWORD, CKDWORD>, CKGLVertexBuffer*, pair_hash> m_dynvbo;
     DWORD m_direct_draw_counter = 0;
@@ -370,11 +370,11 @@ private:
     CKDWORD m_current_vf = ~0U;
     std::unordered_map<CKDWORD, CKGLIndexBuffer*> m_dynibo;
     DWORD m_noibo_draw_counter = 0;
-    CKDWORD m_cur_vp = 0;
+    uint32_t m_cur_vp = 0;
     CKDWORD m_cur_ts = ~0U;
     CKDWORD m_ts_texture[CKRST_MAX_STAGES] = {~0U};
     CKGLTexCombinatorUniform m_texcombo[CKRST_MAX_STAGES];
-    CKDWORD m_tex_vp[8] = {0};
+    CKDWORD m_tex_vp[CKRST_MAX_STAGES] = {0};
     GLuint m_ubo_mat = 0;
     GLuint m_ubo_texc = 0;
     GLuint m_ubo_lights = 0;

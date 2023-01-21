@@ -50,8 +50,8 @@ uniform vec4 fog_color;
 uniform vec3 fog_parameters; //start, end, density
 uniform vec3 vpos; //camera position
 uniform vec2 depth_range; //near-far plane distances for fog calculation
-out vec4 color;
-out vec4 norpth;
+layout(location = 0) out vec4 color;
+layout(location = 1) out vec4 norpth;
 layout (std140) uniform MatUniformBlock
 {
     mat_t material;
