@@ -152,11 +152,11 @@ vec4[3] component_add(vec4[3] a, vec4[3] b)
 }
 vec4 accum_light(vec4[3] c)
 {
-    return clamp_color(c[0] + c[1] + c[2]);
+    return c[0] + c[1] + c[2];
 }
 vec4 accum_light_e(vec4[4] c)
 {
-    return clamp_color(c[0] + c[1] + c[2] + c[3]);
+    return c[0] + c[1] + c[2] + c[3];
 }
 float fog_factor(float dist, float rdist, uint mode)
 {
@@ -254,8 +254,10 @@ void main()
             (lighting_switches & LSW_SPECULAR_ENABLED) != 0U && (lighting_switches & LSW_SPCL_OVERR_ONLY) == 0U)
 #endif
         {
-            color += material.emis;
             lighting_colors_e[3] = material.emis;
+            color = accum_light_e(lighting_colors_e);
+            if (material.diff.a < 1)
+                color.a = material.diff.a;
         }
     }
     if (fntex > 1U)
@@ -301,5 +303,5 @@ void main()
         color *= texture(tex[0], ftexcoord[0]);
     if ((alphatest_flags & 0x80U) != 0U && !alpha_test(color.a))
         discard;
-    color = mix(fog_color, color, ffactor);
+    color = mix(fog_color, clamp_color(color), ffactor);
 }
