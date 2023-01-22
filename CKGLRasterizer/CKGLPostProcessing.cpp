@@ -41,15 +41,15 @@ void CKGLPostProcessingStage::setup_fbo(bool has_depth, bool has_normal, int _wi
     height = _height;
 
     glTextureStorage2D(tex[COLOR], 1, GL_RGBA8, width, height);
-    glTextureParameteri(tex[COLOR], GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTextureParameteri(tex[COLOR], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(tex[COLOR], GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(tex[COLOR], GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, tex[COLOR], 0);
 
     if (has_normal || has_depth)
     {
         glTextureStorage2D(tex[NORPTH], 1, GL_RGBA32F, width, height);
-        glTextureParameteri(tex[NORPTH], GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTextureParameteri(tex[NORPTH], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(tex[NORPTH], GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(tex[NORPTH], GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT1, tex[NORPTH], 0);
         GLenum db[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
         glNamedFramebufferDrawBuffers(fbo, 2, db);
@@ -59,8 +59,8 @@ void CKGLPostProcessingStage::setup_fbo(bool has_depth, bool has_normal, int _wi
     {
         glBindTexture(GL_TEXTURE_2D, tex[DEPTH]);
         glTextureStorage2D(tex[DEPTH], 1, GL_DEPTH_COMPONENT32F, width, height);
-        glTextureParameteri(tex[DEPTH], GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTextureParameteri(tex[DEPTH], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(tex[DEPTH], GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(tex[DEPTH], GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glNamedFramebufferTexture(fbo, GL_DEPTH_ATTACHMENT, tex[DEPTH], 0);
     }
 }

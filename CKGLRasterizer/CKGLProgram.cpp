@@ -1,4 +1,5 @@
 #include "CKGLProgram.h"
+#include "CKGLRasterizerCommon.h"
 
 #include <vector>
 
@@ -100,6 +101,7 @@ void CKGLProgram::stage_uniform(const std::string &name, CKGLUniformValue *val)
 
 void CKGLProgram::send_uniform()
 {
+    ZoneScopedN(__FUNCTION__);
     for (auto &up : pending_uniforms)
     {
         auto &[loc, u] = up;
