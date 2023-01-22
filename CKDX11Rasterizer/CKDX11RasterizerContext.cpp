@@ -2,23 +2,27 @@
 #include "CKDX11RasterizerCommon.h"
 
 static const char* shader = 
-    "struct VOut\n"
-    "{\n"
-    "    float4 position : SV_POSITION;\n"
-    "    float4 color : COLOR;\n"
-    "};\n"
+    R"(
+struct VOut
+{
+    float4 position : SV_POSITION;
+    float4 color : COLOR;
+};
 
-    "VOut VShader(float4 position : POSITION, float4 color : COLOR)\n"
-    "{\n"
-    "    VOut output;\n"
-    "    output.position = position;\n"
-    "    output.color = color;\n"
-    "    return output;\n"
-    "}\n"
-    "float4 PShader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET\n"
-    "{\n"
-    "    return color;\n"
-    "}";
+VOut VShader(float4 position : SV_POSITION)
+{
+    VOut output;
+    output.position = position;
+    output.color = position;
+    //output.color = color;
+    return output;
+}
+
+float4 PShader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
+{
+    return color;
+}
+)";
 
 struct vertex
 {
@@ -250,6 +254,75 @@ CKBOOL CKDX11RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const v
 {
     return CKRasterizerContext::SetPixelShaderConstant(Register, Data, CstCount);
 }
+
+
+CKDWORD CKDX11RasterizerContext::GenerateIB(void *indices, int indexCount, int *startIndex)
+{
+    if (!indices)
+        return -1;
+    m_IBCounter = (m_IBCounter + 1) % m_IndexBuffers.Size();
+    CKDWORD IB = m_IBCounter;
+    *startIndex = 0;
+    // Prepare index buffer for given IB index
+    auto *ibo = m_IndexBuffers[IB];
+    if (!ibo || ibo->m_MaxIndexCount < indexCount)
+    {
+        CKIndexBufferDesc desc;
+        desc.m_MaxIndexCount = indexCount + 100 < 4096 ? 4096 : indexCount + 100;
+        desc.m_CurrentICount = 0;
+        desc.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+        if (!CreateIndexBuffer(IB, &desc))
+            return -1;
+        ibo = m_IndexBuffers[IB];
+    }
+    void *pData = nullptr;
+    if (indexCount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
+    {
+        pData = LockIndexBuffer(IB, ibo->m_CurrentICount, indexCount, CKRST_LOCK_NOOVERWRITE);
+        *startIndex = ibo->m_CurrentICount;
+        ibo->m_CurrentICount += indexCount;
+    }
+    else
+    {
+        pData = LockIndexBuffer(IB, 0, indexCount, CKRST_LOCK_DISCARD);
+        ibo->m_CurrentICount = indexCount;
+    }
+    if (pData)
+        memcpy(pData, indices, indexCount * sizeof(CKWORD));
+    UnlockIndexBuffer(IB);
+    return IB;
+}
+
+CKDWORD CKDX11RasterizerContext::TriangleFanToStrip(int VOffset, int VCount, int *startIndex)
+{
+    std::vector<int> strip_index;
+    // Center at VOffset
+    for (int i = 1; i < VCount; ++i)
+    {
+        strip_index.emplace_back(i + VOffset);
+        strip_index.emplace_back(VOffset);
+    }
+    strip_index.pop_back();
+    return GenerateIB(strip_index.data(), strip_index.size(), startIndex);
+}
+
+CKDWORD CKDX11RasterizerContext::TriangleFanToStrip(CKWORD *indices, int count, int *startIndex)
+{
+    if (!indices)
+        return -1;
+    std::vector<int> strip_index;
+    CKWORD center = indices[0];
+    for (int i = 1; i < count; ++i)
+    {
+        strip_index.emplace_back(indices[i]);
+        strip_index.emplace_back(center);
+    }
+    strip_index.pop_back();
+    return GenerateIB(strip_index.data(), strip_index.size(), startIndex);
+}
+
+
+
 CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
                                               VxDrawPrimitiveData *data)
 {
@@ -297,42 +370,54 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 CKBOOL CKDX11RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD StartVIndex,
                                                 CKDWORD VertexCount, CKWORD *indices, int indexcount)
 {
-    if (!indices)
+    if (!indices && pType != VX_TRIANGLEFAN)
         return DrawPrimitiveVBIB(pType, VB, -1, StartVIndex, VertexCount, 0, 0);
-    m_IBCounter = (m_IBCounter + 1) % m_IndexBuffers.Size();
-    CKDWORD IB = m_IBCounter;
     int ibase = 0;
-    // Prepare index buffer for given IB index
-    auto* ibo = m_IndexBuffers[IB];
-    if (!ibo || ibo->m_MaxIndexCount < indexcount)
+    CKDWORD IB;
+    if (pType == VX_TRIANGLEFAN)
     {
-        CKIndexBufferDesc desc;
-        desc.m_MaxIndexCount = indexcount + 100 < 4096 ? 4096 : indexcount + 100;
-        desc.m_CurrentICount = 0;
-        desc.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
-        if (!CreateIndexBuffer(IB, &desc))
-            return FALSE;
-        ibo = m_IndexBuffers[IB];
+        pType = VX_TRIANGLESTRIP;
+        IB = TriangleFanToStrip(indices, indexcount, &ibase);
     }
-    void *pData = nullptr;
-    if (indexcount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
+    else
     {
-        pData = LockIndexBuffer(IB, ibo->m_CurrentICount, indexcount, CKRST_LOCK_NOOVERWRITE);
-        ibase = ibo->m_CurrentICount;
-        ibo->m_CurrentICount += indexcount;
-    } else
-    {
-        pData = LockIndexBuffer(IB, 0, indexcount, CKRST_LOCK_DISCARD);
-        ibo->m_CurrentICount = indexcount;
+        IB = GenerateIB(indices, indexcount, &ibase);
     }
-    if (pData)
-        memcpy(pData, indices, indexcount * sizeof(CKWORD));
-    UnlockIndexBuffer(IB);
+    //CKDWORD IB = m_IBCounter;
+    //int ibase = 0;
+    //// Prepare index buffer for given IB index
+    //auto* ibo = m_IndexBuffers[IB];
+    //if (!ibo || ibo->m_MaxIndexCount < indexcount)
+    //{
+    //    CKIndexBufferDesc desc;
+    //    desc.m_MaxIndexCount = indexcount + 100 < 4096 ? 4096 : indexcount + 100;
+    //    desc.m_CurrentICount = 0;
+    //    desc.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+    //    if (!CreateIndexBuffer(IB, &desc))
+    //        return FALSE;
+    //    ibo = m_IndexBuffers[IB];
+    //}
+    //void *pData = nullptr;
+    //if (indexcount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
+    //{
+    //    pData = LockIndexBuffer(IB, ibo->m_CurrentICount, indexcount, CKRST_LOCK_NOOVERWRITE);
+    //    ibase = ibo->m_CurrentICount;
+    //    ibo->m_CurrentICount += indexcount;
+    //} else
+    //{
+    //    pData = LockIndexBuffer(IB, 0, indexcount, CKRST_LOCK_DISCARD);
+    //    ibo->m_CurrentICount = indexcount;
+    //}
+    //if (pData)
+    //    memcpy(pData, indices, indexcount * sizeof(CKWORD));
+    //UnlockIndexBuffer(IB);
     return DrawPrimitiveVBIB(pType, VB, IB, StartVIndex, VertexCount, ibase, indexcount);
 }
+
 CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                                   CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
+    assert(pType != VX_TRIANGLEFAN);
     auto *dxvbo = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!dxvbo)
         return FALSE;
@@ -655,10 +740,10 @@ void CKDX11RasterizerContext::SetupStreams(CKDWORD VB, CKDWORD VShader)
         return;
     HRESULT hr;
     D3D11_INPUT_ELEMENT_DESC desc[] = {
-        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"SV_POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        // {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
     };
-    D3DCall(m_Device->CreateInputLayout(desc, 2,
+    D3DCall(m_Device->CreateInputLayout(desc, 1,
                                         vs->DxBlob->GetBufferPointer(), vs->DxBlob->GetBufferSize(),
                                         m_InputLayout.GetAddressOf()));
     // D3DCall(m_Device->CreateInputLayout(vbo->DxInputElementDesc.data(), vbo->DxInputElementDesc.size(),

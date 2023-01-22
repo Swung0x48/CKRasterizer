@@ -160,6 +160,11 @@ protected:
     CKBOOL CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat);
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
     void SetupStreams(CKDWORD VB, CKDWORD VShader);
+
+    CKDWORD GenerateIB(void *indices, int indexcount, int* startIndex);
+
+    CKDWORD TriangleFanToStrip(int VOffset, int VCount, int *startIndex);
+    CKDWORD TriangleFanToStrip(CKWORD* indices, int count, int *startIndex);
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 #endif
