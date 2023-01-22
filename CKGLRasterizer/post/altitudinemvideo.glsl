@@ -12,5 +12,5 @@ void main()
 {
     color = vec4(vec3(pow(texture(norpth_in, texcoords).w, 3)), 1.);
     norpth = texture(norpth_in, texcoords);
-    gl_FragDepth = texture(norpth_in, texcoords).w;
+    gl_FragDepth = norpth.w;
 }

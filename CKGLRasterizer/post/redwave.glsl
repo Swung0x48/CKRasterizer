@@ -14,5 +14,5 @@ void main()
     color.r += sin(time);
     color.r = clamp(color.r, 0. ,1.);
     norpth = texture(norpth_in, texcoords);
-    gl_FragDepth = texture(norpth_in, texcoords).w;
+    gl_FragDepth = norpth.w;
 }

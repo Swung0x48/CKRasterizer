@@ -29,5 +29,5 @@ void main()
             color = mix(color, max(color, max(c1, c2)), w);
         }
     norpth = texture(norpth_in, texcoords);
-    gl_FragDepth = texture(norpth_in, texcoords).w;
+    gl_FragDepth = norpth.w;
 }

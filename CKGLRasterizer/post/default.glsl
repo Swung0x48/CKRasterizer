@@ -12,5 +12,5 @@ void main()
 {
     color = texture(color_in, texcoords);
     norpth = texture(norpth_in, texcoords);
-    gl_FragDepth = texture(norpth_in, texcoords).w;
+    gl_FragDepth = norpth.w;
 }

@@ -13,5 +13,5 @@ void main()
     norpth = texture(norpth_in, texcoords);
     vec3 posnormal = (norpth.xyz + vec3(1.)) / 2;
     color = vec4(posnormal, 1.);
-    gl_FragDepth = texture(norpth_in, texcoords).w;
+    gl_FragDepth = norpth.w;
 }
