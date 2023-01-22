@@ -14,7 +14,7 @@ cbuffer CBuf
     matrix transform;
 }
 
-VOut VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float2 texcoord: TEXCOORD)
+VOut VShaderColor(float4 position : SV_POSITION)
 {
     VOut output;
     output.position = mul(position, transform);
@@ -222,7 +222,18 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
     return SUCCEEDED(hr);
 }
 
-CKBOOL CKDX11RasterizerContext::BeginScene() { return CKRasterizerContext::BeginScene(); }
+CKBOOL CKDX11RasterizerContext::BeginScene()
+{
+    if (m_SceneBegined)
+        return FALSE;
+    HRESULT hr;
+    m_TotalMatrix = VxMatrix::Identity();
+    D3D11_MAPPED_SUBRESOURCE ms;
+    D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
+    memcpy(ms.pData, &m_TotalMatrix, sizeof(ConstantBufferStruct));
+    m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
+    return SUCCEEDED(hr);
+}
 CKBOOL CKDX11RasterizerContext::EndScene()
 {
     if (!m_SceneBegined)
@@ -264,20 +275,17 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
         case VXMATRIX_WORLD:
             m_WorldMatrix = Mat;
             m_MatrixUptodate |= WORLD_TRANSFORM;
-            if (m_MatrixUptodate & VIEW_TRANSFORM)
-                Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            //Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
             break;
         case VXMATRIX_VIEW:
             m_ViewMatrix = Mat;
             m_MatrixUptodate |= VIEW_TRANSFORM;
-            if (m_MatrixUptodate & WORLD_TRANSFORM)
-                Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            //Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
             break;
         case VXMATRIX_PROJECTION:
             m_ProjectionMatrix = Mat;
             m_MatrixUptodate |= PROJ_TRANSFORM;
-            if ((m_MatrixUptodate & WORLD_TRANSFORM) && (m_MatrixUptodate & VIEW_TRANSFORM))
-                Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
+            //Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
             break;
         case VXMATRIX_TEXTURE0:
         case VXMATRIX_TEXTURE1:
@@ -296,6 +304,8 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
         (m_MatrixUptodate & VIEW_TRANSFORM) &&
         (m_MatrixUptodate & PROJ_TRANSFORM))
     {
+        Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+        Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
         D3D11_MAPPED_SUBRESOURCE ms;
         D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
         memcpy(ms.pData, &m_TotalMatrix, sizeof(ConstantBufferStruct));
@@ -476,7 +486,18 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     HRESULT hr;
 
     m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
-    
+    // if ((m_MatrixUptodate & WORLD_TRANSFORM) && (m_MatrixUptodate & VIEW_TRANSFORM) &&
+    //     (m_MatrixUptodate & PROJ_TRANSFORM))
+    // {
+    //     Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+    //     Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
+    //     D3D11_MAPPED_SUBRESOURCE ms;
+    //     D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
+    //     memcpy(ms.pData, &m_TotalMatrix, sizeof(ConstantBufferStruct));
+    //     m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
+    //     m_ConstantBufferUptodate = TRUE;
+    // }
+    m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
     m_DeviceContext->IASetVertexBuffers(0, 1, 
         dxvbo->DxBuffer.GetAddressOf(), (UINT*) &dxvbo->m_VertexSize, (UINT*)&MinVIndex);
 
@@ -801,10 +822,10 @@ void CKDX11RasterizerContext::SetupStreams(CKDWORD VB, CKDWORD VShader)
     
     D3D11_INPUT_ELEMENT_DESC desc[] = {
         {"SV_POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"COLOR", 0, DXGI_FORMAT_B8G8R8A8_UNORM, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        // {"COLOR", 0, DXGI_FORMAT_B8G8R8A8_UNORM, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        // {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
     };
-    D3DCall(m_Device->CreateInputLayout(desc, 3,
+    D3DCall(m_Device->CreateInputLayout(desc, 1,
                                         vs->DxBlob->GetBufferPointer(), vs->DxBlob->GetBufferSize(),
                                         m_InputLayout.GetAddressOf()));
     // D3DCall(m_Device->CreateInputLayout(vbo->DxInputElementDesc.data(), vbo->DxInputElementDesc.size(),
