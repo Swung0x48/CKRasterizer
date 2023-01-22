@@ -89,7 +89,7 @@ vec4[3] light_point(light_t l, vec3 normal, vec3 fpos, vec3 vdir, bool spec_enab
     {
         vec3 refldir = reflect(-ldir, normal);
         float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.spcl_strength);
-        spc = 4 * l.spcl * material.spcl * specl;
+        spc = l.spcl * material.spcl * specl;
 #ifdef DEBUG
         if ((lighting_switches & LSW_SPCL_OVERR_ONLY) != 0U)
             return vec4[3](vec4(0.), vec4(0.), spc * atnf);
@@ -112,7 +112,7 @@ vec4[3] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
     {
         vec3 refldir = reflect(-ldir, normal);
         float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.spcl_strength);
-        spc = 4 * l.spcl * material.spcl * specl;
+        spc = l.spcl * material.spcl * specl;
 #ifdef DEBUG
         if ((lighting_switches & LSW_SPCL_OVERR_ONLY) != 0U)
             return vec4[3](vec4(0), vec4(0), spc);
