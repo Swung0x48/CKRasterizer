@@ -9,10 +9,25 @@ struct VOut
     float4 color : COLOR;
 };
 
-VOut VShader(float4 position : SV_POSITION)
+cbuffer CBuf
+{
+    matrix transform;
+}
+
+VOut VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float2 texcoord: TEXCOORD)
 {
     VOut output;
-    output.position = position;
+    output.position = mul(position, transform);
+    output.color = position;
+    //output.color = color;
+    return output;
+}
+
+
+VOut VShaderNormal(float4 position : SV_POSITION, float4 normal: NORMAL, float2 texcoord: TEXCOORD)
+{
+    VOut output;
+    output.position = mul(position, transform);
     output.color = position;
     //output.color = color;
     return output;
@@ -107,16 +122,23 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     if (m_Fullscreen)
         m_Driver->m_Owner->m_FullscreenContext = this;
 
-    CKDWORD vs_idx = 0, ps_idx = 1;
-    CKVertexShaderDesc vs_desc;
+    CKDWORD vs_idx = 0, ps_idx = 1, vs_normal_idx = 2;
+    CKDX11VertexShaderDesc vs_desc;
     vs_desc.m_Function = (CKDWORD*)shader;
     vs_desc.m_FunctionSize = strlen(shader);
+    vs_desc.DxEntryPoint = "VShaderColor";
     CreateObject(vs_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc);
 
-    CKPixelShaderDesc ps_desc;
+    CKDX11PixelShaderDesc ps_desc;
     ps_desc.m_Function = (CKDWORD *)shader;
     ps_desc.m_FunctionSize = strlen(shader);
     CreateObject(ps_idx, CKRST_OBJ_PIXELSHADER, &ps_desc);
+
+    CKDX11VertexShaderDesc vs_desc_normal;
+    vs_desc_normal.m_Function = (CKDWORD *)shader;
+    vs_desc_normal.m_FunctionSize = strlen(shader);
+    vs_desc_normal.DxEntryPoint = "VShaderNormal";
+    CreateObject(vs_normal_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc_normal);
 
     m_CurrentVShader = vs_idx;
     m_CurrentPShader = ps_idx;
@@ -127,6 +149,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     vs->Bind(this);
     ps->Bind(this);
 
+    m_ConstantBuffer.Create(this);
     /*D3DCall(D3DCompile(shader, strlen(shader), nullptr, nullptr, nullptr, "VShader", "vs_4_0", 0, 0, &vsBlob, nullptr));
     D3DCall(D3DCompile(shader, strlen(shader), nullptr, nullptr, nullptr, "PShader", "ps_4_0", 0, 0, &psBlob, nullptr));
     D3DCall(m_Device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &vshader));
@@ -155,6 +178,13 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     memcpy(ms.pData, triangle, sizeof(triangle));
     m_DeviceContext->Unmap(vb, NULL);*/
 
+    m_WorldMatrix = VxMatrix::Identity();
+    m_ViewMatrix = VxMatrix::Identity();
+    m_ModelViewMatrix = VxMatrix::Identity();
+    m_ProjectionMatrix = VxMatrix::Identity();
+    m_ViewProjMatrix = VxMatrix::Identity();
+    m_TotalMatrix = VxMatrix::Identity();
+
     m_InCreateDestroy = FALSE;
 
     return SUCCEEDED(hr);
@@ -180,20 +210,27 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
     HRESULT hr;
     m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
 
-    UINT stride = sizeof(vertex);
-    UINT offset = 0;
-    m_DeviceContext->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
-
-    m_DeviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    m_DeviceContext->Draw(3, 0);
+    // UINT stride = sizeof(vertex);
+    // UINT offset = 0;
+    // m_DeviceContext->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+    //
+    // m_DeviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    //
+    // m_DeviceContext->Draw(3, 0);
 
     D3DCall(m_Swapchain->Present(vsync ? 1 : 0, (m_AllowTearing && !m_Fullscreen && !vsync) ? DXGI_PRESENT_ALLOW_TEARING : 0));
     return SUCCEEDED(hr);
 }
 
 CKBOOL CKDX11RasterizerContext::BeginScene() { return CKRasterizerContext::BeginScene(); }
-CKBOOL CKDX11RasterizerContext::EndScene() { return CKRasterizerContext::EndScene(); }
+CKBOOL CKDX11RasterizerContext::EndScene()
+{
+    if (!m_SceneBegined)
+        return FALSE;
+    m_MatrixUptodate = 0;
+    m_ConstantBufferUptodate = FALSE;
+    return TRUE;
+}
 CKBOOL CKDX11RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
     return CKRasterizerContext::SetLight(Light, data);
@@ -220,7 +257,52 @@ CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
 
 CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat)
 {
-    return CKRasterizerContext::SetTransformMatrix(Type, Mat);
+    ZoneScopedN(__FUNCTION__);
+    HRESULT hr;
+    switch (Type)
+    {
+        case VXMATRIX_WORLD:
+            m_WorldMatrix = Mat;
+            m_MatrixUptodate |= WORLD_TRANSFORM;
+            if (m_MatrixUptodate & VIEW_TRANSFORM)
+                Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            break;
+        case VXMATRIX_VIEW:
+            m_ViewMatrix = Mat;
+            m_MatrixUptodate |= VIEW_TRANSFORM;
+            if (m_MatrixUptodate & WORLD_TRANSFORM)
+                Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            break;
+        case VXMATRIX_PROJECTION:
+            m_ProjectionMatrix = Mat;
+            m_MatrixUptodate |= PROJ_TRANSFORM;
+            if ((m_MatrixUptodate & WORLD_TRANSFORM) && (m_MatrixUptodate & VIEW_TRANSFORM))
+                Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
+            break;
+        case VXMATRIX_TEXTURE0:
+        case VXMATRIX_TEXTURE1:
+        case VXMATRIX_TEXTURE2:
+        case VXMATRIX_TEXTURE3:
+        case VXMATRIX_TEXTURE4:
+        case VXMATRIX_TEXTURE5:
+        case VXMATRIX_TEXTURE6:
+        case VXMATRIX_TEXTURE7:
+            // UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
+            break;
+        default:
+            return FALSE;
+    }
+    if ((m_MatrixUptodate & WORLD_TRANSFORM) &&
+        (m_MatrixUptodate & VIEW_TRANSFORM) &&
+        (m_MatrixUptodate & PROJ_TRANSFORM))
+    {
+        D3D11_MAPPED_SUBRESOURCE ms;
+        D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
+        memcpy(ms.pData, &m_TotalMatrix, sizeof(ConstantBufferStruct));
+        m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
+        m_ConstantBufferUptodate = TRUE;
+    }
+    return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
@@ -321,8 +403,6 @@ CKDWORD CKDX11RasterizerContext::TriangleFanToStrip(CKWORD *indices, int count, 
     return GenerateIB(strip_index.data(), strip_index.size(), startIndex);
 }
 
-
-
 CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
                                               VxDrawPrimitiveData *data)
 {
@@ -383,34 +463,6 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
     {
         IB = GenerateIB(indices, indexcount, &ibase);
     }
-    //CKDWORD IB = m_IBCounter;
-    //int ibase = 0;
-    //// Prepare index buffer for given IB index
-    //auto* ibo = m_IndexBuffers[IB];
-    //if (!ibo || ibo->m_MaxIndexCount < indexcount)
-    //{
-    //    CKIndexBufferDesc desc;
-    //    desc.m_MaxIndexCount = indexcount + 100 < 4096 ? 4096 : indexcount + 100;
-    //    desc.m_CurrentICount = 0;
-    //    desc.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
-    //    if (!CreateIndexBuffer(IB, &desc))
-    //        return FALSE;
-    //    ibo = m_IndexBuffers[IB];
-    //}
-    //void *pData = nullptr;
-    //if (indexcount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
-    //{
-    //    pData = LockIndexBuffer(IB, ibo->m_CurrentICount, indexcount, CKRST_LOCK_NOOVERWRITE);
-    //    ibase = ibo->m_CurrentICount;
-    //    ibo->m_CurrentICount += indexcount;
-    //} else
-    //{
-    //    pData = LockIndexBuffer(IB, 0, indexcount, CKRST_LOCK_DISCARD);
-    //    ibo->m_CurrentICount = indexcount;
-    //}
-    //if (pData)
-    //    memcpy(pData, indices, indexcount * sizeof(CKWORD));
-    //UnlockIndexBuffer(IB);
     return DrawPrimitiveVBIB(pType, VB, IB, StartVIndex, VertexCount, ibase, indexcount);
 }
 
@@ -445,7 +497,8 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
             break;
         case VX_TRIANGLEFAN:
             // D3D11 does not support triangle fan, leave it here.
-            topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+            assert(false);
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
             break;
         default:
             break;
@@ -629,6 +682,12 @@ CKBOOL CKDX11RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShad
     d11desc = new CKDX11VertexShaderDesc;
     d11desc->m_Function = DesiredFormat->m_Function;
     d11desc->m_FunctionSize = DesiredFormat->m_FunctionSize;
+    auto* fmt = dynamic_cast<CKDX11VertexShaderDesc *>(DesiredFormat);
+    if (fmt)
+    {
+        d11desc->DxEntryPoint = fmt->DxEntryPoint;
+        d11desc->DxTarget = fmt->DxTarget;
+    }
     CKBOOL succeeded = d11desc->Create(this);
     if (succeeded)
         m_VertexShaders[VShader] = d11desc;
@@ -739,11 +798,13 @@ void CKDX11RasterizerContext::SetupStreams(CKDWORD VB, CKDWORD VShader)
     if (!vbo || !vs)
         return;
     HRESULT hr;
+    
     D3D11_INPUT_ELEMENT_DESC desc[] = {
-        {"SV_POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        // {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"SV_POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_B8G8R8A8_UNORM, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
     };
-    D3DCall(m_Device->CreateInputLayout(desc, 1,
+    D3DCall(m_Device->CreateInputLayout(desc, 3,
                                         vs->DxBlob->GetBufferPointer(), vs->DxBlob->GetBufferSize(),
                                         m_InputLayout.GetAddressOf()));
     // D3DCall(m_Device->CreateInputLayout(vbo->DxInputElementDesc.data(), vbo->DxInputElementDesc.size(),
