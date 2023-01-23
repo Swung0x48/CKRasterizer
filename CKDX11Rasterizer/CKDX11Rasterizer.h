@@ -15,6 +15,8 @@
     #include <dxgidebug.h>
 #endif
 
+#include <unordered_map>
+
 #include "FlexibleVertexFormat.h"
 using Microsoft::WRL::ComPtr;
 
@@ -212,7 +214,7 @@ protected:
     CKBOOL CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat);
     CKBOOL CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat);
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
-    void SetupStreams(CKDWORD VB, CKDWORD VShader);
+    void SetupStreams(CKDWORD VB);
 
     CKDWORD GenerateIB(void *indices, int indexcount, int* startIndex);
 
@@ -256,14 +258,16 @@ public:
 
     CKDX11ConstantBufferDesc m_ConstantBuffer;
     CKBOOL m_ConstantBufferUptodate;
-        //    IDirect3DDevice9Ex *m_Device;
-//    VxDirectXData m_DirectXData;
-//    //----------------------------------------------------
-//    //--- Index buffer filled when drawing primitives
-//    CKDX11IndexBufferDesc *m_IndexBuffer[2]; // Clip/unclipped
-//
-//    int m_CurrentTextureIndex;
-//
+    std::unordered_map<CKDWORD, CKDWORD> m_VertexShaderMap;
+
+    //    IDirect3DDevice9Ex *m_Device;
+    //    VxDirectXData m_DirectXData;
+    //    //----------------------------------------------------
+    //    //--- Index buffer filled when drawing primitives
+    //    CKDX11IndexBufferDesc *m_IndexBuffer[2]; // Clip/unclipped
+    //
+    //    int m_CurrentTextureIndex;
+    //
     volatile CKBOOL m_InCreateDestroy;
     //-------------------------------------------------
     //--- to avoid redoundant calls to SetVertexShader & SetStreamSource :
