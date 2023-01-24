@@ -2,6 +2,8 @@
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 
+#define DYNAMIC_IBO_COUNT 64
+
 #include "CKRasterizer.h"
 #include <Windows.h>
 #include <d3d11.h>
@@ -72,6 +74,8 @@ public:
     D3D11_BUFFER_DESC DxDesc;
     CKDX11IndexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
+    virtual void *Lock(CKDX11RasterizerContext *ctx, CKDWORD offset, CKDWORD len, bool overwrite);
+    virtual void Unlock(CKDX11RasterizerContext *ctx);
 } CKDX11IndexBufferDesc;
 
 typedef struct CKDX11VertexShaderDesc : public CKVertexShaderDesc
@@ -214,7 +218,10 @@ protected:
     CKBOOL CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat);
     CKBOOL CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat);
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
-    void SetupStreams(CKDWORD VB);
+    void AssemblyInput(CKDX11VertexBufferDesc *vbo);
+    CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKDX11VertexBufferDesc *vbo,
+                                                          CKDWORD StartVertex, CKDWORD VertexCount, CKWORD *indices,
+                                                          int indexcount);
 
     CKDWORD GenerateIB(void *indices, int indexcount, int* startIndex);
 
@@ -263,8 +270,10 @@ public:
     //    IDirect3DDevice9Ex *m_Device;
     //    VxDirectXData m_DirectXData;
     //    //----------------------------------------------------
-    //    //--- Index buffer filled when drawing primitives
-    //    CKDX11IndexBufferDesc *m_IndexBuffer[2]; // Clip/unclipped
+    //--- Index buffer filled when drawing primitives
+    CKDX11IndexBufferDesc *m_IndexBuffer[2]; // Clip/unclipped
+    CKDWORD m_DynamicIndexBufferCounter = 0;
+    CKDX11IndexBufferDesc *m_DynamicIndexBuffer[DYNAMIC_IBO_COUNT] = {nullptr};
     //
     //    int m_CurrentTextureIndex;
     //
