@@ -97,7 +97,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     DXGI_SWAP_CHAIN_DESC scd;
     ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
 
-    //m_AllowTearing = static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
+    m_AllowTearing = static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
     m_AllowTearing = FALSE;
     scd.BufferCount = 2;
     scd.BufferDesc.Width = Width;
@@ -542,7 +542,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
                                                         int indexcount)
 {
     ZoneScopedN(__FUNCTION__);
-    int ibbase = 0;
+    int ibbasecnt = 0;
     if (indices)
     {
         CKDX11IndexBufferDesc *ibo = nullptr;
@@ -569,7 +569,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
         if (indexcount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
         {
             pdata = ibo->Lock(this, sizeof(CKWORD) * ibo->m_CurrentICount, sizeof(CKWORD) * indexcount, false);
-            ibbase = sizeof(CKWORD) * ibo->m_CurrentICount;
+            ibbasecnt = ibo->m_CurrentICount;
             ibo->m_CurrentICount += indexcount;
         }
         else
@@ -582,9 +582,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
         ibo->Unlock(this);
         m_DeviceContext->IASetIndexBuffer(ibo->DxBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
     }
-    UINT stride = vbo->m_VertexSize;
-    UINT offset = 0;
-    m_DeviceContext->IASetVertexBuffers(0, 1, vbo->DxBuffer.GetAddressOf(), &stride, &offset);
+    
     AssemblyInput(vbo);
 
     {
@@ -625,7 +623,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
     }
     m_DeviceContext->IASetPrimitiveTopology(topology);
     if (indices)
-        m_DeviceContext->DrawIndexed(indexcount, ibbase / 2, 0);
+        m_DeviceContext->DrawIndexed(indexcount, ibbasecnt, StartVertex);
     else
         m_DeviceContext->Draw(VertexCount, StartVertex);
     return TRUE;
@@ -702,7 +700,7 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
 #endif
     assert(VertexCount <= vbo->m_MaxVertexCount - MinVIndex); // check if vb is big enough
     assert(Indexcount <= ibo->m_MaxIndexCount - StartIndex); // check if ib is big enough
-    m_DeviceContext->DrawIndexed(Indexcount, sizeof(CKWORD) * StartIndex, MinVIndex);
+    m_DeviceContext->DrawIndexed(Indexcount, StartIndex, MinVIndex);
     return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
@@ -997,7 +995,9 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo)
     D3DCall(m_Device->CreateInputLayout(vbo->DxInputElementDesc.data(), vbo->DxInputElementDesc.size(),
         vs->DxBlob->GetBufferPointer(), vs->DxBlob->GetBufferSize(), m_InputLayout.GetAddressOf()));
     m_DeviceContext->IASetInputLayout(m_InputLayout.Get());
-
+    UINT stride = vbo->m_VertexSize;
+    UINT offset = 0;
+    m_DeviceContext->IASetVertexBuffers(0, 1, vbo->DxBuffer.GetAddressOf(), &stride, &offset);
 #if LOGGING
     fprintf(stderr, "IA: vs %s\n", vs->DxEntryPoint);
 #endif
