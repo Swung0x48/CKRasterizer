@@ -27,8 +27,8 @@ VS_OUTPUT VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float
 {
     VS_OUTPUT output;
     output.position = mul(position, transform);
-    output.color = position;
-    //output.color = color;
+    //output.color = position;
+    output.color = float4(texcoord, 1.0, 1.0);
     return output;
 }
 
@@ -38,7 +38,7 @@ VS_OUTPUT VShaderNormal(float3 position : SV_POSITION, float3 normal: NORMAL, fl
     VS_OUTPUT output;
     float4 pos4 = float4(position, 1.0);
     output.position = mul(pos4, transform);
-    output.color = pos4;
+    output.color = float4(texcoord, 1.0, 1.0);
     //output.color = float4(normal, 1.0);
     return output;
 }
@@ -48,7 +48,7 @@ VS_OUTPUT VShaderSpec(float3 position : SV_POSITION, float3 diffuse: COLOR, floa
     VS_OUTPUT output;
     float4 pos4 = float4(position, 1.0);
     output.position = mul(pos4, transform);
-    output.color = pos4;
+    output.color = float4(texcoord, 1.0, 1.0);
     //output.color = pos4;
     return output;
 }
@@ -585,16 +585,18 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
     
     AssemblyInput(vbo);
 
-    {
-        HRESULT hr;
-        Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-        Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
-        D3D11_MAPPED_SUBRESOURCE ms;
-        D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
-        memcpy(ms.pData, &m_TotalMatrix, sizeof(ConstantBufferStruct));
-        m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
-        m_ConstantBufferUptodate = TRUE;
-    }
+    // {
+    //     HRESULT hr;
+    //     Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+    //     Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
+    //     VxMatrix transposed;
+    //     Vx3DTransposeMatrix(transposed, m_TotalMatrix);
+    //     D3D11_MAPPED_SUBRESOURCE ms;
+    //     D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
+    //     memcpy(ms.pData, &transposed, sizeof(ConstantBufferStruct));
+    //     m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
+    //     m_ConstantBufferUptodate = TRUE;
+    // }
     m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
 
     D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
@@ -653,15 +655,15 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     HRESULT hr;
     // if ((m_MatrixUptodate & WORLD_TRANSFORM) && (m_MatrixUptodate & VIEW_TRANSFORM) &&
     //     (m_MatrixUptodate & PROJ_TRANSFORM))
-    {
-        Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-        Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
-        D3D11_MAPPED_SUBRESOURCE ms;
-        D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
-        memcpy(ms.pData, &m_TotalMatrix, sizeof(ConstantBufferStruct));
-        m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
-        m_ConstantBufferUptodate = TRUE;
-    }
+    // {
+    //     Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+    //     Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
+    //     D3D11_MAPPED_SUBRESOURCE ms;
+    //     D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
+    //     memcpy(ms.pData, &m_TotalMatrix, sizeof(ConstantBufferStruct));
+    //     m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
+    //     m_ConstantBufferUptodate = TRUE;
+    // }
 
     m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
     UINT vertexOffsetInBytes = 0;
@@ -978,13 +980,24 @@ CKBOOL CKDX11RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc 
 
 void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo)
 {
+    HRESULT hr;
+    {
+        Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+        Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
+        VxMatrix transposed;
+        Vx3DTransposeMatrix(transposed, m_TotalMatrix);
+        D3D11_MAPPED_SUBRESOURCE ms;
+        D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
+        memcpy(ms.pData, &transposed, sizeof(ConstantBufferStruct));
+        m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
+        m_ConstantBufferUptodate = TRUE;
+    }
     if (m_FVF == vbo->m_VertexFormat)
         return; // no need to re-set input layout
     // auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
     if (!vbo)
         return;
     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[m_VertexShaderMap[vbo->m_VertexFormat]]);
-    HRESULT hr;
 
     fprintf(stderr, "IA: Layout: ");
     for (auto item: vbo->DxInputElementDesc)
