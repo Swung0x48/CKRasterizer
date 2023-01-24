@@ -20,14 +20,14 @@ struct VS_INPUT_COLOR {
 
 cbuffer CBuf
 {
-    matrix transform;
+    matrix transform_mat;
 };
 
 VS_OUTPUT VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float2 texcoord: TEXCOORD)
 {
     VS_OUTPUT output;
-    output.position = mul(position, transform);
-    //output.color = position;
+    output.position.xyzw = position.xywz;
+    output.position.w = 1.0;
     output.color = float4(texcoord, 1.0, 1.0);
     return output;
 }
@@ -37,9 +37,8 @@ VS_OUTPUT VShaderNormal(float3 position : SV_POSITION, float3 normal: NORMAL, fl
 {
     VS_OUTPUT output;
     float4 pos4 = float4(position, 1.0);
-    output.position = mul(pos4, transform);
+    output.position = mul(pos4, transform_mat);
     output.color = float4(texcoord, 1.0, 1.0);
-    //output.color = float4(normal, 1.0);
     return output;
 }
 
@@ -47,9 +46,8 @@ VS_OUTPUT VShaderSpec(float3 position : SV_POSITION, float3 diffuse: COLOR, floa
 {
     VS_OUTPUT output;
     float4 pos4 = float4(position, 1.0);
-    output.position = mul(pos4, transform);
+    output.position = mul(pos4, transform_mat);
     output.color = float4(texcoord, 1.0, 1.0);
-    //output.color = pos4;
     return output;
 }
 
@@ -58,7 +56,6 @@ float4 PShader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
     return color;
 }
 )";
-
 CKDX11RasterizerContext::CKDX11RasterizerContext() {}
 CKDX11RasterizerContext::~CKDX11RasterizerContext() {}
 
@@ -80,7 +77,6 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
 
     m_AllowTearing = static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
-    m_AllowTearing = FALSE;
     scd.BufferCount = 2;
     scd.BufferDesc.Width = Width;
     scd.BufferDesc.Height = Height;
