@@ -59,24 +59,6 @@ float4 PShader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
 }
 )";
 
-// struct vertex
-// {
-//     float X, Y, Z;
-//     float Color[4];
-// };
-//
-// vertex triangle[] = {
-//     {0.0f, 0.5f, 1.0f, {1.0f, 0.0f, 0.0f, 1.0f} },
-//     {0.45f, -0.5, 1.0f, {0.0f, 1.0f, 0.0f, 1.0f} },
-//     {-0.45f, -0.5f, 1.0f, {0.0f, 0.0f, 1.0f, 1.0f} }
-// };
-// ID3D11Buffer *vb;
-// ID3D11InputLayout *layout;
-
-// static ID3DBlob *vsBlob = nullptr, *psBlob = nullptr;
-// static ID3D11VertexShader *vshader;
-// static ID3D11PixelShader *pshader;
-
 CKDX11RasterizerContext::CKDX11RasterizerContext() {}
 CKDX11RasterizerContext::~CKDX11RasterizerContext() {}
 
@@ -188,33 +170,6 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     ps->Bind(this);
 
     m_ConstantBuffer.Create(this);
-    /*D3DCall(D3DCompile(shader, strlen(shader), nullptr, nullptr, nullptr, "VShader", "vs_4_0", 0, 0, &vsBlob, nullptr));
-    D3DCall(D3DCompile(shader, strlen(shader), nullptr, nullptr, nullptr, "PShader", "ps_4_0", 0, 0, &psBlob, nullptr));
-    D3DCall(m_Device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &vshader));
-    D3DCall(m_Device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &pshader));
-    m_DeviceContext->VSSetShader(vshader, nullptr, 0);
-    m_DeviceContext->PSSetShader(pshader, nullptr, 0);
-
-    D3D11_INPUT_ELEMENT_DESC desc[] = {
-        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-    };
-    m_Device->CreateInputLayout(desc, 2, vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &layout);
-    m_DeviceContext->IASetInputLayout(layout);
-
-    D3D11_BUFFER_DESC bd;
-    ZeroMemory(&bd, sizeof(bd));
-
-    bd.Usage = D3D11_USAGE_DYNAMIC;
-    bd.ByteWidth = sizeof(vertex) * 3;
-    bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-    D3DCall(m_Device->CreateBuffer(&bd, nullptr, &vb));
-    D3D11_MAPPED_SUBRESOURCE ms;
-    D3DCall(m_DeviceContext->Map(vb, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
-    memcpy(ms.pData, triangle, sizeof(triangle));
-    m_DeviceContext->Unmap(vb, NULL);*/
 
     m_WorldMatrix = VxMatrix::Identity();
     m_ViewMatrix = VxMatrix::Identity();
@@ -252,15 +207,7 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
 #endif
     HRESULT hr;
     m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
-
-    // UINT stride = sizeof(vertex);
-    // UINT offset = 0;
-    // m_DeviceContext->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
-    //
-    // m_DeviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    //
-    // m_DeviceContext->Draw(3, 0);
-
+    
     D3DCall(m_Swapchain->Present(vsync ? 1 : 0, (m_AllowTearing && !m_Fullscreen && !vsync) ? DXGI_PRESENT_ALLOW_TEARING : 0));
     return SUCCEEDED(hr);
 }
@@ -269,14 +216,8 @@ CKBOOL CKDX11RasterizerContext::BeginScene()
 {
     if (m_SceneBegined)
         return FALSE;
-    HRESULT hr;
-    m_TotalMatrix = VxMatrix::Identity();
-    D3D11_MAPPED_SUBRESOURCE ms;
-    D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
-    memcpy(ms.pData, &m_TotalMatrix, sizeof(ConstantBufferStruct));
-    m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
     m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
-    return SUCCEEDED(hr);
+    return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::EndScene()
 {
@@ -350,11 +291,6 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
     {
         Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
         Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
-        D3D11_MAPPED_SUBRESOURCE ms;
-        D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
-        memcpy(ms.pData, &m_TotalMatrix, sizeof(ConstantBufferStruct));
-        m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
-        m_ConstantBufferUptodate = TRUE;
     }
     return TRUE;
 }
@@ -585,19 +521,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
     
     AssemblyInput(vbo);
 
-    // {
-    //     HRESULT hr;
-    //     Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-    //     Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
-    //     VxMatrix transposed;
-    //     Vx3DTransposeMatrix(transposed, m_TotalMatrix);
-    //     D3D11_MAPPED_SUBRESOURCE ms;
-    //     D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
-    //     memcpy(ms.pData, &transposed, sizeof(ConstantBufferStruct));
-    //     m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
-    //     m_ConstantBufferUptodate = TRUE;
-    // }
-    m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
+    
 
     D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
     switch (pType & 0xf)
@@ -652,18 +576,6 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         return FALSE;
 
     AssemblyInput(vbo);
-    HRESULT hr;
-    // if ((m_MatrixUptodate & WORLD_TRANSFORM) && (m_MatrixUptodate & VIEW_TRANSFORM) &&
-    //     (m_MatrixUptodate & PROJ_TRANSFORM))
-    // {
-    //     Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-    //     Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
-    //     D3D11_MAPPED_SUBRESOURCE ms;
-    //     D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
-    //     memcpy(ms.pData, &m_TotalMatrix, sizeof(ConstantBufferStruct));
-    //     m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
-    //     m_ConstantBufferUptodate = TRUE;
-    // }
 
     m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
     UINT vertexOffsetInBytes = 0;
@@ -847,7 +759,7 @@ CKBOOL CKDX11RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 }
 CKBOOL CKDX11RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat) { return 0; }
 
-bool operator==(CKVertexShaderDesc a, CKVertexShaderDesc b)
+bool operator==(const CKVertexShaderDesc &a, const CKVertexShaderDesc& b)
 {
     return a.m_FunctionSize == b.m_FunctionSize &&
         (a.m_Function == b.m_Function || 
@@ -883,7 +795,7 @@ CKBOOL CKDX11RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShad
     return succeeded;
 }
 
-bool operator==(CKPixelShaderDesc a, CKPixelShaderDesc b)
+bool operator==(const CKPixelShaderDesc& a, const CKPixelShaderDesc& b)
 {
     return a.m_FunctionSize == b.m_FunctionSize &&
         (a.m_Function == b.m_Function || memcmp(a.m_Function, b.m_Function, a.m_FunctionSize) == 0);
@@ -982,19 +894,17 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo)
 {
     HRESULT hr;
     {
-        Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-        Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
         VxMatrix transposed;
         Vx3DTransposeMatrix(transposed, m_TotalMatrix);
         D3D11_MAPPED_SUBRESOURCE ms;
         D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
         memcpy(ms.pData, &transposed, sizeof(ConstantBufferStruct));
         m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
+        m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
         m_ConstantBufferUptodate = TRUE;
     }
     if (m_FVF == vbo->m_VertexFormat)
         return; // no need to re-set input layout
-    // auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
     if (!vbo)
         return;
     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[m_VertexShaderMap[vbo->m_VertexFormat]]);
