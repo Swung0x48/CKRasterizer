@@ -1,0 +1,9 @@
+name=motion blur
+num_stages=2
+[stage_0]
+vsh=BUILTIN/CKGLRPP_VERT_SHDR/DEFAULT
+fsh=BUILTIN/CKGLRPP_FRAG_SHDR/MBLUR
+uniform_parameter=attenuation|f32|0.8
+[stage_1]
+vsh=BUILTIN/CKGLRPP_VERT_SHDR/DEFAULT
+fsh=BUILTIN/CKGLRPP_FRAG_SHDR/DEFAULT

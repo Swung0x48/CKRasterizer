@@ -18,19 +18,19 @@ void main()
     color = texture(color_in, texcoords);
     vec2 texel_size = 1. / screen_size;
     float stp = 1.;
-    for (float x = 0; x <= radius; x += stp)
-        for (float y = 0; y <= radius; y += stp)
+    vec4 maxc = vec4(0.);
+    for (float r = 1.0; r <= radius; r += stp)
+    {
+        vec2 d[8] = vec2[8](vec2(-1, -1), vec2(-1, 0), vec2(-1, 1),
+                            vec2( 0, -1),              vec2( 0, 1),
+                            vec2( 1, -1), vec2( 1, 0), vec2( 1, 1));
+        for (int i = 0; i < 8; ++i)
         {
-            vec2 d[4] = vec2[4](vec2(-x, -y), vec2(-x, y),
-                                vec2( x, -y), vec2( x, y));
-            float w = step(sqrt(x * x + y * y) / radius, 1.);
-            vec4 cc[4];
-            for (int i = 0; i < 4; ++i)
-                cc[i] = texture(color_in, clamp2(texcoords + d[i] * texel_size));
-            vec4 c1 = max(cc[0], cc[1]);
-            vec4 c2 = max(cc[2], cc[3]);
-            color = mix(color, max(color, max(c1, c2)), w);
+            vec4 c = texture(color_in, clamp2(texcoords + r * d[i] * texel_size));
+            maxc = max(maxc, c);
         }
+    }
+    color = maxc;
     norpth = texture(norpth_in, texcoords);
     gl_FragDepth = norpth.w;
 }

@@ -1,11 +1,25 @@
 BUILTIN_VERTEX_SHADER   CKGLR_VERT_SHADER vert.glsl
 BUILTIN_FRAGMENT_SHADER CKGLR_FRAG_SHADER frag.glsl
 
-1						CKGLRPP_VERT_SHDR post/vs.glsl
-1						CKGLRPP_FRAG_SHDR post/default.glsl
-2						CKGLRPP_FRAG_SHDR post/yflip.glsl
-3						CKGLRPP_FRAG_SHDR post/redwave.glsl
-4						CKGLRPP_FRAG_SHDR post/normalvideo.glsl
-5						CKGLRPP_FRAG_SHDR post/altitudinemvideo.glsl
-6						CKGLRPP_FRAG_SHDR post/edgedetect.glsl
-7						CKGLRPP_FRAG_SHDR post/blobfilter.glsl
+DEFAULT                 CKGLRPP_VERT_SHDR post/vs.glsl
+
+DEFAULT                 CKGLRPP_FRAG_SHDR post/default.glsl
+YFLIP                   CKGLRPP_FRAG_SHDR post/yflip.glsl
+REDWAVE                 CKGLRPP_FRAG_SHDR post/redwave.glsl
+NORMALVIDEO             CKGLRPP_FRAG_SHDR post/normalvideo.glsl
+ALTITUDINEMVIDEO        CKGLRPP_FRAG_SHDR post/altitudinemvideo.glsl
+EDGEDETECT              CKGLRPP_FRAG_SHDR post/edgedetect.glsl
+BLOBFILTER              CKGLRPP_FRAG_SHDR post/blobfilter.glsl
+MOUSE                   CKGLRPP_FRAG_SHDR post/mouse.glsl
+MBLUR                   CKGLRPP_FRAG_SHDR post/mblur.glsl
+MAXFILTER               CKGLRPP_FRAG_SHDR post/maxfilter.glsl
+
+1                       CKGLRPP_DESC      post/default.pipeline
+2                       CKGLRPP_DESC      post/yflip.pipeline
+3                       CKGLRPP_DESC      post/normalvideo.pipeline
+4                       CKGLRPP_DESC      post/altitudinemvideo.pipeline
+5                       CKGLRPP_DESC      post/edgedetect.pipeline
+6                       CKGLRPP_DESC      post/edgedetect2.pipeline
+7                       CKGLRPP_DESC      post/blobfilter.pipeline
+8                       CKGLRPP_DESC      post/mblur.pipeline
+9                       CKGLRPP_DESC      post/mouse.pipeline

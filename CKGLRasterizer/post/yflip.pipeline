@@ -1,0 +1,5 @@
+name=y flip
+num_stages=1
+[stage_0]
+vsh=BUILTIN/CKGLRPP_VERT_SHDR/DEFAULT
+fsh=BUILTIN/CKGLRPP_FRAG_SHDR/YFLIP

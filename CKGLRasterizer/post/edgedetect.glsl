@@ -24,5 +24,6 @@ void main()
     float depth_thresh = 1. - 1. / 84.;
     color = mix(vec4(0.), edge_color, step(thresh, length(norpth - avg)));
     color = mix(color, vec4(0.), step(depth_thresh, norpth.w));
+    color.a = 1.;
     gl_FragDepth = norpth.w;
 }

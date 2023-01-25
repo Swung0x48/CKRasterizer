@@ -38,41 +38,6 @@ void GLAPIENTRY debug_callback(GLenum src, GLenum typ, GLuint id, GLenum severit
 
 VxMatrix inv(const VxMatrix &m);
 
-static HMODULE self_module = nullptr;
-
-static HMODULE get_self_module()
-{
-    if (!self_module)
-    {
-        GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            (char*)&self_module, &self_module);
-    }
-    return self_module;
-}
-
-unsigned int get_resource_size(const char* type, const char* name)
-{
-    HRSRC rsc = FindResourceA(get_self_module(), name, type);
-    if (!rsc) return 0;
-    return SizeofResource(get_self_module(), rsc);
-}
-
-void* get_resource_data(const char* type, const char* name)
-{
-    HRSRC rsc = FindResourceA(get_self_module(), name, type);
-    if (!rsc) return nullptr;
-    HGLOBAL hrdat = LoadResource(get_self_module(), rsc);
-    if (!hrdat) return nullptr;
-    return LockResource(hrdat);
-}
-
-std::string get_resource(const char* type, const char* name)
-{
-    size_t sz = get_resource_size(type, name);
-    if (!sz) return std::string();
-    return std::string((char*)get_resource_data(type, name), sz);
-}
-
 CKGLRasterizerContext::CKGLRasterizerContext()
 {
 }
@@ -313,8 +278,8 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     memset(m_lights_data, 0, sizeof(m_lights_data));
 
     // TODO: Shader compilation and binding may be moved elsewhere
-    m_prgm = new CKGLProgram(get_resource("CKGLR_VERT_SHADER", "BUILTIN_VERTEX_SHADER"),
-                             get_resource("CKGLR_FRAG_SHADER", "BUILTIN_FRAGMENT_SHADER"));
+    m_prgm = new CKGLProgram(load_resource("CKGLR_VERT_SHADER", "BUILTIN_VERTEX_SHADER"),
+                             load_resource("CKGLR_FRAG_SHADER", "BUILTIN_FRAGMENT_SHADER"));
     m_prgm->validate();
     m_prgm->use();
     for (int i = 0; i < CKRST_MAX_STAGES; ++i)
@@ -388,17 +353,13 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     m_renderst[VXRENDERSTATE_DESTBLEND] = VXBLEND_ZERO;
 
 #if USE_FBO_AND_POSTPROCESSING
-    for (m_max_ppsh_id = 1; m_max_ppsh_id < 256 && get_resource_size("CKGLRPP_FRAG_SHDR", (char*)m_max_ppsh_id) != 0; ++m_max_ppsh_id);
+    for (m_max_ppsh_id = 1; m_max_ppsh_id < 256 && get_resource_size("CKGLRPP_DESC", (char*)m_max_ppsh_id) != 0; ++m_max_ppsh_id);
     if (m_max_ppsh_id > 255) m_max_ppsh_id = 1;
     m_current_ppsh_id = 1;
     m_3dpp = new CKGLPostProcessingPipeline();
     m_2dpp = new CKGLPostProcessingPipeline();
-    int l = get_resource_size("CKGLRPP_FRAG_SHDR", (char*)m_current_ppsh_id);
-    char *s = (char*)get_resource_data("CKGLRPP_FRAG_SHDR", (char*)m_current_ppsh_id);
-    m_3dpp->add_stage(new CKGLPostProcessingStage(std::string(s, l)));
-    l = get_resource_size("CKGLRPP_FRAG_SHDR", (char*)1);
-    s = (char*)get_resource_data("CKGLRPP_FRAG_SHDR", (char*)1);
-    m_2dpp->add_stage(new CKGLPostProcessingStage(std::string(s, l)));
+    m_3dpp->parse_pipeline_config(load_resource("CKGLRPP_DESC", (char*)m_current_ppsh_id));
+    m_2dpp->parse_pipeline_config(load_resource("CKGLRPP_DESC", (char*)1));
     m_3dpp->setup_fbo(true, true, m_Width, m_Height);
     m_2dpp->setup_fbo(false, false, m_Width, m_Height);
 #endif
@@ -455,7 +416,11 @@ CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
 CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 {
     if (m_batch_status)
+#if USE_FBO_AND_POSTPROCESSING
+        set_title_status("OpenGL %s | batch stats: direct %d, vb %d, vbib %d | post processing %s", glGetString(GL_VERSION), directbat, vbbat, vbibbat, m_3dpp->get_name().c_str());
+#else
         set_title_status("OpenGL %s | batch stats: direct %d, vb %d, vbib %d", glGetString(GL_VERSION), directbat, vbbat, vbibbat);
+#endif
     TracyPlot("DirectBatch", (int64_t)directbat);
     TracyPlot("VB", (int64_t)vbbat);
     TracyPlot("VBIB", (int64_t)vbibbat);
@@ -511,9 +476,7 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
             m_current_ppsh_id = 1;
         if (m_3dpp) delete m_3dpp;
         m_3dpp = new CKGLPostProcessingPipeline();
-        int l = get_resource_size("CKGLRPP_FRAG_SHDR", (char*)m_current_ppsh_id);
-        char *s = (char*)get_resource_data("CKGLRPP_FRAG_SHDR", (char*)m_current_ppsh_id);
-        m_3dpp->add_stage(new CKGLPostProcessingStage(std::string(s, l)));
+        m_3dpp->parse_pipeline_config(load_resource("CKGLRPP_DESC", (char*)m_current_ppsh_id));
         m_3dpp->setup_fbo(true, true, m_Width, m_Height);
         m_ppsh_switch_pending = false;
     }
