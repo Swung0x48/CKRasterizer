@@ -103,6 +103,7 @@ typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
 typedef struct ConstantBufferStruct
 {
     VxMatrix TotalMatrix;
+    // VxMatrix ViewportMatrix;
 } ConstantBufferStruct;
 
 typedef struct CKDX11ConstantBufferDesc
@@ -274,6 +275,8 @@ public:
     CKDX11IndexBufferDesc *m_IndexBuffer[2]; // Clip/unclipped
     CKDWORD m_DynamicIndexBufferCounter = 0;
     CKDX11IndexBufferDesc *m_DynamicIndexBuffer[DYNAMIC_IBO_COUNT] = {nullptr};
+    VxMatrix m_ViewportMat;
+    ConstantBufferStruct m_CBuffer;
     //
     //    int m_CurrentTextureIndex;
     //

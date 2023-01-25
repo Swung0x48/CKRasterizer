@@ -20,7 +20,8 @@ struct VS_INPUT_COLOR {
 
 cbuffer CBuf
 {
-    matrix transform_mat;
+    matrix total_mat;
+    //matrix viewport_mat;
 };
 
 VS_OUTPUT VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float2 texcoord: TEXCOORD)
@@ -28,6 +29,7 @@ VS_OUTPUT VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float
     VS_OUTPUT output;
     output.position.xyzw = position.xywz;
     output.position.w = 1.0;
+    //output.position = mul(output.position, viewport_mat);
     output.color = float4(texcoord, 1.0, 1.0);
     return output;
 }
@@ -37,7 +39,7 @@ VS_OUTPUT VShaderNormal(float3 position : SV_POSITION, float3 normal: NORMAL, fl
 {
     VS_OUTPUT output;
     float4 pos4 = float4(position, 1.0);
-    output.position = mul(pos4, transform_mat);
+    output.position = mul(pos4, total_mat);
     output.color = float4(texcoord, 1.0, 1.0);
     return output;
 }
@@ -46,7 +48,7 @@ VS_OUTPUT VShaderSpec(float3 position : SV_POSITION, float3 diffuse: COLOR, floa
 {
     VS_OUTPUT output;
     float4 pos4 = float4(position, 1.0);
-    output.position = mul(pos4, transform_mat);
+    output.position = mul(pos4, total_mat);
     output.color = float4(texcoord, 1.0, 1.0);
     return output;
 }
@@ -167,12 +169,12 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
 
     m_ConstantBuffer.Create(this);
 
-    m_WorldMatrix = VxMatrix::Identity();
-    m_ViewMatrix = VxMatrix::Identity();
-    m_ModelViewMatrix = VxMatrix::Identity();
-    m_ProjectionMatrix = VxMatrix::Identity();
-    m_ViewProjMatrix = VxMatrix::Identity();
-    m_TotalMatrix = VxMatrix::Identity();
+    // m_WorldMatrix = VxMatrix::Identity();
+    // m_ViewMatrix = VxMatrix::Identity();
+    // m_ModelViewMatrix = VxMatrix::Identity();
+    // m_ProjectionMatrix = VxMatrix::Identity();
+    // m_ViewProjMatrix = VxMatrix::Identity();
+    // m_TotalMatrix = VxMatrix::Identity();
 
     m_InCreateDestroy = FALSE;
 
@@ -244,29 +246,36 @@ CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
     //viewport.MaxDepth = data->ViewZMax;
     //viewport.MinDepth = data->ViewZMin;
     m_DeviceContext->RSSetViewports(1, &m_Viewport);
+    //
+    // m_CBuffer.ViewportMatrix = VxMatrix::Identity();
+    // float(*m)[4] = (float(*)[4]) &m_CBuffer.ViewportMatrix;
+    // m[0][0] = 2. / data->ViewWidth;
+    // m[1][1] = 2. / data->ViewHeight;
+    // m[2][2] = 0;
+    // m[3][0] = -(-2. * data->ViewX + data->ViewWidth) / data->ViewWidth;
+    // m[3][1] = (-2. * data->ViewY + data->ViewHeight) / data->ViewHeight;
     return TRUE;
 }
 
 CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat)
 {
     ZoneScopedN(__FUNCTION__);
-    HRESULT hr;
+    CKDWORD UnityMatrixMask = 0;
     switch (Type)
     {
         case VXMATRIX_WORLD:
             m_WorldMatrix = Mat;
-            m_MatrixUptodate |= WORLD_TRANSFORM;
-            //Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            m_MatrixUptodate &= ~0U ^ WORLD_TRANSFORM;
             break;
         case VXMATRIX_VIEW:
             m_ViewMatrix = Mat;
-            m_MatrixUptodate |= VIEW_TRANSFORM;
-            //Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            m_MatrixUptodate = 0;
             break;
         case VXMATRIX_PROJECTION:
             m_ProjectionMatrix = Mat;
-            m_MatrixUptodate |= PROJ_TRANSFORM;
-            //Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
+            m_MatrixUptodate = 0;
             break;
         case VXMATRIX_TEXTURE0:
         case VXMATRIX_TEXTURE1:
@@ -276,17 +285,20 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
         case VXMATRIX_TEXTURE5:
         case VXMATRIX_TEXTURE6:
         case VXMATRIX_TEXTURE7:
-            // UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
+            UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
             break;
         default:
             return FALSE;
     }
-    if ((m_MatrixUptodate & WORLD_TRANSFORM) &&
-        (m_MatrixUptodate & VIEW_TRANSFORM) &&
-        (m_MatrixUptodate & PROJ_TRANSFORM))
+    if (VxMatrix::Identity() == Mat)
     {
-        Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-        Vx3DMultiplyMatrix(m_TotalMatrix, m_ProjectionMatrix, m_ModelViewMatrix);
+        if ((m_UnityMatrixMask & UnityMatrixMask) != 0)
+            return TRUE;
+        m_UnityMatrixMask |= UnityMatrixMask;
+    }
+    else
+    {
+        m_UnityMatrixMask &= ~UnityMatrixMask;
     }
     return TRUE;
 }
@@ -474,13 +486,39 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
                                                         int indexcount)
 {
     ZoneScopedN(__FUNCTION__);
+    D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+    switch (pType & 0xf)
+    {
+        case VX_LINELIST:
+            topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
+            break;
+        case VX_LINESTRIP:
+            topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
+            break;
+        case VX_TRIANGLELIST:
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+            break;
+        case VX_TRIANGLESTRIP:
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+            break;
+        case VX_TRIANGLEFAN:
+            // D3D11 does not support triangle fan, leave it here.
+            // return FALSE;
+            // assert(false);
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+            break;
+        default:
+            break;
+    }
+    m_DeviceContext->IASetPrimitiveTopology(topology);
+
     int ibbasecnt = 0;
     if (indices)
     {
         CKDX11IndexBufferDesc *ibo = nullptr;
         void *pdata = nullptr;
-        auto iboid = m_DynamicIndexBufferCounter;
-        if (++m_DynamicIndexBufferCounter > DYNAMIC_IBO_COUNT)
+        auto iboid = m_DynamicIndexBufferCounter++;
+        if (m_DynamicIndexBufferCounter >= DYNAMIC_IBO_COUNT)
             m_DynamicIndexBufferCounter = 0;
         if (!m_DynamicIndexBuffer[iboid] || m_DynamicIndexBuffer[iboid]->m_MaxIndexCount < indexcount)
         {
@@ -517,33 +555,6 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
     
     AssemblyInput(vbo);
 
-    
-
-    D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
-    switch (pType & 0xf)
-    {
-        case VX_LINELIST:
-            topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
-            break;
-        case VX_LINESTRIP:
-            topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
-            break;
-        case VX_TRIANGLELIST:
-            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-            break;
-        case VX_TRIANGLESTRIP:
-            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
-            break;
-        case VX_TRIANGLEFAN:
-            // D3D11 does not support triangle fan, leave it here.
-            return FALSE;
-            // assert(false);
-            topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
-            break;
-        default:
-            break;
-    }
-    m_DeviceContext->IASetPrimitiveTopology(topology);
     if (indices)
         m_DeviceContext->DrawIndexed(indexcount, ibbasecnt, StartVertex);
     else
@@ -554,7 +565,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
 CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                                   CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
-    assert(pType != VX_TRIANGLEFAN);
+    // assert(pType != VX_TRIANGLEFAN);
 
     ZoneScopedN(__FUNCTION__);
     if (VB >= m_VertexBuffers.Size())
@@ -596,8 +607,8 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
             break;
         case VX_TRIANGLEFAN:
             // D3D11 does not support triangle fan, leave it here.
-            assert(false);
-            topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+            // assert(false);
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
             break;
         default:
             break;
@@ -890,11 +901,10 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo)
 {
     HRESULT hr;
     {
-        VxMatrix transposed;
-        Vx3DTransposeMatrix(transposed, m_TotalMatrix);
+        Vx3DTransposeMatrix(m_CBuffer.TotalMatrix, m_TotalMatrix);
         D3D11_MAPPED_SUBRESOURCE ms;
         D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
-        memcpy(ms.pData, &transposed, sizeof(ConstantBufferStruct));
+        memcpy(ms.pData, &m_CBuffer, sizeof(ConstantBufferStruct));
         m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
         m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
         m_ConstantBufferUptodate = TRUE;
