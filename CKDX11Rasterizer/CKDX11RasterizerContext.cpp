@@ -53,6 +53,22 @@ VS_OUTPUT VShaderSpec(float3 position : SV_POSITION, float3 diffuse: COLOR, floa
     return output;
 }
 
+VS_OUTPUT VShader0x102(float3 position : SV_POSITION, float2 texcoord: TEXCOORD) {
+    VS_OUTPUT output;
+    float4 pos4 = float4(position, 1.0);
+    output.position = mul(pos4, total_mat);
+    output.color = float4(texcoord, 1.0, 1.0);
+    return output;
+}
+
+VS_OUTPUT VShader0x142(float3 position : SV_POSITION, float3 diffuse: COLOR, float2 texcoord: TEXCOORD) {
+    VS_OUTPUT output;
+    float4 pos4 = float4(position, 1.0);
+    output.position = mul(pos4, total_mat);
+    output.color = float4(texcoord, 1.0, 1.0);
+    return output;
+}
+
 float4 PShader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
 {
     return color;
@@ -129,7 +145,8 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     if (m_Fullscreen)
         m_Driver->m_Owner->m_FullscreenContext = this;
 
-    CKDWORD vs_color_idx = 0, ps_idx = 1, vs_normal_idx = 2, vs_spec_idx = 3;
+    CKDWORD vs_color_idx = 0, vs_normal_idx = 1, vs_spec_idx = 2, vs_0x102_idx = 3, vs_0x142_idx = 4;
+    CKDWORD ps_idx = 0;
     CKDX11VertexShaderDesc vs_desc;
     vs_desc.m_Function = (CKDWORD*)shader;
     vs_desc.m_FunctionSize = strlen(shader);
@@ -153,10 +170,23 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     vs_spec_normal.DxEntryPoint = "VShaderSpec";
     CreateObject(vs_spec_idx, CKRST_OBJ_VERTEXSHADER, &vs_spec_normal);
 
+    CKDX11VertexShaderDesc vs_0x102;
+    vs_0x102.m_Function = (CKDWORD *)shader;
+    vs_0x102.m_FunctionSize = strlen(shader);
+    vs_0x102.DxEntryPoint = "VShader0x102";
+    CreateObject(vs_0x102_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x102);
+
+    CKDX11VertexShaderDesc vs_0x142;
+    vs_0x142.m_Function = (CKDWORD *)shader;
+    vs_0x142.m_FunctionSize = strlen(shader);
+    vs_0x142.DxEntryPoint = "VShader0x142";
+    CreateObject(vs_0x142_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x142);
+
     m_VertexShaderMap[CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_color_idx;
     m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1] = vs_normal_idx;
     m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_SPECULAR | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_spec_idx;
-
+    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_TEX1] = vs_0x102_idx;
+    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_0x142_idx;
 
     // m_CurrentVShader = vs_idx;
     m_CurrentPShader = ps_idx;
@@ -913,14 +943,36 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo)
         return; // no need to re-set input layout
     if (!vbo)
         return;
-    auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[m_VertexShaderMap[vbo->m_VertexFormat]]);
-
+    CKDWORD VShader;
+#if defined(DEBUG) || defined(_DEBUG)
+    try
+    {
+#endif
+        VShader = m_VertexShaderMap.at(vbo->m_VertexFormat);
+#if defined(DEBUG) || defined(_DEBUG)
+    } catch (...)
+    {
+#if LOGGING
+        fprintf(stderr, "FVF: 0x%x\n", vbo->m_VertexFormat);
+#endif
+        assert(false);
+        return;
+    }
+#endif
+    auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
+#if LOGGING
     fprintf(stderr, "IA: Layout: ");
     for (auto item: vbo->DxInputElementDesc)
     {
         fprintf(stderr, "%s | ", item.SemanticName);
     }
     fprintf(stderr, ", Size: %d\n", vbo->m_VertexSize);
+#endif
+    // D3D11_INPUT_ELEMENT_DESC desc[] = {
+    //     {"SV_POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+    //     {"COLOR", 0, DXGI_FORMAT_B8G8R8A8_UNORM, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
+    //     {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
+    // };
     D3DCall(m_Device->CreateInputLayout(vbo->DxInputElementDesc.data(), vbo->DxInputElementDesc.size(),
         vs->DxBlob->GetBufferPointer(), vs->DxBlob->GetBufferSize(), m_InputLayout.GetAddressOf()));
     m_DeviceContext->IASetInputLayout(m_InputLayout.Get());
