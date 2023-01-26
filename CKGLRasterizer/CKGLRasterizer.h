@@ -313,6 +313,7 @@ public:
     void set_position_transformed(bool transformed);
     void set_vertex_has_color(bool color);
     void set_num_textures(CKDWORD ntex);
+    void select_framebuffer(bool twod);
     void set_title_status(const char* fmt, ...);
 
     CKBOOL _SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value);
@@ -385,6 +386,8 @@ private:
     int m_max_ppsh_id = 0;
     int m_current_ppsh_id = 0;
     bool m_ppsh_switch_pending = false;
+    GLenum m_blend_src = GL_ONE;
+    GLenum m_blend_dst = GL_ZERO;
 
     //debugging
     int m_step_mode = 0;

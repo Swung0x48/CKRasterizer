@@ -689,8 +689,6 @@ CKBOOL CKGLRasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Va
 CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
     static GLenum previous_zfunc = GL_INVALID_ENUM;
-    static GLenum srcblend = GL_ONE;
-    static GLenum dstblend = GL_ZERO;
     static CKDWORD prev_cull = 0;
     auto vxblend2glblfactor = [](VXBLEND_MODE mode) -> GLenum
     {
@@ -783,24 +781,20 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         }
         case VXRENDERSTATE_SRCBLEND:
         {
-            srcblend = vxblend2glblfactor((VXBLEND_MODE)Value);
+            m_blend_src = vxblend2glblfactor((VXBLEND_MODE)Value);
             if (m_use_post_processing && m_target_mode == -1)
-            {
-                glBlendFuncSeparate(srcblend, dstblend, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-            }
+                glBlendFuncSeparate(m_blend_src, m_blend_dst, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
             else
-                glBlendFunc(srcblend, dstblend);
+                glBlendFunc(m_blend_src, m_blend_dst);
             return TRUE;
         }
         case VXRENDERSTATE_DESTBLEND:
         {
-            dstblend = vxblend2glblfactor((VXBLEND_MODE)Value);
+            m_blend_dst = vxblend2glblfactor((VXBLEND_MODE)Value);
             if (m_use_post_processing && m_target_mode == -1)
-            {
-                glBlendFuncSeparate(srcblend, dstblend, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-            }
+                glBlendFuncSeparate(m_blend_src, m_blend_dst, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
             else
-                glBlendFunc(srcblend, dstblend);
+                glBlendFunc(m_blend_src, m_blend_dst);
             return TRUE;
         }
         case VXRENDERSTATE_INVERSEWINDING:
@@ -1379,32 +1373,7 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
     if (!ibo) return NULL;
 
     if (m_use_post_processing)
-    {
-        if (vbo->m_VertexFormat & CKRST_VF_RASTERPOS)
-        {
-            if (m_target_mode != -1)
-            {
-                m_target_mode = -1;
-                m_2dpp->set_as_target();
-                GLint s, d;
-                glGetIntegerv(GL_BLEND_SRC_RGB, &s);
-                glGetIntegerv(GL_BLEND_DST_RGB, &d);
-                glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-            }
-        }
-        else
-        {
-            if (m_target_mode != 1)
-            {
-                m_target_mode = 1;
-                m_3dpp->set_as_target();
-                GLint s, d;
-                glGetIntegerv(GL_BLEND_SRC_RGB, &s);
-                glGetIntegerv(GL_BLEND_DST_RGB, &d);
-                glBlendFunc(s, d);
-            }
-        }
-    }
+        select_framebuffer(vbo->m_VertexFormat & CKRST_VF_RASTERPOS);
 
     vbo->Bind(this);
 #if USE_SEPARATE_ATTRIBUTE
@@ -1457,32 +1426,7 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
     ZoneScopedN(__FUNCTION__);
 
     if (m_use_post_processing)
-    {
-        if (vbo->m_VertexFormat & CKRST_VF_RASTERPOS)
-        {
-            if (m_target_mode != -1)
-            {
-                m_target_mode = -1;
-                m_2dpp->set_as_target();
-                GLint s, d;
-                glGetIntegerv(GL_BLEND_SRC_RGB, &s);
-                glGetIntegerv(GL_BLEND_DST_RGB, &d);
-                glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-            }
-        }
-        else
-        {
-            if (m_target_mode != 1)
-            {
-                m_target_mode = 1;
-                m_3dpp->set_as_target();
-                GLint s, d;
-                glGetIntegerv(GL_BLEND_SRC_RGB, &s);
-                glGetIntegerv(GL_BLEND_DST_RGB, &d);
-                glBlendFunc(s, d);
-            }
-        }
-    }
+        select_framebuffer(vbo->m_VertexFormat & CKRST_VF_RASTERPOS);
 
     if (!vbo) return FALSE;
     if (!vbbound) vbo->Bind(this);
@@ -1772,6 +1716,28 @@ void CKGLRasterizerContext::set_num_textures(CKDWORD ntex)
         m_cur_vp &= ~VP_TEXTURE_MASK;
         m_cur_vp |= ntex;
         m_prgm->stage_uniform("vertex_properties", CKGLUniformValue::make_u32v(1, &m_cur_vp));
+    }
+}
+
+void CKGLRasterizerContext::select_framebuffer(bool twod)
+{
+    if (twod)
+    {
+        if (m_target_mode != -1) //needs pre-multiplied alpha
+        {
+            m_target_mode = -1;
+            m_2dpp->set_as_target();
+            glBlendFuncSeparate(m_blend_src, m_blend_dst, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+        }
+    }
+    else
+    {
+        if (m_target_mode != 1)
+        {
+            m_target_mode = 1;
+            m_3dpp->set_as_target();
+            glBlendFunc(m_blend_src, m_blend_dst);
+        }
     }
 }
 
