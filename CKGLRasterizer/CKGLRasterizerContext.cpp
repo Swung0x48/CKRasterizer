@@ -510,6 +510,8 @@ CKBOOL CKGLRasterizerContext::EndScene()
 CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
     ZoneScopedN(__FUNCTION__);
+    if (Light < RST_MAX_LIGHT)
+        m_CurrentLightData[Light] = *data;
     if (Light >= m_lights.size())
         m_lights.resize(Light + 1, std::pair<CKDWORD, CKLightData>(MAX_ACTIVE_LIGHTS, CKLightData()));
     m_lights[Light].second = *data;
@@ -551,6 +553,8 @@ CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 CKBOOL CKGLRasterizerContext::SetMaterial(CKMaterialData *mat)
 {
     ZoneScopedN(__FUNCTION__);
+    //DX9Rasterizer checks mat for null pointer... can mat be null?
+    m_CurrentMaterialData = *mat;
     CKGLMaterialUniform mu(*mat);
     m_prgm->update_uniform_block(m_ubo_mat, 0, sizeof(CKGLMaterialUniform), &mu);
     return TRUE;
@@ -578,10 +582,33 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
     CKDWORD UnityMatrixMask = 0;
     switch (Type)
     {
+        case VXMATRIX_WORLD: UnityMatrixMask = WORLD_TRANSFORM; break;
+        case VXMATRIX_VIEW: UnityMatrixMask = VIEW_TRANSFORM; break;
+        case VXMATRIX_PROJECTION: UnityMatrixMask = PROJ_TRANSFORM; break;
+        case VXMATRIX_TEXTURE0:
+        case VXMATRIX_TEXTURE1:
+        case VXMATRIX_TEXTURE2:
+        case VXMATRIX_TEXTURE3:
+        case VXMATRIX_TEXTURE4:
+        case VXMATRIX_TEXTURE5:
+        case VXMATRIX_TEXTURE6:
+        case VXMATRIX_TEXTURE7:
+            UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
+            break;
+    }
+    if (VxMatrix::Identity() == Mat)
+    {
+        if ((m_UnityMatrixMask & UnityMatrixMask) != 0)
+            return TRUE;
+        m_UnityMatrixMask |= UnityMatrixMask;
+    } else
+        m_UnityMatrixMask &= ~UnityMatrixMask;
+
+    switch (Type)
+    {
         case VXMATRIX_WORLD:
         {
             m_WorldMatrix = Mat;
-            UnityMatrixMask = WORLD_TRANSFORM;
             Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
             m_prgm->stage_uniform("world", CKGLUniformValue::make_f32mat4(1, (float*)&m_WorldMatrix));
             VxMatrix tmat;
@@ -597,7 +624,6 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
         case VXMATRIX_VIEW:
         {
             m_ViewMatrix = Mat;
-            UnityMatrixMask = VIEW_TRANSFORM;
             Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
             m_prgm->stage_uniform("view", CKGLUniformValue::make_f32mat4(1, (float*)&m_ViewMatrix));
             m_MatrixUptodate = 0;
@@ -613,7 +639,6 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
         case VXMATRIX_PROJECTION:
         {
             m_ProjectionMatrix = Mat;
-            UnityMatrixMask = PROJ_TRANSFORM;
             m_prgm->stage_uniform("proj", CKGLUniformValue::make_f32mat4(1, (float*)&m_ProjectionMatrix));
             float (*m)[4] = (float(*)[4])&Mat;
             float A = m[2][2];
@@ -635,22 +660,12 @@ CKBOOL CKGLRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
             CKDWORD tex = Type - VXMATRIX_TEXTURE0;
             m_textrmtx[tex] = Mat;
             m_prgm->stage_uniform("textr[" + std::to_string(tex) + "]", CKGLUniformValue::make_f32mat4(1, (float*)&m_textrmtx[tex]));
-            UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
             break;
         }
         default:
             return FALSE;
     }
-    if (VxMatrix::Identity() == Mat)
-    {
-        if ((m_UnityMatrixMask & UnityMatrixMask) != 0)
-            return TRUE;
-        m_UnityMatrixMask |= UnityMatrixMask;
-    } else
-    {
-        m_UnityMatrixMask &= ~UnityMatrixMask;
-    }
-    return 1;
+    return TRUE;
 }
 
 CKBOOL CKGLRasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
@@ -661,9 +676,12 @@ CKBOOL CKGLRasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Va
 #endif
     if (m_renderst[State] != Value)
     {
+        ++m_RenderStateCacheMiss;
         m_renderst[State] = Value;
+        m_StateCache[State].Valid = 1;
+        m_StateCache[State].Value = Value;
         return _SetRenderState(State, Value);
-    }
+    } else ++m_RenderStateCacheHit;
     return TRUE;
 }
 
