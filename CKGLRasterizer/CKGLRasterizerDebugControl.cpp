@@ -23,6 +23,7 @@ LRESULT CALLBACK keyboard_handler(int code, WPARAM kc, LPARAM rc)
             case 'S': r->toggle_specular_handling(); break;
             case 'E': r->toggle_2d_rendering(); break;
             case 'D': r->cycle_post_processing_shader(); break;
+            case 'C': r->toggle_post_processing(); break;
         }
     }
 

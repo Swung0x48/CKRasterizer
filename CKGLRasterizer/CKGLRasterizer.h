@@ -325,6 +325,7 @@ public:
     void toggle_specular_handling();
     void toggle_2d_rendering();
     void cycle_post_processing_shader();
+    void toggle_post_processing();
 
 protected:
     CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBuffer * vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt, bool vbbound = false);
@@ -375,7 +376,8 @@ private:
     CKDWORD m_ts_texture[CKRST_MAX_STAGES] = {~0U};
     CKGLTexCombinatorUniform m_texcombo[CKRST_MAX_STAGES];
     CKDWORD m_tex_vp[CKRST_MAX_STAGES] = {0};
-#if USE_FBO_AND_POSTPROCESSING
+    bool m_use_post_processing = false;
+    bool m_use_pp_switch_pending = false;
     CKGLPostProcessingPipeline *m_3dpp = nullptr;
     CKGLPostProcessingPipeline *m_2dpp = nullptr;
     int m_target_mode = 0; // 0=screen, 1=3d, -1=2d
@@ -383,7 +385,6 @@ private:
     int m_max_ppsh_id = 0;
     int m_current_ppsh_id = 0;
     bool m_ppsh_switch_pending = false;
-#endif
 
     //debugging
     int m_step_mode = 0;

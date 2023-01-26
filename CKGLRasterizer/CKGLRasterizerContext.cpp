@@ -44,7 +44,6 @@ CKGLRasterizerContext::CKGLRasterizerContext()
 
 CKGLRasterizerContext::~CKGLRasterizerContext()
 {
-#if USE_FBO_AND_POSTPROCESSING
     if (m_2dpp)
     {
         m_2dpp->clear_stages();
@@ -55,7 +54,6 @@ CKGLRasterizerContext::~CKGLRasterizerContext()
         m_3dpp->clear_stages();
         delete m_3dpp;
     }
-#endif
     if (m_Owner->m_FullscreenContext == this)
         m_Owner->m_FullscreenContext = NULL;
 
@@ -352,7 +350,6 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     m_renderst[VXRENDERSTATE_SRCBLEND] = VXBLEND_ONE;
     m_renderst[VXRENDERSTATE_DESTBLEND] = VXBLEND_ZERO;
 
-#if USE_FBO_AND_POSTPROCESSING
     for (m_max_ppsh_id = 1; m_max_ppsh_id < 256 && get_resource_size("CKGLRPP_DESC", (char*)m_max_ppsh_id) != 0; ++m_max_ppsh_id);
     if (m_max_ppsh_id > 255) m_max_ppsh_id = 1;
     m_current_ppsh_id = 1;
@@ -362,7 +359,6 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     m_2dpp->parse_pipeline_config(load_resource("CKGLRPP_DESC", (char*)1));
     m_3dpp->setup_fbo(true, true, m_Width, m_Height);
     m_2dpp->setup_fbo(false, false, m_Width, m_Height);
-#endif
     return TRUE;
 }
 
@@ -370,10 +366,8 @@ CKBOOL CKGLRasterizerContext::Resize(int PosX, int PosY, int Width, int Height, 
 {
     m_Height = Height;
     m_Width = Width;
-#if USE_FBO_AND_POSTPROCESSING
     m_3dpp->setup_fbo(true, true, m_Width, m_Height);
     m_2dpp->setup_fbo(false, false, m_Width, m_Height);
-#endif
     return TRUE;
 }
 
@@ -389,9 +383,8 @@ CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
         glDepthMask(true);
         mask |= GL_DEPTH_BUFFER_BIT;
     }
-#if USE_FBO_AND_POSTPROCESSING
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-#endif
+    if (m_use_post_processing)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     VxColor c(Ccol);
     glClearColor(c.r, c.g, c.b, c.a);
     glClearDepth(Z);
@@ -403,24 +396,26 @@ CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
         glClear(mask);
         BackToFront(FALSE);
     }
-#if USE_FBO_AND_POSTPROCESSING
-    m_3dpp->set_as_target();
-    glClear(mask);
-    m_2dpp->set_as_target();
-    glClearColor(c.r, c.g, c.b, 0);
-    glClear(mask);
-#endif
+    if (m_use_post_processing)
+    {
+        m_3dpp->set_as_target();
+        glClear(mask);
+        m_2dpp->set_as_target();
+        glClearColor(c.r, c.g, c.b, 0);
+        glClear(mask);
+    }
     return 1;
 }
 
 CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 {
     if (m_batch_status)
-#if USE_FBO_AND_POSTPROCESSING
-        set_title_status("OpenGL %s | batch stats: direct %d, vb %d, vbib %d | post processing %s", glGetString(GL_VERSION), directbat, vbbat, vbibbat, m_3dpp->get_name().c_str());
-#else
-        set_title_status("OpenGL %s | batch stats: direct %d, vb %d, vbib %d", glGetString(GL_VERSION), directbat, vbbat, vbibbat);
-#endif
+    {
+        if (m_use_post_processing)
+            set_title_status("OpenGL %s | batch stats: direct %d, vb %d, vbib %d | post processing %s", glGetString(GL_VERSION), directbat, vbbat, vbibbat, m_3dpp->get_name().c_str());
+        else
+            set_title_status("OpenGL %s | batch stats: direct %d, vb %d, vbib %d", glGetString(GL_VERSION), directbat, vbbat, vbibbat);
+    }
     TracyPlot("DirectBatch", (int64_t)directbat);
     TracyPlot("VB", (int64_t)vbbat);
     TracyPlot("VBIB", (int64_t)vbibbat);
@@ -433,54 +428,61 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
         wglSwapIntervalEXT(vsync ? 1 : 0);
     }
 
-#if USE_FBO_AND_POSTPROCESSING
-    m_target_mode = 0;
-    m_current_vf = ~0U;
-    if (!m_renderst[VXRENDERSTATE_ALPHABLENDENABLE])
-        _SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, TRUE);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    if (m_renderst[VXRENDERSTATE_ZENABLE])
-        _SetRenderState(VXRENDERSTATE_ZENABLE, FALSE);
-    if (m_renderst[VXRENDERSTATE_CULLMODE] != VXCULL_NONE)
-        _SetRenderState(VXRENDERSTATE_ZENABLE, VXCULL_NONE);
-    if (m_renderst[VXRENDERSTATE_FILLMODE] != VXFILL_SOLID)
-        _SetRenderState(VXRENDERSTATE_ZENABLE, VXFILL_SOLID);
-    //here we are expecting:
-    // blending on; 1,1-srcalpha
-    // depth testing disabled or always passes
-    // face culling disabled
-    // solid polygon filling
-
-    m_3dpp->draw();
-    if (m_2d_enabled)
-        m_2dpp->draw();
-    m_prgm->use();
-
-    //restore to whatever the state was before
-    if (!m_renderst[VXRENDERSTATE_ALPHABLENDENABLE])
-        _SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, FALSE);
-    _SetRenderState(VXRENDERSTATE_SRCBLEND, m_renderst[VXRENDERSTATE_SRCBLEND]);
-    _SetRenderState(VXRENDERSTATE_DESTBLEND, m_renderst[VXRENDERSTATE_DESTBLEND]);
-    if (m_renderst[VXRENDERSTATE_ZENABLE])
-        _SetRenderState(VXRENDERSTATE_ZENABLE, TRUE);
-    if (m_renderst[VXRENDERSTATE_CULLMODE] != VXCULL_NONE)
-        _SetRenderState(VXRENDERSTATE_CULLMODE, m_renderst[VXRENDERSTATE_CULLMODE]);
-    if (m_renderst[VXRENDERSTATE_FILLMODE] != VXFILL_SOLID)
-        _SetRenderState(VXRENDERSTATE_ZENABLE, m_renderst[VXRENDERSTATE_FILLMODE]);
-    m_cur_ts = ~0U;
-    memset(m_ts_texture, 0xFF, sizeof(m_ts_texture));
-
-    if (m_ppsh_switch_pending)
+    if (m_use_post_processing)
     {
-        if (++m_current_ppsh_id >= m_max_ppsh_id)
-            m_current_ppsh_id = 1;
-        if (m_3dpp) delete m_3dpp;
-        m_3dpp = new CKGLPostProcessingPipeline();
-        m_3dpp->parse_pipeline_config(load_resource("CKGLRPP_DESC", (char*)m_current_ppsh_id));
-        m_3dpp->setup_fbo(true, true, m_Width, m_Height);
-        m_ppsh_switch_pending = false;
+        m_target_mode = 0;
+        m_current_vf = ~0U;
+        if (!m_renderst[VXRENDERSTATE_ALPHABLENDENABLE])
+            _SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, TRUE);
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        if (m_renderst[VXRENDERSTATE_ZENABLE])
+            _SetRenderState(VXRENDERSTATE_ZENABLE, FALSE);
+        if (m_renderst[VXRENDERSTATE_CULLMODE] != VXCULL_NONE)
+            _SetRenderState(VXRENDERSTATE_ZENABLE, VXCULL_NONE);
+        if (m_renderst[VXRENDERSTATE_FILLMODE] != VXFILL_SOLID)
+            _SetRenderState(VXRENDERSTATE_ZENABLE, VXFILL_SOLID);
+        //here we are expecting:
+        // blending on; 1,1-srcalpha
+        // depth testing disabled or always passes
+        // face culling disabled
+        // solid polygon filling
+
+        m_3dpp->draw();
+        if (m_2d_enabled)
+            m_2dpp->draw();
+        m_prgm->use();
+
+        //restore to whatever the state was before
+        if (!m_renderst[VXRENDERSTATE_ALPHABLENDENABLE])
+            _SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, FALSE);
+        _SetRenderState(VXRENDERSTATE_SRCBLEND, m_renderst[VXRENDERSTATE_SRCBLEND]);
+        _SetRenderState(VXRENDERSTATE_DESTBLEND, m_renderst[VXRENDERSTATE_DESTBLEND]);
+        if (m_renderst[VXRENDERSTATE_ZENABLE])
+            _SetRenderState(VXRENDERSTATE_ZENABLE, TRUE);
+        if (m_renderst[VXRENDERSTATE_CULLMODE] != VXCULL_NONE)
+            _SetRenderState(VXRENDERSTATE_CULLMODE, m_renderst[VXRENDERSTATE_CULLMODE]);
+        if (m_renderst[VXRENDERSTATE_FILLMODE] != VXFILL_SOLID)
+            _SetRenderState(VXRENDERSTATE_ZENABLE, m_renderst[VXRENDERSTATE_FILLMODE]);
+        m_cur_ts = ~0U;
+        memset(m_ts_texture, 0xFF, sizeof(m_ts_texture));
+
+        if (m_ppsh_switch_pending)
+        {
+            if (++m_current_ppsh_id >= m_max_ppsh_id)
+                m_current_ppsh_id = 1;
+            if (m_3dpp) delete m_3dpp;
+            m_3dpp = new CKGLPostProcessingPipeline();
+            m_3dpp->parse_pipeline_config(load_resource("CKGLRPP_DESC", (char*)m_current_ppsh_id));
+            m_3dpp->setup_fbo(true, true, m_Width, m_Height);
+            m_ppsh_switch_pending = false;
+        }
     }
-#endif
+
+    if (m_use_pp_switch_pending)
+    {
+        m_use_post_processing = !m_use_post_processing;
+        m_use_pp_switch_pending = false;
+    }
 
     SwapBuffers(m_DC);
     TracyGpuCollect;
@@ -496,9 +498,6 @@ CKBOOL CKGLRasterizerContext::BackToFront(CKBOOL vsync)
 CKBOOL CKGLRasterizerContext::BeginScene()
 {
     FrameMark;
-#if USE_FBO_AND_POSTPROCESSING
-    //glUseProgram(m_CurrentProgram);
-#endif
     return 1;
 }
 
@@ -785,26 +784,22 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         case VXRENDERSTATE_SRCBLEND:
         {
             srcblend = vxblend2glblfactor((VXBLEND_MODE)Value);
-#if USE_FBO_AND_POSTPROCESSING
-            if (m_target_mode == -1)
+            if (m_use_post_processing && m_target_mode == -1)
             {
                 glBlendFuncSeparate(srcblend, dstblend, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
             }
             else
-#endif
                 glBlendFunc(srcblend, dstblend);
             return TRUE;
         }
         case VXRENDERSTATE_DESTBLEND:
         {
             dstblend = vxblend2glblfactor((VXBLEND_MODE)Value);
-#if USE_FBO_AND_POSTPROCESSING
-            if (m_target_mode == -1)
+            if (m_use_post_processing && m_target_mode == -1)
             {
                 glBlendFuncSeparate(srcblend, dstblend, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
             }
             else
-#endif
                 glBlendFunc(srcblend, dstblend);
             return TRUE;
         }
@@ -1028,17 +1023,17 @@ void CKGLRasterizerContext::toggle_specular_handling()
 
 void CKGLRasterizerContext::toggle_2d_rendering()
 {
-#if USE_FBO_AND_POSTPROCESSING
-    m_2d_enabled = !m_2d_enabled;
-#endif
+    if (m_use_post_processing)
+        m_2d_enabled = !m_2d_enabled;
 }
 
 void CKGLRasterizerContext::cycle_post_processing_shader()
 {
-#if USE_FBO_AND_POSTPROCESSING
-    m_ppsh_switch_pending = true;
-#endif
+    if (m_use_post_processing)
+        m_ppsh_switch_pending = true;
 }
+
+void CKGLRasterizerContext::toggle_post_processing() { m_use_pp_switch_pending = true; }
 
 CKBOOL CKGLRasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *Value)
 {
@@ -1383,32 +1378,33 @@ CKBOOL CKGLRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
     CKGLIndexBuffer *ibo = static_cast<CKGLIndexBuffer*>(m_IndexBuffers[IB]);
     if (!ibo) return NULL;
 
-#if USE_FBO_AND_POSTPROCESSING
-    if (vbo->m_VertexFormat & CKRST_VF_RASTERPOS)
+    if (m_use_post_processing)
     {
-        if (m_target_mode != -1)
+        if (vbo->m_VertexFormat & CKRST_VF_RASTERPOS)
         {
-            m_target_mode = -1;
-            m_2dpp->set_as_target();
-            GLint s, d;
-            glGetIntegerv(GL_BLEND_SRC_RGB, &s);
-            glGetIntegerv(GL_BLEND_DST_RGB, &d);
-            glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+            if (m_target_mode != -1)
+            {
+                m_target_mode = -1;
+                m_2dpp->set_as_target();
+                GLint s, d;
+                glGetIntegerv(GL_BLEND_SRC_RGB, &s);
+                glGetIntegerv(GL_BLEND_DST_RGB, &d);
+                glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+            }
+        }
+        else
+        {
+            if (m_target_mode != 1)
+            {
+                m_target_mode = 1;
+                m_3dpp->set_as_target();
+                GLint s, d;
+                glGetIntegerv(GL_BLEND_SRC_RGB, &s);
+                glGetIntegerv(GL_BLEND_DST_RGB, &d);
+                glBlendFunc(s, d);
+            }
         }
     }
-    else
-    {
-        if (m_target_mode != 1)
-        {
-            m_target_mode = 1;
-            m_3dpp->set_as_target();
-            GLint s, d;
-            glGetIntegerv(GL_BLEND_SRC_RGB, &s);
-            glGetIntegerv(GL_BLEND_DST_RGB, &d);
-            glBlendFunc(s, d);
-        }
-    }
-#endif
 
     vbo->Bind(this);
 #if USE_SEPARATE_ATTRIBUTE
@@ -1460,32 +1456,33 @@ CKBOOL CKGLRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLV
 {
     ZoneScopedN(__FUNCTION__);
 
-#if USE_FBO_AND_POSTPROCESSING
-    if (vbo->m_VertexFormat & CKRST_VF_RASTERPOS)
+    if (m_use_post_processing)
     {
-        if (m_target_mode != -1)
+        if (vbo->m_VertexFormat & CKRST_VF_RASTERPOS)
         {
-            m_target_mode = -1;
-            m_2dpp->set_as_target();
-            GLint s, d;
-            glGetIntegerv(GL_BLEND_SRC_RGB, &s);
-            glGetIntegerv(GL_BLEND_DST_RGB, &d);
-            glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+            if (m_target_mode != -1)
+            {
+                m_target_mode = -1;
+                m_2dpp->set_as_target();
+                GLint s, d;
+                glGetIntegerv(GL_BLEND_SRC_RGB, &s);
+                glGetIntegerv(GL_BLEND_DST_RGB, &d);
+                glBlendFuncSeparate(s, d, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+            }
+        }
+        else
+        {
+            if (m_target_mode != 1)
+            {
+                m_target_mode = 1;
+                m_3dpp->set_as_target();
+                GLint s, d;
+                glGetIntegerv(GL_BLEND_SRC_RGB, &s);
+                glGetIntegerv(GL_BLEND_DST_RGB, &d);
+                glBlendFunc(s, d);
+            }
         }
     }
-    else
-    {
-        if (m_target_mode != 1)
-        {
-            m_target_mode = 1;
-            m_3dpp->set_as_target();
-            GLint s, d;
-            glGetIntegerv(GL_BLEND_SRC_RGB, &s);
-            glGetIntegerv(GL_BLEND_DST_RGB, &d);
-            glBlendFunc(s, d);
-        }
-    }
-#endif
 
     if (!vbo) return FALSE;
     if (!vbbound) vbo->Bind(this);
