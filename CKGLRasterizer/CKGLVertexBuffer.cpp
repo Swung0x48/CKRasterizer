@@ -136,9 +136,6 @@ void CKGLVertexBuffer::Unlock()
         lock_length = 0;
         return;
     }
-    int locked = 0;
-    glGetNamedBufferParameteriv(GLBuffer, GL_BUFFER_MAPPED, &locked);
-    if (!locked) return;
     glUnmapNamedBuffer(GLBuffer);
 }
 
