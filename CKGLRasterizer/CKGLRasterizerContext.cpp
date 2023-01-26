@@ -6,9 +6,6 @@
 #include "CKGLPostProcessing.h"
 #include "EnumMaps.h"
 
-#include <CKContext.h>
-#include <CKInputManager.h>
-
 #define LOG_LOADTEXTURE 0
 #define LOG_CREATETEXTURE 0
 #define LOG_CREATEBUFFER 0
@@ -404,6 +401,7 @@ CKBOOL CKGLRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
         glClearColor(c.r, c.g, c.b, 0);
         glClear(mask);
     }
+    _SetRenderState(VXRENDERSTATE_ZWRITEENABLE, m_renderst[VXRENDERSTATE_ZWRITEENABLE]);
     return 1;
 }
 
@@ -909,7 +907,7 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         }
         case VXRENDERSTATE_DITHERENABLE:
         {
-            //not supported or needed by modern hardware.
+            //not supported. always on.
             return FALSE;
         }
         case VXRENDERSTATE_TEXTUREPERSPECTIVE:
