@@ -1119,7 +1119,6 @@ BOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Typ
             break;
         case CKRST_OBJ_SPRITE:
         {
-            return 0;
             result = CreateSprite(ObjIndex, static_cast<CKSpriteDesc *>(DesiredFormat));
             CKSpriteDesc* desc = m_Sprites[ObjIndex];
             fprintf(stderr, "idx: %d\n", ObjIndex);
@@ -1384,8 +1383,7 @@ BOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect* src, VxRect* dst
     CKSpriteDesc *sprite = m_Sprites[Sprite];
     if (sprite == NULL)
         return 0;
-    if (sprite->Textures.Size() < 16)
-        return 0;
+    //if (sprite->Textures.Size() < 16) return 0;
     if (src->GetWidth() <= 0.0)
         return 0;
     if (src->right < 0.0)
