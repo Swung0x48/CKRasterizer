@@ -17,6 +17,7 @@
     #include <dxgidebug.h>
 #endif
 
+#include <string>
 #include <unordered_map>
 
 #include "FlexibleVertexFormat.h"
@@ -228,6 +229,7 @@ protected:
 
     CKDWORD TriangleFanToStrip(int VOffset, int VCount, int *startIndex);
     CKDWORD TriangleFanToStrip(CKWORD* indices, int count, int *startIndex);
+    void SetTitleStatus(const char *fmt, ...);
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 #endif
@@ -281,6 +283,7 @@ public:
     //    int m_CurrentTextureIndex;
     //
     volatile CKBOOL m_InCreateDestroy;
+    std::string m_OriginalTitle;
     //-------------------------------------------------
     //--- to avoid redoundant calls to SetVertexShader & SetStreamSource :
     //--- a cache with the current vertex format and source VB

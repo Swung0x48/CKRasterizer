@@ -6,6 +6,9 @@
 #if LOGGING
 #include <conio.h>
 static bool step_mode = false;
+static int directbat = 0;
+static int vbbat = 0;
+static int vbibbat = 0;
 #endif
 
 static const char *shader = R"(
@@ -77,6 +80,27 @@ float4 PShader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
 CKDX11RasterizerContext::CKDX11RasterizerContext() {}
 CKDX11RasterizerContext::~CKDX11RasterizerContext() {}
 
+void CKDX11RasterizerContext::SetTitleStatus(const char *fmt, ...)
+{
+    std::string ts;
+    if (fmt)
+    {
+        va_list args;
+        va_start(args, fmt);
+        va_list argsx;
+        va_copy(argsx, args);
+        ts.resize(vsnprintf(NULL, 0, fmt, argsx) + 1);
+        va_end(argsx);
+        vsnprintf(ts.data(), ts.size(), fmt, args);
+        va_end(args);
+        ts = m_OriginalTitle + " | " + ts;
+    }
+    else
+        ts = m_OriginalTitle;
+
+    SetWindowTextA(GetAncestor((HWND)m_Window, GA_ROOT), ts.c_str());
+}
+
 CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
                                        CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
@@ -135,6 +159,12 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
 
     m_Window = (HWND)Window;
+
+    m_OriginalTitle.resize(GetWindowTextLengthA(GetAncestor((HWND)Window, GA_ROOT)) + 1);
+    GetWindowTextA(GetAncestor((HWND)Window, GA_ROOT), m_OriginalTitle.data(), m_OriginalTitle.size());
+    while (m_OriginalTitle.back() == '\0')
+        m_OriginalTitle.pop_back();
+
     m_PosX = PosX;
     m_PosY = PosY;
     m_Fullscreen = Fullscreen;
@@ -232,6 +262,12 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
         EndScene();
 #if LOGGING
     // fprintf(stderr, "swap\n");
+    SetTitleStatus("D3D11 | batch stats: direct %d, vb %d, vbib %d", directbat, vbbat,
+                     vbibbat);
+
+    directbat = 0;
+    vbbat = 0;
+    vbibbat = 0;
 #endif
     HRESULT hr;
     m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
@@ -455,6 +491,9 @@ CKDWORD CKDX11RasterizerContext::TriangleFanToStrip(CKWORD *indices, int count, 
 CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
                                               VxDrawPrimitiveData *data)
 {
+#if LOGGING
+    ++directbat;
+#endif
     ZoneScopedN(__FUNCTION__);
     if (!m_SceneBegined)
         BeginScene();
@@ -499,6 +538,9 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 CKBOOL CKDX11RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD StartVIndex,
                                                 CKDWORD VertexCount, CKWORD *indices, int indexcount)
 {
+#if LOGGING
+    ++vbbat;
+#endif
     ZoneScopedN(__FUNCTION__);
     if (VB >= m_VertexBuffers.Size())
         return 0;
@@ -575,6 +617,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
         else
         {
             pdata = ibo->Lock(this, 0, sizeof(CKWORD) * indexcount, true);
+            ibbasecnt = 0;
             ibo->m_CurrentICount = indexcount;
         }
         if (pdata)
@@ -595,6 +638,9 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
 CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                                   CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
+#if LOGGING
+    ++vbibbat;
+#endif
     // assert(pType != VX_TRIANGLEFAN);
 
     ZoneScopedN(__FUNCTION__);
