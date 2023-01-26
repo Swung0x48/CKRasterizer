@@ -309,9 +309,9 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         blanktex->Load(&white);
     }
     //setup material uniform block
-    m_ubo_mat = m_prgm->define_uniform_block("MatUniformBlock", sizeof(CKGLMaterialUniform), nullptr);
+    m_prgm->define_uniform_block("MatUniformBlock", 16, sizeof(CKGLMaterialUniform), nullptr);
     //setup lights uniform block
-    m_ubo_lights = m_prgm->define_uniform_block("LightsUniformBlock", MAX_ACTIVE_LIGHTS * sizeof(CKGLLightUniform), m_lights_data);
+    m_prgm->define_uniform_block("LightsUniformBlock", 16, MAX_ACTIVE_LIGHTS * sizeof(CKGLLightUniform), m_lights_data);
     //initialize texture combinator stuff
     m_texcombo[0] = CKGLTexCombinatorUniform::make(
         TexOp::modulate, TexArg::texture, TexArg::current, TexArg::current,
@@ -323,7 +323,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
             TexOp::disable, TexArg::diffuse, TexArg::current, TexArg::current,
             TexArg::current, ~0U);
     //setup texture combinator uniform block
-    m_ubo_texc = m_prgm->define_uniform_block("TexCombinatorUniformBlock", CKRST_MAX_STAGES * sizeof(CKGLTexCombinatorUniform), m_texcombo);
+    m_prgm->define_uniform_block("TexCombinatorUniformBlock", 16, CKRST_MAX_STAGES * sizeof(CKGLTexCombinatorUniform), m_texcombo);
 
     for (int i = 0; i < CKRST_MAX_STAGES; ++i)
         m_prgm->stage_uniform("texp[" + std::to_string(i) + "]", CKGLUniformValue::make_u32v(1, (uint32_t*)&m_tex_vp[i]));
@@ -518,7 +518,8 @@ CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
     if (m_lights[Light].first < MAX_ACTIVE_LIGHTS)
     {
         m_lights_data[m_lights[Light].first] = CKGLLightUniform(*data);
-        m_prgm->update_uniform_block(m_ubo_lights, m_lights[Light].first * sizeof(CKGLLightUniform), sizeof(CKGLLightUniform), &m_lights_data[m_lights[Light].first]);
+        //m_prgm->update_uniform_block("LightsUniformBlock", m_lights[Light].first * sizeof(CKGLLightUniform), sizeof(CKGLLightUniform), &m_lights_data[m_lights[Light].first]);
+        m_prgm->update_uniform_block("LightsUniformBlock", 0, MAX_ACTIVE_LIGHTS * sizeof(CKGLLightUniform) , m_lights_data);
     }
     return TRUE;
 }
@@ -546,7 +547,8 @@ CKBOOL CKGLRasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
         if (m_lights[Light].first < MAX_ACTIVE_LIGHTS)
             m_lights_data[m_lights[Light].first].type = 0;
     }
-    m_prgm->update_uniform_block(m_ubo_lights, m_lights[Light].first * sizeof(CKGLLightUniform), sizeof(CKGLLightUniform), &m_lights_data[m_lights[Light].first]);
+    //m_prgm->update_uniform_block("LightsUniformBlock", m_lights[Light].first * sizeof(CKGLLightUniform), sizeof(CKGLLightUniform), &m_lights_data[m_lights[Light].first]);
+    m_prgm->update_uniform_block("LightsUniformBlock", 0, MAX_ACTIVE_LIGHTS * sizeof(CKGLLightUniform) , m_lights_data);
     return TRUE;
 }
 
@@ -556,7 +558,7 @@ CKBOOL CKGLRasterizerContext::SetMaterial(CKMaterialData *mat)
     //DX9Rasterizer checks mat for null pointer... can mat be null?
     m_CurrentMaterialData = *mat;
     CKGLMaterialUniform mu(*mat);
-    m_prgm->update_uniform_block(m_ubo_mat, 0, sizeof(CKGLMaterialUniform), &mu);
+    m_prgm->update_uniform_block("MatUniformBlock", 0, sizeof(CKGLMaterialUniform), &mu);
     return TRUE;
 }
 
@@ -1174,7 +1176,8 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             if (valid)
             {
                 m_texcombo[Stage] = tc;
-                m_prgm->update_uniform_block(m_ubo_texc, Stage * sizeof(CKGLTexCombinatorUniform), sizeof(CKGLTexCombinatorUniform), m_texcombo);
+                //m_prgm->update_uniform_block("TexCombinatorUniformBlock", Stage * sizeof(CKGLTexCombinatorUniform), sizeof(CKGLTexCombinatorUniform), &m_texcombo[Stage]);
+                m_prgm->update_uniform_block("TexCombinatorUniformBlock", 0, CKRST_MAX_STAGES * sizeof(CKGLTexCombinatorUniform), m_texcombo);
             }
             return valid;
         }
@@ -1220,7 +1223,8 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             if (valid)
             {
                 m_texcombo[Stage] = tc;
-                m_prgm->update_uniform_block(m_ubo_texc, Stage * sizeof(CKGLTexCombinatorUniform), sizeof(CKGLTexCombinatorUniform), m_texcombo);
+                //m_prgm->update_uniform_block("TexCombinatorUniformBlock", Stage * sizeof(CKGLTexCombinatorUniform), sizeof(CKGLTexCombinatorUniform), &m_texcombo[Stage]);
+                m_prgm->update_uniform_block("TexCombinatorUniformBlock", 0, CKRST_MAX_STAGES * sizeof(CKGLTexCombinatorUniform), m_texcombo);
             }
             return valid;
         }

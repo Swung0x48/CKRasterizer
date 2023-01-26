@@ -64,30 +64,44 @@ CKGLProgram::~CKGLProgram()
 {
     if (program)
         glDeleteProgram(program);
-    std::vector<uint32_t> ubos;
-    for (auto &ubo : uniform_buffers)
-        ubos.push_back(ubo);
-    glDeleteBuffers(ubos.size(), ubos.data());
+    for (auto &ubi : ubs)
+        glDeleteBuffers(ubi.second.ubos.size(), ubi.second.ubos.data());
 }
 
 bool CKGLProgram::validate() { return program; }
 void CKGLProgram::use() { glUseProgram(program); }
 
-uint32_t CKGLProgram::define_uniform_block(const std::string &name, int block_size, void *initial_data)
+void CKGLProgram::define_uniform_block(const std::string &name, uint32_t nbuffers, int block_size, void *initial_data)
 {
-    GLuint ubo = 0;
-    glCreateBuffers(1, &ubo);
+    std::vector<GLuint> ubos(nbuffers, 0);
+    glCreateBuffers(nbuffers, ubos.data());
     int idx = glGetUniformBlockIndex(program, name.c_str());
-    glUniformBlockBinding(program, idx, uniform_buffers.size());
-    glNamedBufferStorage(ubo, block_size, initial_data, GL_DYNAMIC_STORAGE_BIT);
-    glBindBufferBase(GL_UNIFORM_BUFFER, uniform_buffers.size(), ubo);
-    uniform_buffers.insert(ubo);
-    return ubo;
+    uint32_t bp = ubs.size();
+    glUniformBlockBinding(program, idx, bp);
+    for (auto &ubo : ubos)
+        glNamedBufferStorage(ubo, block_size, initial_data, GL_DYNAMIC_STORAGE_BIT);
+    glBindBufferBase(GL_UNIFORM_BUFFER, bp, ubos[0]);
+    ubs.emplace(std::piecewise_construct,
+                std::forward_as_tuple(name),
+                std::forward_as_tuple(bp, 0, std::move(ubos)));
 }
 
-void CKGLProgram::update_uniform_block(uint32_t block, int start_offset, int data_size, void *data)
+void CKGLProgram::update_uniform_block(const std::string &name, int start_offset, int data_size, void *data)
 {
-    glNamedBufferSubData(block, start_offset, data_size, data);
+    if (ubs.find(name) == ubs.end())
+        return;
+    auto &ubi = ubs[name];
+    GLuint buffer = ubi.ubos[ubi.current_buffer];
+    if (ubi.ubos.size() > 1)
+    {
+        ++ ubi.current_buffer;
+        if (ubi.current_buffer >= ubi.ubos.size())
+            ubi.current_buffer = 0;
+        buffer = ubi.ubos[ubi.current_buffer];
+        glBindBufferBase(GL_UNIFORM_BUFFER, ubi.binding_point, buffer);
+    }
+    // this is problematic... for now always update the entire buffer
+    glNamedBufferSubData(buffer, start_offset, data_size, data);
 }
 
 void CKGLProgram::stage_uniform(const std::string &name, CKGLUniformValue *val)

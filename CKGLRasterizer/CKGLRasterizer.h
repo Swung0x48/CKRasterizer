@@ -375,9 +375,6 @@ private:
     CKDWORD m_ts_texture[CKRST_MAX_STAGES] = {~0U};
     CKGLTexCombinatorUniform m_texcombo[CKRST_MAX_STAGES];
     CKDWORD m_tex_vp[CKRST_MAX_STAGES] = {0};
-    GLuint m_ubo_mat = 0;
-    GLuint m_ubo_texc = 0;
-    GLuint m_ubo_lights = 0;
 #if USE_FBO_AND_POSTPROCESSING
     CKGLPostProcessingPipeline *m_3dpp = nullptr;
     CKGLPostProcessingPipeline *m_2dpp = nullptr;
