@@ -303,7 +303,12 @@ void main()
         color = accum;
     }
     else
-        color *= texture(tex[0], ftexcoord[0]);
+    {
+        if ((texcomb[0].op & 0xfU) == 13U) //This doesn't make ANY sense
+            color = (max(lighting_colors_e[0] + lighting_colors_e[1] + lighting_colors_e[3], vec4(1.)) + lighting_colors_e[2]) * texture(tex[0],ftexcoord[0]);
+        else
+            color *= texture(tex[0], ftexcoord[0]);
+    }
     if ((alphatest_flags & 0x80U) != 0U && !alpha_test(color.a))
         discard;
     color = mix(fog_color, clamp_color(color), ffactor);
