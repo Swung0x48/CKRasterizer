@@ -1,7 +1,7 @@
 #include "CKDX11Rasterizer.h"
 #include "CKDX11RasterizerCommon.h"
 
-#define LOGGING 0
+#define LOGGING 1
 
 #if LOGGING
 #include <conio.h>
@@ -294,6 +294,7 @@ CKBOOL CKDX11RasterizerContext::BeginScene()
     if (m_SceneBegined)
         return FALSE;
     m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
+    m_SceneBegined = TRUE;
     return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::EndScene()
@@ -302,6 +303,7 @@ CKBOOL CKDX11RasterizerContext::EndScene()
         return FALSE;
     m_MatrixUptodate = 0;
     m_ConstantBufferUptodate = FALSE;
+    m_SceneBegined = FALSE;
     return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
@@ -339,7 +341,7 @@ CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
 CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat)
 {
     ZoneScopedN(__FUNCTION__);
-    // CKDWORD UnityMatrixMask = 0;
+    CKDWORD UnityMatrixMask = 0;
     // switch (Type)
     // {
     //     case VXMATRIX_WORLD:
@@ -370,17 +372,18 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
     //     default:
     //         return FALSE;
     // }
-    // if (VxMatrix::Identity() == Mat)
-    // {
-    //     if ((m_UnityMatrixMask & UnityMatrixMask) != 0)
-    //         return TRUE;
-    //     m_UnityMatrixMask |= UnityMatrixMask;
-    // }
-    // else
-    // {
-    //     m_UnityMatrixMask &= ~UnityMatrixMask;
-    // }
-    return CKRasterizerContext::SetTransformMatrix(Type, Mat);
+    auto ret = CKRasterizerContext::SetTransformMatrix(Type, Mat);
+    if (VxMatrix::Identity() == Mat)
+    {
+        if ((m_UnityMatrixMask & UnityMatrixMask) != 0)
+            return TRUE;
+        m_UnityMatrixMask |= UnityMatrixMask;
+    }
+    else
+    {
+        m_UnityMatrixMask &= ~UnityMatrixMask;
+    }
+    return ret;
 }
 CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
@@ -640,7 +643,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
             // D3D11 does not support triangle fan, leave it here.
             // assert(false);
             // return FALSE;
-            // topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
             break;
         default:
             break;
