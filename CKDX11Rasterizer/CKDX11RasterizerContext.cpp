@@ -339,47 +339,48 @@ CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
 CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat)
 {
     ZoneScopedN(__FUNCTION__);
-    CKDWORD UnityMatrixMask = 0;
-    switch (Type)
-    {
-        case VXMATRIX_WORLD:
-            m_WorldMatrix = Mat;
-            Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-            m_MatrixUptodate &= ~0U ^ WORLD_TRANSFORM;
-            break;
-        case VXMATRIX_VIEW:
-            m_ViewMatrix = Mat;
-            Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-            m_MatrixUptodate = 0;
-            break;
-        case VXMATRIX_PROJECTION:
-            m_ProjectionMatrix = Mat;
-            m_MatrixUptodate = 0;
-            break;
-        case VXMATRIX_TEXTURE0:
-        case VXMATRIX_TEXTURE1:
-        case VXMATRIX_TEXTURE2:
-        case VXMATRIX_TEXTURE3:
-        case VXMATRIX_TEXTURE4:
-        case VXMATRIX_TEXTURE5:
-        case VXMATRIX_TEXTURE6:
-        case VXMATRIX_TEXTURE7:
-            UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
-            break;
-        default:
-            return FALSE;
-    }
-    if (VxMatrix::Identity() == Mat)
-    {
-        if ((m_UnityMatrixMask & UnityMatrixMask) != 0)
-            return TRUE;
-        m_UnityMatrixMask |= UnityMatrixMask;
-    }
-    else
-    {
-        m_UnityMatrixMask &= ~UnityMatrixMask;
-    }
-    return TRUE;
+    // CKDWORD UnityMatrixMask = 0;
+    // switch (Type)
+    // {
+    //     case VXMATRIX_WORLD:
+    //         m_WorldMatrix = Mat;
+    //         Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+    //         m_MatrixUptodate &= ~0U ^ WORLD_TRANSFORM;
+    //         break;
+    //     case VXMATRIX_VIEW:
+    //         m_ViewMatrix = Mat;
+    //         Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+    //         m_MatrixUptodate = 0;
+    //         break;
+    //     case VXMATRIX_PROJECTION:
+    //         m_ProjectionMatrix = Mat;
+    //         m_MatrixUptodate = 0;
+    //         Vx3DMultiplyMatrix(m_ViewProjMatrix, m_ProjectionMatrix, m_ViewMatrix);
+    //         break;
+    //     case VXMATRIX_TEXTURE0:
+    //     case VXMATRIX_TEXTURE1:
+    //     case VXMATRIX_TEXTURE2:
+    //     case VXMATRIX_TEXTURE3:
+    //     case VXMATRIX_TEXTURE4:
+    //     case VXMATRIX_TEXTURE5:
+    //     case VXMATRIX_TEXTURE6:
+    //     case VXMATRIX_TEXTURE7:
+    //         UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
+    //         break;
+    //     default:
+    //         return FALSE;
+    // }
+    // if (VxMatrix::Identity() == Mat)
+    // {
+    //     if ((m_UnityMatrixMask & UnityMatrixMask) != 0)
+    //         return TRUE;
+    //     m_UnityMatrixMask |= UnityMatrixMask;
+    // }
+    // else
+    // {
+    //     m_UnityMatrixMask &= ~UnityMatrixMask;
+    // }
+    return CKRasterizerContext::SetTransformMatrix(Type, Mat);
 }
 CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
@@ -637,9 +638,9 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
             break;
         case VX_TRIANGLEFAN:
             // D3D11 does not support triangle fan, leave it here.
-            return FALSE;
             // assert(false);
-            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+            // return FALSE;
+            // topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
             break;
         default:
             break;
@@ -1079,8 +1080,8 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo)
 {
     HRESULT hr;
     
-    if (m_FVF == vbo->m_VertexFormat)
-        return; // no need to re-set input layout
+    // if (m_FVF == vbo->m_VertexFormat)
+    //     return; // no need to re-set input layout
     if (!vbo)
         return;
     CKDWORD VShader;

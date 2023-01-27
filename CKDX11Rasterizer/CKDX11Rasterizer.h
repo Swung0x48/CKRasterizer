@@ -282,7 +282,7 @@ public:
 
     CKDX11VertexBufferDesc *m_DynamicVertexBuffer[DYNAMIC_VBO_COUNT] = {nullptr};
     CKDX11IndexBufferDesc *m_DynamicIndexBuffer[DYNAMIC_IBO_COUNT] = {nullptr};
-    VxMatrix m_ViewportMat;
+    // VxMatrix m_ViewportMat;
     ConstantBufferStruct m_CBuffer;
     //
     //    int m_CurrentTextureIndex;
