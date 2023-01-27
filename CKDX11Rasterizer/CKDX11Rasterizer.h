@@ -2,6 +2,7 @@
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 
+#define DYNAMIC_VBO_COUNT 64
 #define DYNAMIC_IBO_COUNT 64
 
 #include "CKRasterizer.h"
@@ -66,6 +67,8 @@ public:
     std::vector<D3D11_INPUT_ELEMENT_DESC> DxInputElementDesc;
     CKDX11VertexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
+    virtual void *Lock(CKDX11RasterizerContext *ctx, CKDWORD offset, CKDWORD len, bool overwrite);
+    virtual void Unlock(CKDX11RasterizerContext *ctx);
 } CKDX11VertexBufferDesc;
 
 typedef struct CKDX11IndexBufferDesc : public CKIndexBufferDesc
@@ -260,7 +263,6 @@ public:
     };
     D3D11_VIEWPORT m_Viewport;
     CKBOOL m_AllowTearing;
-    CKDWORD m_IBCounter = 0;
     CKDWORD m_CurrentVShader = -1;
     CKDWORD m_CurrentPShader = -1;
     CKDWORD m_FVF = 0;
@@ -276,6 +278,9 @@ public:
     //--- Index buffer filled when drawing primitives
     CKDX11IndexBufferDesc *m_IndexBuffer[2]; // Clip/unclipped
     CKDWORD m_DynamicIndexBufferCounter = 0;
+    CKDWORD m_DirectVertexBufferCounter = 0;
+
+    CKDX11VertexBufferDesc *m_DynamicVertexBuffer[DYNAMIC_VBO_COUNT] = {nullptr};
     CKDX11IndexBufferDesc *m_DynamicIndexBuffer[DYNAMIC_IBO_COUNT] = {nullptr};
     VxMatrix m_ViewportMat;
     ConstantBufferStruct m_CBuffer;

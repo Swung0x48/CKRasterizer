@@ -21,3 +21,22 @@ CKBOOL CKDX11VertexBufferDesc::Create(CKDX11RasterizerContext* ctx)
     bool succeeded = FVF::CreateInputLayoutFromFVF(m_VertexFormat, DxInputElementDesc);
     return SUCCEEDED(hr) && succeeded;
 }
+
+void *CKDX11VertexBufferDesc::Lock(CKDX11RasterizerContext *ctx, CKDWORD offset, CKDWORD len, bool overwrite)
+{
+    D3D11_MAP mapType = overwrite ? D3D11_MAP_WRITE_DISCARD : D3D11_MAP_WRITE_NO_OVERWRITE;
+
+    assert(offset + len <= m_MaxVertexCount * m_VertexSize);
+    HRESULT hr;
+    D3D11_MAPPED_SUBRESOURCE ms;
+    D3DCall(ctx->m_DeviceContext->Map(DxBuffer.Get(), NULL, mapType, NULL, &ms));
+    if (SUCCEEDED(hr))
+        // seems like d3d11 does not give us an option to map a portion of data...
+        return (char *)ms.pData + offset;
+    return nullptr;
+}
+
+void CKDX11VertexBufferDesc::Unlock(CKDX11RasterizerContext *ctx)
+{
+    ctx->m_DeviceContext->Unmap(DxBuffer.Get(), NULL);
+}
