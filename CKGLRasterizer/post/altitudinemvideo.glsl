@@ -10,7 +10,7 @@ layout(location = 0) out vec4 color;
 layout(location = 1) out vec4 norpth;
 void main()
 {
-    color = vec4(vec3(pow(texture(norpth_in, texcoords).w, 3)), 1.);
+    color = vec4(vec3(1. - pow(texture(norpth_in, texcoords).w, 3)), 1.);
     norpth = texture(norpth_in, texcoords);
     gl_FragDepth = norpth.w;
 }

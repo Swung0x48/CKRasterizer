@@ -1,16 +1,19 @@
 #version 330 core
+/* BEGIN POST STAGE CONFIGURATION *\
+uniform_parameter|edge_color|f32v4
+\*  END POST STAGE CONFIGURATION  */
 uniform vec2 screen_size;
 uniform vec2 mouse_pos;
 uniform float time;
 uniform float frame_time;
 uniform sampler2D color_in;
 uniform sampler2D norpth_in;
+uniform vec4 edge_color;
 in vec2 texcoords;
 layout(location = 0) out vec4 color;
 layout(location = 1) out vec4 norpth;
 void main()
 {
-    vec4 edge_color = vec4(.8, 0., 1., 1.);
     vec2 texel_size = 1. / screen_size;
     norpth = texture(norpth_in, texcoords);
     vec4 avg = vec4(0.);

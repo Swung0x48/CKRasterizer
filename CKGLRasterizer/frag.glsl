@@ -112,6 +112,9 @@ vec4[3] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
     {
         vec3 refldir = reflect(-ldir, normal);
         float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.spcl_strength);
+        //direct3d9 specular strength formula
+        //vec3 hv = normalize(normalize(vpos - fpos) + ldir);
+        //specl = pow(dot(normal, hv), material.spcl_strength);
         spc = l.spcl * material.spcl * specl;
 #ifdef DEBUG
         if ((lighting_switches & LSW_SPCL_OVERR_ONLY) != 0U)

@@ -3,3 +3,4 @@ num_stages=1
 [stage_0]
 vsh=BUILTIN/CKGLRPP_VERT_SHDR/DEFAULT
 fsh=BUILTIN/CKGLRPP_FRAG_SHDR/EDGEDETECT
+uniform_parameter=edge_color|f32v4|.8 .0 1. 1.
