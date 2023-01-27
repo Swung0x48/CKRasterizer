@@ -1,11 +1,15 @@
 #include "CKDX11Rasterizer.h"
 #include "CKDX11RasterizerCommon.h"
 
-#define LOGGING 1
+#define LOGGING 0
+#define STATUS 1
 
 #if LOGGING
 #include <conio.h>
 static bool step_mode = false;
+#endif
+
+#if STATUS
 static int directbat = 0;
 static int vbbat = 0;
 static int vbibbat = 0;
@@ -274,7 +278,7 @@ CKBOOL CKDX11RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
 CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
     if (!m_SceneBegined)
         EndScene();
-#if LOGGING
+#if STATUS
     // fprintf(stderr, "swap\n");
     SetTitleStatus("D3D11 | batch stats: direct %d, vb %d, vbib %d", directbat, vbbat,
                      vbibbat);
@@ -508,7 +512,7 @@ CKDWORD CKDX11RasterizerContext::TriangleFanToStrip(CKWORD *indices, int count, 
 CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
                                               VxDrawPrimitiveData *data)
 {
-#if LOGGING
+#if (LOGGING) || (STATUS)
     ++directbat;
 #endif
     ZoneScopedN(__FUNCTION__);
@@ -599,7 +603,7 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 CKBOOL CKDX11RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD StartVIndex,
                                                 CKDWORD VertexCount, CKWORD *indices, int indexcount)
 {
-#if LOGGING
+#if (LOGGING) || (STATUS)
     ++vbbat;
 #endif
     ZoneScopedN(__FUNCTION__);
@@ -744,7 +748,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
 CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                                   CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
-#if LOGGING
+#if (LOGGING) || (STATUS)
     ++vbibbat;
 #endif
     // assert(pType != VX_TRIANGLEFAN);
@@ -790,6 +794,7 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         case VX_TRIANGLEFAN:
             // D3D11 does not support triangle fan, leave it here.
             // assert(false);
+            return FALSE;
             topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
             break;
         default:
