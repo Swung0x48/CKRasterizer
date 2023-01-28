@@ -193,6 +193,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     vs_desc.m_Function = (CKDWORD*)shader;
     vs_desc.m_FunctionSize = strlen(shader);
     vs_desc.DxEntryPoint = "VShaderColor";
+    vs_desc.DxFVF = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
     CreateObject(vs_color_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc);
 
     CKDX11PixelShaderDesc ps_desc;
@@ -204,30 +205,35 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     vs_desc_normal.m_Function = (CKDWORD *)shader;
     vs_desc_normal.m_FunctionSize = strlen(shader);
     vs_desc_normal.DxEntryPoint = "VShaderNormal";
+    vs_desc_normal.DxFVF = CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1;
     CreateObject(vs_normal_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc_normal);
 
     CKDX11VertexShaderDesc vs_spec_normal;
     vs_spec_normal.m_Function = (CKDWORD *)shader;
     vs_spec_normal.m_FunctionSize = strlen(shader);
     vs_spec_normal.DxEntryPoint = "VShaderSpec";
+    vs_spec_normal.DxFVF = CKRST_VF_POSITION | CKRST_VF_SPECULAR | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
     CreateObject(vs_spec_idx, CKRST_OBJ_VERTEXSHADER, &vs_spec_normal);
 
     CKDX11VertexShaderDesc vs_0x102;
     vs_0x102.m_Function = (CKDWORD *)shader;
     vs_0x102.m_FunctionSize = strlen(shader);
     vs_0x102.DxEntryPoint = "VShader0x102";
+    vs_0x102.DxFVF = CKRST_VF_POSITION | CKRST_VF_TEX1;
     CreateObject(vs_0x102_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x102);
 
     CKDX11VertexShaderDesc vs_0x142;
     vs_0x142.m_Function = (CKDWORD *)shader;
     vs_0x142.m_FunctionSize = strlen(shader);
     vs_0x142.DxEntryPoint = "VShader0x142";
+    vs_0x142.DxFVF = CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
     CreateObject(vs_0x142_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x142);
 
     CKDX11VertexShaderDesc vs_0x1c4;
     vs_0x1c4.m_Function = (CKDWORD *)shader;
     vs_0x1c4.m_FunctionSize = strlen(shader);
     vs_0x1c4.DxEntryPoint = "VShader0x1c4";
+    vs_0x1c4.DxFVF = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1;
     CreateObject(vs_0x1c4_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x1c4);
 
     m_VertexShaderMap[CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_color_idx;
@@ -571,32 +577,6 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     UINT stride = vbo->m_VertexSize;
     UINT offset = 0;
     m_DeviceContext->IASetVertexBuffers(0, 1, vbo->DxBuffer.GetAddressOf(), &stride, &offset);
-    
-    // CKDX11VertexBufferDesc *vbo = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
-    // if (!vbo)
-    //     return FALSE;
-    // assert(vertexSize == vbo->m_VertexSize);
-    // void *pbData = nullptr;
-    // CKDWORD startVertex = 0;
-    // if (vbo->m_CurrentVCount + data->VertexCount < vbo->m_MaxVertexCount)
-    // {
-    //     ZoneScopedN("Lock");
-    //     pbData = vbo->Lock(this, 
-    //         vbo->m_CurrentVCount * vertexSize, data->VertexCount * vertexSize, false);
-    //     startVertex = vbo->m_CurrentVCount;
-    //     vbo->m_CurrentVCount += data->VertexCount;
-    // }
-    // else
-    // {
-    //     ZoneScopedN("Lock");
-    //     pbData = vbo->Lock(this, 0, data->VertexCount * vertexSize, false);
-    //     vbo->m_CurrentVCount = data->VertexCount;
-    // }
-    // CKBYTE* ld_end = CKRSTLoadVertexBuffer(reinterpret_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
-    // vbo->Unlock(this);
-    // assert(ld_end - pbData == vertexSize * data->VertexCount);
-    // return TRUE;
-    // OutputDebugStringA("direct\n");
     return InternalDrawPrimitive(pType, vbo, vbase, data->VertexCount, indices, indexcount);
 }
 
@@ -614,11 +594,6 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
         return FALSE;
     if (!m_SceneBegined)
         BeginScene();
-    // OutputDebugStringA("VB\n");
-    // char buf[200];
-    // sprintf(buf, "%d %d %d\n", vbo->m_MaxVertexCount - vbo->m_CurrentVCount, StartVIndex, VertexCount);
-    // OutputDebugStringA(buf);
-    // fprintf(stderr, "%d %d %d\n", vbo->m_MaxVertexCount - vbo->m_CurrentVCount, StartVIndex, VertexCount);
     return InternalDrawPrimitive(pType, static_cast<CKDX11VertexBufferDesc *>(vbo), StartVIndex,
                                    VertexCount, indices, indexcount);
 }
@@ -646,7 +621,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
         case VX_TRIANGLEFAN:
             // D3D11 does not support triangle fan, leave it here.
             // assert(false);
-            // return FALSE;
+            return FALSE;
             topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
             break;
         default:
@@ -697,43 +672,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
         ibo->Unlock(this);
         m_DeviceContext->IASetIndexBuffer(ibo->DxBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
     }
-//     if (indices)
-//     {
-//         CKDX11IndexBufferDesc *ibo = nullptr;
-//         void *pdata = nullptr;
-//         auto iboid = m_DynamicIndexBufferCounter++;
-//         if (m_DynamicIndexBufferCounter >= DYNAMIC_IBO_COUNT)
-//             m_DynamicIndexBufferCounter = 0;
-//         if (!m_DynamicIndexBuffer[iboid] || m_DynamicIndexBuffer[iboid]->m_MaxIndexCount < indexcount)
-//         {
-//             if (m_DynamicIndexBuffer[iboid])
-//                 delete m_DynamicIndexBuffer[iboid];
-//             ibo = new CKDX11IndexBufferDesc;
-//             ibo->m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
-//             ibo->m_MaxIndexCount = indexcount;
-//             ibo->m_CurrentICount = 0;
-//             if (!ibo->Create(this))
-//             {
-//                 m_DynamicIndexBuffer[iboid] = nullptr;
-//                 return FALSE;
-//             }
-//             m_DynamicIndexBuffer[iboid] = ibo;
-//         }
-//         ibo = m_DynamicIndexBuffer[iboid];
-//
-//         pdata = ibo->Lock(this, 0, sizeof(CKWORD) * indexcount, true);
-//         ibbasecnt = 0;
-//         ibo->m_CurrentICount = indexcount;
-//         
-//         if (pdata)
-//             memcpy(pdata, indices, sizeof(CKWORD) * indexcount);
-//         ibo->Unlock(this);
-// #ifdef LOGGING
-//         fprintf(stderr, "ib %d\n", iboid);
-// #endif
-//         m_DeviceContext->IASetIndexBuffer(ibo->DxBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
-//     }
-    
+
     AssemblyInput(vbo);
 
     if (indices)
@@ -975,13 +914,12 @@ CKBOOL CKDX11RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShad
     delete desc;
     m_VertexShaders[VShader] = nullptr;
     d11desc = new CKDX11VertexShaderDesc;
-    d11desc->m_Function = DesiredFormat->m_Function;
-    d11desc->m_FunctionSize = DesiredFormat->m_FunctionSize;
-    auto* fmt = dynamic_cast<CKDX11VertexShaderDesc *>(DesiredFormat);
-    if (fmt)
-    {
-        d11desc->DxEntryPoint = fmt->DxEntryPoint;
-        d11desc->DxTarget = fmt->DxTarget;
+    auto *d11fmt = dynamic_cast<CKDX11VertexShaderDesc *>(DesiredFormat);
+    if (d11fmt)
+        *d11desc = *d11fmt;
+    else {
+        d11desc->m_Function = DesiredFormat->m_Function;
+        d11desc->m_FunctionSize = DesiredFormat->m_FunctionSize;
     }
     CKBOOL succeeded = d11desc->Create(this);
     if (succeeded)
@@ -1122,9 +1060,7 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo)
     //     {"COLOR", 0, DXGI_FORMAT_B8G8R8A8_UNORM, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
     //     {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
     // };
-    D3DCall(m_Device->CreateInputLayout(vbo->DxInputElementDesc.data(), vbo->DxInputElementDesc.size(),
-        vs->DxBlob->GetBufferPointer(), vs->DxBlob->GetBufferSize(), m_InputLayout.GetAddressOf()));
-    m_DeviceContext->IASetInputLayout(m_InputLayout.Get());
+    // m_DeviceContext->IASetInputLayout(m_InputLayout.Get());
     {
         Vx3DTransposeMatrix(m_CBuffer.TotalMatrix, m_TotalMatrix);
         D3D11_MAPPED_SUBRESOURCE ms;

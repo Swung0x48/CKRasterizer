@@ -11,11 +11,18 @@ CKBOOL CKDX11VertexShaderDesc::Create(CKDX11RasterizerContext *ctx)
         const char *errorMsg = (const char *)DxErrorMsgs->GetBufferPointer();
         MessageBox(nullptr, errorMsg, TEXT("Vertex Shader Compilation Error"), MB_RETRYCANCEL);
     }
+    bool succeeded = FVF::CreateInputLayoutFromFVF(DxFVF, DxInputElementDesc);
+    if (!succeeded)
+        return FALSE;
+    D3DCall(ctx->m_Device->CreateInputLayout(DxInputElementDesc.data(), DxInputElementDesc.size(),
+                                             DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(),
+                                             DxInputLayout.GetAddressOf()));
     D3DCall(ctx->m_Device->CreateVertexShader(DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(), nullptr, &DxShader));
     
     return SUCCEEDED(hr);
 }
 
 void CKDX11VertexShaderDesc::Bind(CKDX11RasterizerContext *ctx) {
+    ctx->m_DeviceContext->IASetInputLayout(DxInputLayout.Get());
     ctx->m_DeviceContext->VSSetShader(DxShader.Get(), nullptr, 0);
 }

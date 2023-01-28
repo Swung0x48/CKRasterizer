@@ -64,7 +64,6 @@ typedef struct CKDX11VertexBufferDesc : public CKVertexBufferDesc
 public:
     ComPtr<ID3D11Buffer> DxBuffer;
     D3D11_BUFFER_DESC DxDesc;
-    std::vector<D3D11_INPUT_ELEMENT_DESC> DxInputElementDesc;
     CKDX11VertexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
     virtual void *Lock(CKDX11RasterizerContext *ctx, CKDWORD offset, CKDWORD len, bool overwrite);
@@ -89,6 +88,9 @@ typedef struct CKDX11VertexShaderDesc : public CKVertexShaderDesc
     LPCSTR DxEntryPoint = "VShader";
     LPCSTR DxTarget = "vs_4_0";
     ComPtr<ID3DBlob> DxErrorMsgs;
+    CKDWORD DxFVF;
+    std::vector<D3D11_INPUT_ELEMENT_DESC> DxInputElementDesc;
+    ComPtr<ID3D11InputLayout> DxInputLayout;
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
     virtual void Bind(CKDX11RasterizerContext *ctx);
 } CKDX11VertexShaderDesc;
@@ -266,7 +268,8 @@ public:
     CKDWORD m_CurrentVShader = -1;
     CKDWORD m_CurrentPShader = -1;
     CKDWORD m_FVF = 0;
-    ComPtr<ID3D11InputLayout> m_InputLayout;
+    // std::unordered_map<CKDWORD, ComPtr<ID3D11InputLayout>> m_InputLayout;
+    // ComPtr<ID3D11InputLayout> m_InputLayout;
 
     CKDX11ConstantBufferDesc m_ConstantBuffer;
     CKBOOL m_ConstantBufferUptodate;

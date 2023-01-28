@@ -17,9 +17,7 @@ CKBOOL CKDX11VertexBufferDesc::Create(CKDX11RasterizerContext* ctx)
     DxDesc.CPUAccessFlags = flag;
 
     D3DCall(ctx->m_Device->CreateBuffer(&DxDesc, nullptr, DxBuffer.GetAddressOf()));
-
-    bool succeeded = FVF::CreateInputLayoutFromFVF(m_VertexFormat, DxInputElementDesc);
-    return SUCCEEDED(hr) && succeeded;
+    return SUCCEEDED(hr);
 }
 
 void *CKDX11VertexBufferDesc::Lock(CKDX11RasterizerContext *ctx, CKDWORD offset, CKDWORD len, bool overwrite)
