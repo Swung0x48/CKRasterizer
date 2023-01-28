@@ -14,6 +14,7 @@ MOUSE                   CKGLRPP_FRAG_SHDR post/mouse.glsl
 MBLUR                   CKGLRPP_FRAG_SHDR post/mblur.glsl
 MAXFILTER               CKGLRPP_FRAG_SHDR post/maxfilter.glsl
 GAUSSIAN                CKGLRPP_FRAG_SHDR post/gaussian.glsl
+CONV                    CKGLRPP_FRAG_SHDR post/conv.glsl
 
 1                       CKGLRPP_DESC      post/default.pipeline
 2                       CKGLRPP_DESC      post/yflip.pipeline

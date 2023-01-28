@@ -1,6 +1,15 @@
 name=blur
-num_stages=1
+num_stages=2
 [stage_0]
 vsh=BUILTIN/CKGLRPP_VERT_SHDR/DEFAULT
-fsh=BUILTIN/CKGLRPP_FRAG_SHDR/GAUSSIAN
-uniform_parameter=radius|i32|8
+fsh=BUILTIN/CKGLRPP_FRAG_SHDR/CONV
+uniform_parameter=kradius|i32|8
+uniform_parameter=kernel|f32[65]|1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+uniform_parameter=convdir|f32v2|1 0
+
+[stage_1]
+vsh=BUILTIN/CKGLRPP_VERT_SHDR/DEFAULT
+fsh=BUILTIN/CKGLRPP_FRAG_SHDR/CONV
+uniform_parameter=kradius|i32|8
+uniform_parameter=kernel|f32[65]|1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+uniform_parameter=convdir|f32v2|0 1
