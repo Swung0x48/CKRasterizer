@@ -25,7 +25,7 @@ private:
     GLuint tex[16];
     int width;
     int height;
-    std::unordered_map<std::string, UniformType> user_uniforms;
+    std::unordered_map<std::string, std::pair<UniformType, int>> user_uniforms;
 
     //design not finalized yet... let's implement a simpler version first.
     //bit 0-3: location, bit 31: type (0=prev stage, 1=this stage)

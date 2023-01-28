@@ -3,6 +3,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <cassert>
+#include <charconv>
+#include <memory>
+#include <regex>
 #include <sstream>
 
 CKGLUniformValue* CKGLUniformValue::make_f32(float v)
@@ -135,64 +138,76 @@ CKGLUniformValue::~CKGLUniformValue()
         free(dataptr);
 }
 
-UniformType CKGLUniformValue::type_from_string(const std::string &str)
+std::pair<UniformType, int> CKGLUniformValue::type_from_string(const std::string &str)
 {
-    if (str == "f32") return UniformType::f32;
-    if (str == "f32v2") return UniformType::f32v2;
-    if (str == "f32v3") return UniformType::f32v3;
-    if (str == "f32v4") return UniformType::f32v4;
-    if (str == "u32") return UniformType::u32;
-    if (str == "i32") return UniformType::i32;
-    if (str == "f32m4") return UniformType::f32m4;
-    return UniformType::invalid;
+    UniformType ty = UniformType::invalid;
+    std::regex re("([A-Za-z_0-9]*)(\\[([0-9]*)\\])?");
+    std::smatch m;
+    if (!std::regex_match(str, m, re))
+        return std::make_pair(UniformType::invalid, 0);
+    if (m[1] == "f32") ty = UniformType::f32;
+    if (m[1] == "f32v2") ty = UniformType::f32v2;
+    if (m[1] == "f32v3") ty = UniformType::f32v3;
+    if (m[1] == "f32v4") ty = UniformType::f32v4;
+    if (m[1] == "u32") ty = UniformType::u32;
+    if (m[1] == "i32") ty = UniformType::i32;
+    if (m[1] == "f32m4") ty = UniformType::f32m4;
+    int c = 1;
+    if (m.str(3).length())
+    {
+        std::string sm = m.str(3);
+        std::from_chars(sm.c_str(), sm.c_str() + sm.length(), c);
+    }
+    return std::make_pair(ty, c);
 }
 
-CKGLUniformValue* CKGLUniformValue::from_string(const std::string &str, UniformType type)
+CKGLUniformValue* CKGLUniformValue::from_string(const std::string &str, std::pair<UniformType, int> type)
 {
     std::stringstream ss(str);
-    switch (type)
+    auto &[ty, c] = type;
+    auto read = [&ss]<typename T>(int count) -> T*
+    {
+        T *d = new T[count]();
+        for (int i = 0; i < count; ++ i)
+            ss >> d[i];
+        return d;
+    };
+    switch (ty)
     {
         case UniformType::f32:
         {
-            float f;
-            ss >> f;
-            return CKGLUniformValue::make_f32(f);
+            std::unique_ptr<float[]> f(read.template operator()<float>(c));
+            return CKGLUniformValue::make_f32v(c, f.get(), true);
         }
         case UniformType::f32v2:
         {
-            float f[2];
-            ss >> f[0] >> f[1];
-            return CKGLUniformValue::make_f32v2v(1, f, true);
+            std::unique_ptr<float[]> f(read.template operator()<float>(c * 2));
+            return CKGLUniformValue::make_f32v2v(c, f.get(), true);
         }
         case UniformType::f32v3:
         {
-            float f[3];
-            ss >> f[0] >> f[1] >> f[2];
-            return CKGLUniformValue::make_f32v3v(1, f, true);
+            std::unique_ptr<float[]> f(read.template operator()<float>(c * 3));
+            return CKGLUniformValue::make_f32v3v(c, f.get(), true);
         }
         case UniformType::f32v4:
         {
-            float f[4];
-            ss >> f[0] >> f[1] >> f[2] >> f[3];
-            return CKGLUniformValue::make_f32v4v(1, f, true);
+            std::unique_ptr<float[]> f(read.template operator()<float>(c * 4));
+            return CKGLUniformValue::make_f32v4v(c, f.get(), true);
         }
         case UniformType::i32:
         {
-            int32_t i;
-            ss >> i;
-            return CKGLUniformValue::make_i32(i);
+            std::unique_ptr<int32_t[]> f(read.template operator()<int32_t>(c));
+            return CKGLUniformValue::make_i32v(c, f.get(), true);
         }
         case UniformType::u32:
         {
-            uint32_t u;
-            ss >> u;
-            return CKGLUniformValue::make_u32(u);
+            std::unique_ptr<uint32_t[]> f(read.template operator()<uint32_t>(c));
+            return CKGLUniformValue::make_u32v(c, f.get(), true);
         }
         case UniformType::f32m4:
         {
-            float f[16];
-            for (int i = 0; i < 16; ++i) ss >> f[i];
-            return CKGLUniformValue::make_f32mat4(1, f, false, true);
+            std::unique_ptr<float[]> f(read.template operator()<float>(c * 16));
+            return CKGLUniformValue::make_f32mat4(c, f.get(), false, true);
         }
         default:
             return new CKGLUniformValue();

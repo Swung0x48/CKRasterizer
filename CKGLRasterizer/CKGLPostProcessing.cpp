@@ -47,7 +47,7 @@ bool CKGLPostProcessingStage::compile()
 
 void CKGLPostProcessingStage::set_user_uniform(const std::string &u, CKGLUniformValue *v)
 {
-    if (program && user_uniforms.find(u) != user_uniforms.end() && user_uniforms[u] == v->type())
+    if (program && user_uniforms.find(u) != user_uniforms.end() && user_uniforms[u] == std::make_pair(v->type(), v->count()))
         program->stage_uniform(u, v);
 }
 
@@ -255,7 +255,7 @@ void CKGLPostProcessingPipeline::parse_pipeline_config(const std::string &cfg)
                         std::string pn(mm[1]);
                         std::string pt(mm[2]);
                         std::string pv(mm[3]);
-                        UniformType ty = CKGLUniformValue::type_from_string(pt);
+                        std::pair<UniformType, int> ty = CKGLUniformValue::type_from_string(pt);
                         CKGLUniformValue *v = CKGLUniformValue::from_string(pv, ty);
                         stg->set_user_uniform(pn, v);
                     }

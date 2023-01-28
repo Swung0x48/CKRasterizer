@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include <string>
+#include <utility>
 
 enum UniformType
 {
@@ -50,7 +51,7 @@ public:
     static CKGLUniformValue* make_i32v(int count, int32_t *v, bool copy = false);
     static CKGLUniformValue* make_f32mat4(int count, float *v, bool transpose = false, bool copy = false);
 
-    static UniformType type_from_string(const std::string &str);
-    static CKGLUniformValue* from_string(const std::string &str, UniformType type);
+    static std::pair<UniformType, int> type_from_string(const std::string &str);
+    static CKGLUniformValue* from_string(const std::string &str, std::pair<UniformType, int> type);
 };
 #endif
