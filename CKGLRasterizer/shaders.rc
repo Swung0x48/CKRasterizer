@@ -15,6 +15,8 @@ MBLUR                   CKGLRPP_FRAG_SHDR post/mblur.glsl
 MAXFILTER               CKGLRPP_FRAG_SHDR post/maxfilter.glsl
 GAUSSIAN                CKGLRPP_FRAG_SHDR post/gaussian.glsl
 CONV                    CKGLRPP_FRAG_SHDR post/conv.glsl
+CRT                     CKGLRPP_FRAG_SHDR post/crt.glsl
+CRT_LITE                CKGLRPP_FRAG_SHDR post/crt_lite.glsl
 
 1                       CKGLRPP_DESC      post/default.pipeline
 2                       CKGLRPP_DESC      post/yflip.pipeline
@@ -25,4 +27,6 @@ CONV                    CKGLRPP_FRAG_SHDR post/conv.glsl
 7                       CKGLRPP_DESC      post/blobfilter.pipeline
 8                       CKGLRPP_DESC      post/mblur.pipeline
 9                       CKGLRPP_DESC      post/blur.pipeline
-10                      CKGLRPP_DESC      post/mouse.pipeline
+10                      CKGLRPP_DESC      post/crt.pipeline
+11                      CKGLRPP_DESC      post/crt_lite.pipeline
+12                      CKGLRPP_DESC      post/mouse.pipeline

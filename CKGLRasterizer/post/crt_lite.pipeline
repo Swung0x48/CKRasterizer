@@ -1,0 +1,21 @@
+name=crt lite
+num_stages=3
+[stage_0]
+vsh=BUILTIN/CKGLRPP_VERT_SHDR/DEFAULT
+fsh=BUILTIN/CKGLRPP_FRAG_SHDR/CONV
+uniform_parameter=kradius|i32|4
+uniform_parameter=kernel|f32[65]|1 1 1 1 1 1 1 1 1
+uniform_parameter=convdir|f32v2|1 0
+
+[stage_1]
+vsh=BUILTIN/CKGLRPP_VERT_SHDR/DEFAULT
+fsh=BUILTIN/CKGLRPP_FRAG_SHDR/CONV
+uniform_parameter=kradius|i32|4
+uniform_parameter=kernel|f32[65]|1 1 1 1 1 1 1 1 1
+uniform_parameter=convdir|f32v2|0 1
+
+[stage_2]
+vsh=BUILTIN/CKGLRPP_VERT_SHDR/DEFAULT
+fsh=BUILTIN/CKGLRPP_FRAG_SHDR/CRT_LITE
+uniform_parameter=lineres|f32v2|384 288
+uniform_parameter=curvature|f32v2|6 4.5
