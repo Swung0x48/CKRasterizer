@@ -37,8 +37,7 @@ bool D3DLogCall(HRESULT hr, const char* function, const char* file, int line)
                        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                        (LPTSTR)&error_text, 0,
                        NULL);
-        std::string str = std::format("{}\n at {}\n{}:{:d}",
-                                      error_text,
+        std::string str = std::format("{}\n at {}\n{}:{:d}", error_text ? error_text : "",
                                       function,
                                       file,
                                       line);

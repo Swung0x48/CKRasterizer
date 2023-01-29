@@ -2,6 +2,9 @@
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 
+#define DYNAMIC_VBO_COUNT 64
+#define DYNAMIC_IBO_COUNT 64
+
 #include "CKRasterizer.h"
 #include <Windows.h>
 #include <d3d11.h>
@@ -14,6 +17,9 @@
 #ifdef _DEBUG
     #include <dxgidebug.h>
 #endif
+
+#include <string>
+#include <unordered_map>
 
 #include "FlexibleVertexFormat.h"
 using Microsoft::WRL::ComPtr;
@@ -51,10 +57,70 @@ public:
     DXGI_OUTPUT_DESC m_OutputDesc;
 };
 
-struct CKDX11VertexBufferDesc;
-struct CKDX11IndexBufferDesc;
-struct CKDX11VertexShaderDesc;
-struct CKDX11PixelShaderDesc;
+class CKDX11RasterizerContext;
+
+typedef struct CKDX11VertexBufferDesc : public CKVertexBufferDesc
+{
+public:
+    ComPtr<ID3D11Buffer> DxBuffer;
+    D3D11_BUFFER_DESC DxDesc;
+    CKDX11VertexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
+    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
+    virtual void *Lock(CKDX11RasterizerContext *ctx, CKDWORD offset, CKDWORD len, bool overwrite);
+    virtual void Unlock(CKDX11RasterizerContext *ctx);
+} CKDX11VertexBufferDesc;
+
+typedef struct CKDX11IndexBufferDesc : public CKIndexBufferDesc
+{
+public:
+    ComPtr<ID3D11Buffer> DxBuffer;
+    D3D11_BUFFER_DESC DxDesc;
+    CKDX11IndexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
+    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
+    virtual void *Lock(CKDX11RasterizerContext *ctx, CKDWORD offset, CKDWORD len, bool overwrite);
+    virtual void Unlock(CKDX11RasterizerContext *ctx);
+} CKDX11IndexBufferDesc;
+
+typedef struct CKDX11VertexShaderDesc : public CKVertexShaderDesc
+{
+    ComPtr<ID3DBlob> DxBlob;
+    ComPtr<ID3D11VertexShader> DxShader;
+    LPCSTR DxEntryPoint = "VShader";
+    LPCSTR DxTarget = "vs_4_0";
+    ComPtr<ID3DBlob> DxErrorMsgs;
+    CKDWORD DxFVF;
+    std::vector<D3D11_INPUT_ELEMENT_DESC> DxInputElementDesc;
+    ComPtr<ID3D11InputLayout> DxInputLayout;
+    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
+    virtual void Bind(CKDX11RasterizerContext *ctx);
+} CKDX11VertexShaderDesc;
+
+typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
+{
+    ComPtr<ID3DBlob> DxBlob;
+    ComPtr<ID3D11PixelShader> DxShader;
+    LPCSTR DxEntryPoint = "PShader";
+    LPCSTR DxTarget = "ps_4_0";
+    ComPtr<ID3DBlob> DxErrorMsgs;
+    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
+    virtual void Bind(CKDX11RasterizerContext *ctx);
+} CKDX11PixelShaderDesc;
+
+typedef struct ConstantBufferStruct
+{
+    VxMatrix TotalMatrix;
+    // VxMatrix ViewportMatrix;
+} ConstantBufferStruct;
+
+typedef struct CKDX11ConstantBufferDesc
+{
+public:
+    ComPtr<ID3D11Buffer> DxBuffer;
+    D3D11_BUFFER_DESC DxDesc;
+    CKDX11ConstantBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
+    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
+} CKDX11ConstantBufferDesc;
+
 class CKDX11RasterizerContext : public CKRasterizerContext
 {
 public:
@@ -159,12 +225,16 @@ protected:
     CKBOOL CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat);
     CKBOOL CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat);
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
-    void SetupStreams(CKDWORD VB, CKDWORD VShader);
+    void AssemblyInput(CKDX11VertexBufferDesc *vbo);
+    CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKDX11VertexBufferDesc *vbo,
+                                                          CKDWORD StartVertex, CKDWORD VertexCount, CKWORD *indices,
+                                                          int indexcount);
 
     CKDWORD GenerateIB(void *indices, int indexcount, int* startIndex);
 
     CKDWORD TriangleFanToStrip(int VOffset, int VCount, int *startIndex);
     CKDWORD TriangleFanToStrip(CKWORD* indices, int count, int *startIndex);
+    void SetTitleStatus(const char *fmt, ...);
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 #endif
@@ -195,33 +265,33 @@ public:
     };
     D3D11_VIEWPORT m_Viewport;
     CKBOOL m_AllowTearing;
-    CKDWORD m_IBCounter = 0;
     CKDWORD m_CurrentVShader = -1;
     CKDWORD m_CurrentPShader = -1;
     CKDWORD m_FVF = 0;
-    ComPtr<ID3D11InputLayout> m_InputLayout;
-        //    IDirect3DDevice9Ex *m_Device;
-//    D3DPRESENT_PARAMETERS m_PresentParams;
-//    VxDirectXData m_DirectXData;
-//    CKBOOL m_SoftwareVertexProcessing;
-//
-//    //----------------------------------------------------
-//    //--- Index buffer filled when drawing primitives
-//    CKDX11IndexBufferDesc *m_IndexBuffer[2]; // Clip/unclipped
-//
-//    int m_CurrentTextureIndex;
-//
-//    //-----------------------------------------------------
-//    //--- Render Target if rendering is redirected to a texture
-//    LPDIRECT3DSURFACE9 m_DefaultBackBuffer; // Backup pointer of previous back buffer
-//    LPDIRECT3DSURFACE9 m_DefaultDepthBuffer; // Backup pointer of previous depth buffer
-//
+    // std::unordered_map<CKDWORD, ComPtr<ID3D11InputLayout>> m_InputLayout;
+    // ComPtr<ID3D11InputLayout> m_InputLayout;
+
+    CKDX11ConstantBufferDesc m_ConstantBuffer;
+    CKBOOL m_ConstantBufferUptodate;
+    std::unordered_map<CKDWORD, CKDWORD> m_VertexShaderMap;
+
+    //    IDirect3DDevice9Ex *m_Device;
+    //    VxDirectXData m_DirectXData;
+    //    //----------------------------------------------------
+    //--- Index buffer filled when drawing primitives
+    CKDX11IndexBufferDesc *m_IndexBuffer[2]; // Clip/unclipped
+    CKDWORD m_DynamicIndexBufferCounter = 0;
+    // CKDWORD m_DirectVertexBufferCounter = 0;
+
+    // CKDX11VertexBufferDesc *m_DynamicVertexBuffer[DYNAMIC_VBO_COUNT] = {nullptr};
+    CKDX11IndexBufferDesc *m_DynamicIndexBuffer[DYNAMIC_IBO_COUNT] = {nullptr};
+    // VxMatrix m_ViewportMat;
+    ConstantBufferStruct m_CBuffer;
+    //
+    //    int m_CurrentTextureIndex;
+    //
     volatile CKBOOL m_InCreateDestroy;
-//
-//    //--- For web content the render context can be transparent (no clear of backbuffer but instead
-//    //--- a copy of what is currently on screen)
-//    LPDIRECT3DSURFACE9 m_ScreenBackup;
-//
+    std::string m_OriginalTitle;
     //-------------------------------------------------
     //--- to avoid redoundant calls to SetVertexShader & SetStreamSource :
     //--- a cache with the current vertex format and source VB
@@ -233,14 +303,6 @@ public:
     // XBitArray m_StateCacheHitMask;
     // XBitArray m_StateCacheMissMask;
 //
-//    //--------------------------------------------------
-//    // Render states which must be disabled or which values must be translated...
-//    CKDWORD *m_TranslatedRenderStates[VXRENDERSTATE_MAXSTATE];
-//
-//    LPDIRECT3DSTATEBLOCK9 m_TextureMinFilterStateBlocks[8][8];
-//    LPDIRECT3DSTATEBLOCK9 m_TextureMagFilterStateBlocks[8][8];
-//    LPDIRECT3DSTATEBLOCK9 m_TextureMapBlendStateBlocks[10][8];
-//
 //    //-----------------------------------------------------
 //    // + To do texture rendering, Z-buffers are created when
 //    // needed for any given size (power of two)
@@ -251,46 +313,3 @@ public:
 
     CKDX11Rasterizer *m_Owner;
 };
-
-
-
-typedef struct CKDX11VertexBufferDesc : public CKVertexBufferDesc
-{
-public:
-    ComPtr<ID3D11Buffer> DxBuffer;
-    D3D11_BUFFER_DESC DxDesc;
-    std::vector<D3D11_INPUT_ELEMENT_DESC> DxInputElementDesc;
-    CKDX11VertexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
-    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
-} CKDX11VertexBufferDesc;
-
-typedef struct CKDX11IndexBufferDesc : public CKIndexBufferDesc
-{
-public:
-    ComPtr<ID3D11Buffer> DxBuffer;
-    D3D11_BUFFER_DESC DxDesc;
-    CKDX11IndexBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
-    virtual CKBOOL Create(CKDX11RasterizerContext* ctx);
-} CKDX11IndexBufferDesc;
-
-typedef struct CKDX11VertexShaderDesc: public CKVertexShaderDesc
-{
-    ComPtr<ID3DBlob> DxBlob;
-    ComPtr<ID3D11VertexShader> DxShader;
-    LPCSTR DxEntryPoint = "VShader";
-    LPCSTR DxTarget = "vs_4_0";
-    ComPtr<ID3DBlob> DxErrorMsgs;
-    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
-    virtual void Bind(CKDX11RasterizerContext *ctx);
-} CKDX11VertexShaderDesc;
-
-typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
-{
-    ComPtr<ID3DBlob> DxBlob;
-    ComPtr<ID3D11PixelShader> DxShader;
-    LPCSTR DxEntryPoint = "PShader";
-    LPCSTR DxTarget = "ps_4_0";
-    ComPtr<ID3DBlob> DxErrorMsgs;
-    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
-    virtual void Bind(CKDX11RasterizerContext *ctx);
-} CKDX11PixelShaderDesc;

@@ -206,7 +206,7 @@ CKBOOL CKDX11RasterizerDriver::InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapte
     m_3DCaps.CKRasterizerSpecificCaps = 
         (CKRST_SPECIFICCAPS_SPRITEASTEXTURES |
             CKRST_SPECIFICCAPS_CANDOVERTEXBUFFER | 
-            //CKRST_SPECIFICCAPS_CANDOINDEXBUFFER | 
+            CKRST_SPECIFICCAPS_CANDOINDEXBUFFER | 
             CKRST_SPECIFICCAPS_GLATTENUATIONMODEL | 
             CKRST_SPECIFICCAPS_HARDWARETL | 
             CKRST_SPECIFICCAPS_DX8);
@@ -224,7 +224,7 @@ CKBOOL CKDX11RasterizerDriver::InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapte
     m_3DCaps.TextureAddressCaps = 0x1f; // everything
     m_3DCaps.TextureCaps |= CKRST_TEXTURECAPS_PERSPECTIVE; // not only do we support it, it's ALWAYS on
     m_3DCaps.MiscCaps |= CKRST_MISCCAPS_MASKZ; // glDepthMask
-    m_3DCaps.MiscCaps |= CKRST_MISCCAPS_CONFORMANT; // because non-conformant OpenGL drivers don't exist /s
+    m_3DCaps.MiscCaps |= CKRST_MISCCAPS_CONFORMANT;
     m_3DCaps.MiscCaps |= CKRST_MISCCAPS_CULLNONE;
     m_3DCaps.MiscCaps |= CKRST_MISCCAPS_CULLCW;
     m_3DCaps.MiscCaps |= CKRST_MISCCAPS_CULLCCW;
