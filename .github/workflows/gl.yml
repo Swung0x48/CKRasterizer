@@ -1,14 +1,14 @@
-name: CKDX11Rasterizers
+name: CKGLRasterizer
 
 on:
   push:
     branches: [ master ]
     paths:
-      - 'CKDX11Rasterizer/**'
+      - 'CKGLRasterizer/**'
   pull_request:
     branches: [ master ]
     paths:
-      - 'CKDX11Rasterizer/**'
+      - 'CKGLRasterizer/**'
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
@@ -16,12 +16,13 @@ env:
   CMAKE_ARGS: -DVIRTOOLS_SDK_FETCH_FROM_GIT=ON -DTRACY_ENABLE=OFF -A Win32
 
 jobs:
-  build-dx11:
+  build-gl:
     runs-on: windows-latest
     env:
       PROJECT_ROOT: ${{github.workspace}}
       VENDOR_ROOT: ${{github.workspace}}/vendor
-      PROJECT_NAME: CKDX11Rasterizer
+      PROJECT_NAME: CKGLRasterizer
+      GLEW_VERSION: "2.2.0"
     steps:
       - uses: actions/checkout@v3
 
@@ -30,11 +31,22 @@ jobs:
       - name: Fetch git submodules
         run: git submodule update --init --recursive --remote
 
+      - name: Download GLEW
+        if:   steps.cache.outputs.cache-hit != 'true'
+        uses: suisei-cn/actions-download-file@v1.3.0
+        id: download-glew  # Remember to give an ID if you need the output filename
+        with:
+          url: "https://github.com/nigels-com/glew/releases/download/glew-${{env.GLEW_VERSION}}/glew-${{env.GLEW_VERSION}}-win32.zip"
+          target: ${{env.VENDOR_ROOT}}
+          filename: glew.zip
+
+      - name: Extract and setup GLEW
+        if:   steps.cache.outputs.cache-hit != 'true'
+        working-directory: ${{env.VENDOR_ROOT}}
+        run: (7z x ${{env.VENDOR_ROOT}}/glew.zip -o${{env.VENDOR_ROOT}}) -and (ren glew-${{env.GLEW_VERSION}} glew)
+
       # Setup MSVC command prompt environment vars
       - uses: ilammy/msvc-dev-cmd@v1
-
-      # Setup Windows SDK, which includes modern DirectX SDK
-      - uses: GuillaumeFalourd/setup-windows10-sdk-action@v1.11
 
       - name: Configure CMake
         run: cmake -B ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build -S ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ${{env.CMAKE_ARGS}}
