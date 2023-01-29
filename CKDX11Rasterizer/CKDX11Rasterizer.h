@@ -281,9 +281,9 @@ public:
     //--- Index buffer filled when drawing primitives
     CKDX11IndexBufferDesc *m_IndexBuffer[2]; // Clip/unclipped
     CKDWORD m_DynamicIndexBufferCounter = 0;
-    CKDWORD m_DirectVertexBufferCounter = 0;
+    // CKDWORD m_DirectVertexBufferCounter = 0;
 
-    CKDX11VertexBufferDesc *m_DynamicVertexBuffer[DYNAMIC_VBO_COUNT] = {nullptr};
+    // CKDX11VertexBufferDesc *m_DynamicVertexBuffer[DYNAMIC_VBO_COUNT] = {nullptr};
     CKDX11IndexBufferDesc *m_DynamicIndexBuffer[DYNAMIC_IBO_COUNT] = {nullptr};
     // VxMatrix m_ViewportMat;
     ConstantBufferStruct m_CBuffer;

@@ -537,20 +537,30 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         SetRenderState(VXRENDERSTATE_CLIPPING, 0);
     }
 
-    if (++m_DirectVertexBufferCounter >= DYNAMIC_VBO_COUNT)
-        m_DirectVertexBufferCounter = 0;
-    if (m_DynamicVertexBuffer[m_DirectVertexBufferCounter])
-        delete m_DynamicVertexBuffer[m_DirectVertexBufferCounter];
-    CKDX11VertexBufferDesc *vbo = new CKDX11VertexBufferDesc;
+    CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
+    auto *vbo = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
+    // if (++m_DirectVertexBufferCounter >= DYNAMIC_VBO_COUNT)
+    //     m_DirectVertexBufferCounter = 0;
+    // auto* vbo = m_DynamicVertexBuffer[m_DirectVertexBufferCounter];
+    if (vbo && vbo->m_MaxVertexCount < data->VertexCount)
+    {
+        delete vbo;
+        m_VertexBuffers[VB] = nullptr;
+        vbo = nullptr;
+    }
+    if (!vbo)
+    {
+        vbo = new CKDX11VertexBufferDesc;
+        vbo->m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+        vbo->m_VertexFormat = vertexFormat;
+        vbo->m_VertexSize = vertexSize;
+        vbo->m_MaxVertexCount = (data->VertexCount + 100 > DEFAULT_VB_SIZE) ? data->VertexCount + 100 : DEFAULT_VB_SIZE;
+        vbo->m_CurrentVCount = 0;
+        vbo->Create(this);
+    }
+    m_VertexBuffers[VB] = vbo;
 
-    vbo->m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
-    vbo->m_VertexFormat = vertexFormat;
-    vbo->m_VertexSize = vertexSize;
-    vbo->m_MaxVertexCount = (data->VertexCount + 100 > DEFAULT_VB_SIZE) ? data->VertexCount + 100 : DEFAULT_VB_SIZE;
-    vbo->m_CurrentVCount = 0;
-    vbo->Create(this);
-    m_DynamicVertexBuffer[m_DirectVertexBufferCounter] = vbo;
-    // AssemblyInput(vbo);
+    assert(vertexSize == vbo->m_VertexSize);
 
     void *pbData = nullptr;
     CKDWORD vbase = 0;
@@ -966,15 +976,15 @@ CKBOOL CKDX11RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDes
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
         return FALSE;
     
-    auto *vbDesc = m_VertexBuffers[VB];
+    auto *vbo = m_VertexBuffers[VB];
     CKDX11VertexBufferDesc *dx11vb = nullptr;
-    if (vbDesc && *DesiredFormat == *vbDesc)
+    if (vbo && *DesiredFormat == *vbo)
     {
-        dx11vb = dynamic_cast<CKDX11VertexBufferDesc *>(vbDesc);
+        dx11vb = dynamic_cast<CKDX11VertexBufferDesc *>(vbo);
         if (dx11vb && dx11vb->DxBuffer)
             return TRUE;
     }
-    delete vbDesc;
+    delete vbo;
     m_VertexBuffers[VB] = nullptr;
     
     dx11vb = new CKDX11VertexBufferDesc;
@@ -982,7 +992,7 @@ CKBOOL CKDX11RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDes
     dx11vb->m_Flags = DesiredFormat->m_Flags;
     dx11vb->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount;
     dx11vb->m_VertexFormat = DesiredFormat->m_VertexFormat;
-    dx11vb->m_VertexSize = FVF::ComputeVertexSize(dx11vb->m_VertexFormat);
+    dx11vb->m_VertexSize = FVF::ComputeVertexSize(DesiredFormat->m_VertexFormat);
 
     CKBOOL succeeded = dx11vb->Create(this);
     if (succeeded)
