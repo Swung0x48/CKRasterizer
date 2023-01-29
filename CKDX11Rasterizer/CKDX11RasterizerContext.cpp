@@ -1072,6 +1072,7 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo)
     // };
     // m_DeviceContext->IASetInputLayout(m_InputLayout.Get());
     {
+        this->UpdateMatrices(WORLD_TRANSFORM);
         Vx3DTransposeMatrix(m_CBuffer.TotalMatrix, m_TotalMatrix);
         D3D11_MAPPED_SUBRESOURCE ms;
         D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
