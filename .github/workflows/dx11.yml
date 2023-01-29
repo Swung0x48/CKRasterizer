@@ -5,10 +5,16 @@ on:
     branches: [ master ]
     paths:
       - 'CKDX11Rasterizer/**'
+      - '.github/**'
+      - 'buildsystems/**'
+      - 'vendor/**'
   pull_request:
     branches: [ master ]
     paths:
       - 'CKDX11Rasterizer/**'
+      - '.github/**'
+      - 'buildsystems/**'
+      - 'vendor/**'
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
