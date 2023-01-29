@@ -1,0 +1,7 @@
+name=sketchy
+num_stages=1
+[stage_0]
+vsh=BUILTIN/CKGLRPP_VERT_SHDR/DEFAULT
+fsh=BUILTIN/CKGLRPP_FRAG_SHDR/SKETCHY
+uniform_parameter=edge_color|f32v4|.2 .2 .2 1.
+uniform_parameter=background|f32v4|.85 .85 .8 1.

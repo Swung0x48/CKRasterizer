@@ -4,7 +4,6 @@ uniform_parameter|kradius|i32
 uniform_parameter|kernel|f32[65]
 uniform_parameter|convdir|f32v2
 \*  END POST STAGE CONFIGURATION  */
-//chris: this is slow as f! we need something better.
 uniform vec2 screen_size;
 uniform vec2 mouse_pos;
 uniform float time;

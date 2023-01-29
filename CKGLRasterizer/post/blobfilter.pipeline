@@ -3,4 +3,4 @@ num_stages=1
 [stage_0]
 vsh=BUILTIN/CKGLRPP_VERT_SHDR/DEFAULT
 fsh=BUILTIN/CKGLRPP_FRAG_SHDR/BLOBFILTER
-uniform_parameter=radius|f32|4.0
+uniform_parameter=radius|f32|5.0

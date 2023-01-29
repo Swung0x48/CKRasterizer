@@ -17,6 +17,8 @@ GAUSSIAN                CKGLRPP_FRAG_SHDR post/gaussian.glsl
 CONV                    CKGLRPP_FRAG_SHDR post/conv.glsl
 CRT                     CKGLRPP_FRAG_SHDR post/crt.glsl
 CRT_LITE                CKGLRPP_FRAG_SHDR post/crt_lite.glsl
+EDGEENH                 CKGLRPP_FRAG_SHDR post/edgeenh.glsl
+SKETCHY                 CKGLRPP_FRAG_SHDR post/sketchy.glsl
 
 1                       CKGLRPP_DESC      post/default.pipeline
 2                       CKGLRPP_DESC      post/yflip.pipeline
@@ -24,9 +26,11 @@ CRT_LITE                CKGLRPP_FRAG_SHDR post/crt_lite.glsl
 4                       CKGLRPP_DESC      post/altitudinemvideo.pipeline
 5                       CKGLRPP_DESC      post/edgedetect.pipeline
 6                       CKGLRPP_DESC      post/edgedetect2.pipeline
-7                       CKGLRPP_DESC      post/blobfilter.pipeline
-8                       CKGLRPP_DESC      post/mblur.pipeline
-9                       CKGLRPP_DESC      post/blur.pipeline
-10                      CKGLRPP_DESC      post/crt.pipeline
-11                      CKGLRPP_DESC      post/crt_lite.pipeline
-12                      CKGLRPP_DESC      post/mouse.pipeline
+7                       CKGLRPP_DESC      post/sketchy.pipeline
+8                       CKGLRPP_DESC      post/edgeenh.pipeline
+9                       CKGLRPP_DESC      post/blobfilter.pipeline
+10                      CKGLRPP_DESC      post/mblur.pipeline
+11                      CKGLRPP_DESC      post/blur.pipeline
+12                      CKGLRPP_DESC      post/crt.pipeline
+13                      CKGLRPP_DESC      post/crt_lite.pipeline
+100                     CKGLRPP_DESC      post/mouse.pipeline
