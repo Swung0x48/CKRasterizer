@@ -255,14 +255,10 @@ public:
     ComPtr<ID3D11Device> m_Device;
     ComPtr<ID3D11DeviceContext> m_DeviceContext;
     ComPtr<ID3D11RenderTargetView> m_BackBuffer;
+    ComPtr<ID3D11DepthStencilState> m_DepthStencilState;
+    ComPtr<ID3D11DepthStencilView> m_DepthStencilView;
 
     D3D_FEATURE_LEVEL m_FeatureLevel;
-    const float m_ClearColor[4] = {
-        0.2f,
-        0.3f,
-        0.4f,
-        1.0f,
-    };
     D3D11_VIEWPORT m_Viewport;
     CKBOOL m_AllowTearing;
     CKDWORD m_CurrentVShader = -1;
@@ -276,7 +272,7 @@ public:
     std::unordered_map<CKDWORD, CKDWORD> m_VertexShaderMap;
 
     //    IDirect3DDevice9Ex *m_Device;
-    //    VxDirectXData m_DirectXData;
+    VxDirectXData m_DirectXData;
     //    //----------------------------------------------------
     //--- Index buffer filled when drawing primitives
     CKDX11IndexBufferDesc *m_IndexBuffer[2]; // Clip/unclipped

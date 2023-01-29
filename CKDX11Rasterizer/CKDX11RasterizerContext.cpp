@@ -3,6 +3,7 @@
 
 #define LOGGING 0
 #define STATUS 1
+#define VB_STRICT 0
 
 #if LOGGING
 #include <conio.h>
@@ -89,7 +90,7 @@ float4 PShader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
     return color;
 }
 )";
-CKDX11RasterizerContext::CKDX11RasterizerContext() {}
+CKDX11RasterizerContext::CKDX11RasterizerContext() { CKRasterizerContext::CKRasterizerContext(); }
 CKDX11RasterizerContext::~CKDX11RasterizerContext() {}
 
 void CKDX11RasterizerContext::SetTitleStatus(const char *fmt, ...)
@@ -130,7 +131,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     DXGI_SWAP_CHAIN_DESC scd;
     ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
 
-    m_AllowTearing = static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
+    m_AllowTearing = false; // static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
     scd.BufferCount = 2;
     scd.BufferDesc.Width = Width;
     scd.BufferDesc.Height = Height;
@@ -168,7 +169,58 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(m_Swapchain->GetBuffer(0, IID_PPV_ARGS(&pBuffer)));
     D3DCall(m_Device->CreateRenderTargetView(pBuffer, nullptr, &m_BackBuffer));
     D3DCall(pBuffer->Release());
-    m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
+    
+    pBuffer = nullptr;
+    D3D11_TEXTURE2D_DESC descDepth;
+    descDepth.Width = Width;
+    descDepth.Height = Height;
+    descDepth.MipLevels = 1;
+    descDepth.ArraySize = 1;
+    descDepth.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; // TODO: heh, also too lazy to check
+    descDepth.SampleDesc.Count = 1;
+    descDepth.SampleDesc.Quality = 0;
+    descDepth.Usage = D3D11_USAGE_DEFAULT;
+    descDepth.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+    descDepth.CPUAccessFlags = 0;
+    descDepth.MiscFlags = 0;
+    D3DCall(m_Device->CreateTexture2D(&descDepth, NULL, &pBuffer));
+
+    D3D11_DEPTH_STENCIL_DESC dsDesc;
+
+    // Depth test parameters
+    dsDesc.DepthEnable = true;
+    dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+    dsDesc.DepthFunc = D3D11_COMPARISON_LESS;
+
+    // Stencil test parameters
+    dsDesc.StencilEnable = true;
+    dsDesc.StencilReadMask = 0xFF;
+    dsDesc.StencilWriteMask = 0xFF;
+
+    // Stencil operations if pixel is front-facing
+    dsDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+    dsDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
+    dsDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+    dsDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+    // Stencil operations if pixel is back-facing
+    dsDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+    dsDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+    dsDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+    dsDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+    // Create depth stencil state
+    D3DCall(m_Device->CreateDepthStencilState(&dsDesc, m_DepthStencilState.GetAddressOf()));
+    // Bind depth stencil state
+    m_DeviceContext->OMSetDepthStencilState(m_DepthStencilState.Get(), 1);
+
+    D3D11_DEPTH_STENCIL_VIEW_DESC descDSV{};
+    descDSV.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+    descDSV.Texture2D.MipSlice = 0;
+    D3DCall(m_Device->CreateDepthStencilView(pBuffer, &descDSV, m_DepthStencilView.GetAddressOf()));
+    D3DCall(pBuffer->Release());
+    m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), m_DepthStencilView.Get());
 
     m_Window = (HWND)Window;
 
@@ -274,11 +326,18 @@ CKBOOL CKDX11RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
     if (!m_BackBuffer)
         return FALSE;
     if (Flags & CKRST_CTXCLEAR_COLOR)
-        m_DeviceContext->ClearRenderTargetView(m_BackBuffer.Get(), m_ClearColor);
-    /* if (Flags & CKRST_CTXCLEAR_STENCIL)
-        D3DCall(m_DeviceContext->ClearDepthStencilView());
-    if (Flags & CKRST_)
-    D3DCall(m_DeviceContext->ClearRenderTargetView())*/
+    {
+        VxColor c(Ccol);
+        m_DeviceContext->ClearRenderTargetView(m_BackBuffer.Get(), (const float*)&c);
+    }
+    UINT dsClearFlag = 0;
+    if (Flags & CKRST_CTXCLEAR_DEPTH)
+        dsClearFlag |= D3D11_CLEAR_DEPTH;
+    if (Flags & CKRST_CTXCLEAR_STENCIL)
+        dsClearFlag |= D3D11_CLEAR_STENCIL;
+    if (dsClearFlag)
+        m_DeviceContext->ClearDepthStencilView(m_DepthStencilView.Get(), dsClearFlag, Z, Stencil);
+    
     return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
@@ -303,7 +362,7 @@ CKBOOL CKDX11RasterizerContext::BeginScene()
 {
     if (m_SceneBegined)
         return FALSE;
-    m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), NULL);
+    m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), m_DepthStencilView.Get());
     m_SceneBegined = TRUE;
     return TRUE;
 }
@@ -554,7 +613,11 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         vbo->m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
         vbo->m_VertexFormat = vertexFormat;
         vbo->m_VertexSize = vertexSize;
+#if VB_STRICT == 1
+        vbo->m_MaxVertexCount = data->VertexCount;
+#else
         vbo->m_MaxVertexCount = (data->VertexCount + 100 > DEFAULT_VB_SIZE) ? data->VertexCount + 100 : DEFAULT_VB_SIZE;
+#endif
         vbo->m_CurrentVCount = 0;
         vbo->Create(this);
     }
@@ -990,7 +1053,14 @@ CKBOOL CKDX11RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDes
     dx11vb = new CKDX11VertexBufferDesc;
     dx11vb->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
     dx11vb->m_Flags = DesiredFormat->m_Flags;
-    dx11vb->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount;
+    dx11vb->m_MaxVertexCount =
+#if VB_STRICT == 1
+        DesiredFormat->m_MaxVertexCount;
+#else
+        (DesiredFormat->m_MaxVertexCount + 100 > DEFAULT_VB_SIZE)
+        ? DesiredFormat->m_MaxVertexCount + 100
+        : DEFAULT_VB_SIZE;
+#endif
     dx11vb->m_VertexFormat = DesiredFormat->m_VertexFormat;
     dx11vb->m_VertexSize = FVF::ComputeVertexSize(DesiredFormat->m_VertexFormat);
 
@@ -1073,6 +1143,7 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo)
     // m_DeviceContext->IASetInputLayout(m_InputLayout.Get());
     {
         this->UpdateMatrices(WORLD_TRANSFORM);
+        // this->UpdateMatrices(VIEW_TRANSFORM);
         Vx3DTransposeMatrix(m_CBuffer.TotalMatrix, m_TotalMatrix);
         D3D11_MAPPED_SUBRESOURCE ms;
         D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
