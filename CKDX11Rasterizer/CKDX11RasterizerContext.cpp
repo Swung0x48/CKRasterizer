@@ -886,7 +886,6 @@ CKBOOL CKDX11RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
     ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
-    CKTextureDesc;
     CKDX11TextureDesc *desc = static_cast<CKDX11TextureDesc *>(m_Textures[Texture]);
     if (!desc)
         return FALSE;
@@ -1003,7 +1002,20 @@ CKBOOL CKDX11RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
     m_DeviceContext->Unmap(desc->DxBuffer.Get(), NULL);
     return TRUE;
 }
-CKBOOL CKDX11RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat) { return 0; }
+CKBOOL CKDX11RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat) {
+    ZoneScopedN(__FUNCTION__);
+    if (Texture >= m_Textures.Size())
+        return FALSE;
+    if (m_Textures[Texture])
+        return TRUE;
+#if LOG_CREATETEXTURE
+    fprintf(stderr, "create texture %d %dx%d %x\n", Texture, DesiredFormat->Format.Width, DesiredFormat->Format.Height,
+            DesiredFormat->Flags);
+#endif
+    CKDX11TextureDesc *desc = new CKDX11TextureDesc(DesiredFormat);
+    m_Textures[Texture] = desc;
+    return TRUE;
+}
 
 bool operator==(const CKVertexShaderDesc &a, const CKVertexShaderDesc& b)
 {
