@@ -251,7 +251,7 @@ CKBOOL CKDX11RasterizerDriver::InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapte
     m_Desc << buf << " @ ";
     WideCharToMultiByte(CP_ACP, 0, m_AdapterDesc.Description, wcslen(m_AdapterDesc.Description),
                         buf, 128, nullptr, nullptr);
-    m_Desc << buf << " (DX11, DXGI 1.1)";
+    m_Desc << buf << " (DX11, DXGI " << static_cast<CKDX11Rasterizer*>(m_Owner)->m_DXGIVersionString.c_str() << ")";
     m_CapsUpToDate = TRUE;
     return TRUE;
 }

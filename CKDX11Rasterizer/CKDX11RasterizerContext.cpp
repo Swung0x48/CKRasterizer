@@ -389,8 +389,8 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
         EndScene();
 #if STATUS
     // fprintf(stderr, "swap\n");
-    SetTitleStatus("D3D11 | batch stats: direct %d, vb %d, vbib %d", directbat, vbbat,
-                     vbibbat);
+    SetTitleStatus("D3D11 | DXGI %s | AllowTearing: %s | batch stats: direct %d, vb %d, vbib %d", 
+        m_Owner->m_DXGIVersionString.c_str(), m_AllowTearing ? "true" : "false", directbat, vbbat, vbibbat);
 
     directbat = 0;
     vbbat = 0;

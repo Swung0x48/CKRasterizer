@@ -80,7 +80,10 @@ XBOOL CKDX11Rasterizer::Start(WIN_HANDLE AppWnd)
     hr = m_Factory.As(&factory5);
     BOOL allowTearing = FALSE;
     if (SUCCEEDED(hr))
+    {
+        m_DXGIVersionString = "1.5+";
         hr = factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
+    }
     m_TearingSupport = SUCCEEDED(hr) && allowTearing;
 
 	ComPtr<IDXGIAdapter1> adapter = nullptr;

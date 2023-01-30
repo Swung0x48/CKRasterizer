@@ -36,6 +36,7 @@ public:
 public:
     ComPtr<IDXGIFactory1> m_Factory;
     CKBOOL m_TearingSupport = FALSE;
+    std::string m_DXGIVersionString = "1.1";
 };
 
 class CKDX11RasterizerDriver : public CKRasterizerDriver
