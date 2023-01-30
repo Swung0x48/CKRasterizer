@@ -3,17 +3,6 @@
 
 CKDX11TextureDesc::CKDX11TextureDesc(CKTextureDesc* desc): CKTextureDesc(*desc) {
     DxDesc = {};
-	// DxDesc.Width = desc->Format.Width;
- //    DxDesc.Height = desc->Format.Height;
- //    DxDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
- //    DxDesc.MipLevels = 1;
- //    DxDesc.ArraySize = 1;
- //    DxDesc.SampleDesc.Count = 1;
- //    DxDesc.SampleDesc.Quality = 0;
- //    DxDesc.Usage = D3D11_USAGE_IMMUTABLE;
- //    DxDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
- //    DxDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
- //    DxDesc.MiscFlags = 0;
     DxDesc.Width = desc->Format.Width;
     DxDesc.Height = desc->Format.Height;
     DxDesc.MipLevels = 1;
