@@ -92,6 +92,15 @@ VS_OUTPUT VShader0x1c4(float3 position : SV_POSITION, float4 diffuse: COLOR, flo
     return output;
 }
 
+VS_OUTPUT VShader0x42(float3 position : SV_POSITION, float4 diffuse: COLOR) {
+    VS_OUTPUT output;
+    float4 pos4 = float4(position, 1.0);
+    output.position = mul(pos4, total_mat);
+    output.color = float4(1.0, 1.0, 1.0, 1.0);
+    output.texcoord = float2(0.0, 0.0);
+    return output;
+}
+
 Texture2D texture2d;
 SamplerState sampler_st;
 float4 PShader(float4 position : SV_POSITION, float4 color : COLOR, float2 texcoord: TEXCOORD) : SV_TARGET
@@ -140,7 +149,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     DXGI_SWAP_CHAIN_DESC scd;
     ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
 
-    m_AllowTearing = false; // static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
+    m_AllowTearing = static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
     scd.BufferCount = 2;
     scd.BufferDesc.Width = Width;
     scd.BufferDesc.Height = Height;
@@ -266,7 +275,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     if (m_Fullscreen)
         m_Driver->m_Owner->m_FullscreenContext = this;
 
-    CKDWORD vs_color_idx = 0, vs_normal_idx = 1, vs_spec_idx = 2, vs_0x102_idx = 3, vs_0x142_idx = 4, vs_0x1c4_idx = 5;
+    CKDWORD vs_color_idx = 0, vs_normal_idx = 1, vs_spec_idx = 2, vs_0x102_idx = 3, vs_0x142_idx = 4, vs_0x1c4_idx = 5, vs_0x42_idx = 6;
     CKDWORD ps_idx = 0;
     CKDX11VertexShaderDesc vs_desc;
     vs_desc.m_Function = (CKDWORD*)shader;
@@ -315,12 +324,20 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     vs_0x1c4.DxFVF = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1;
     CreateObject(vs_0x1c4_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x1c4);
 
+    CKDX11VertexShaderDesc vs_0x42;
+    vs_0x42.m_Function = (CKDWORD *)shader;
+    vs_0x42.m_FunctionSize = strlen(shader);
+    vs_0x42.DxEntryPoint = "VShader0x42";
+    vs_0x42.DxFVF = CKRST_VF_POSITION | CKRST_VF_DIFFUSE;
+    CreateObject(vs_0x42_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x42);
+
     m_VertexShaderMap[CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_color_idx;
     m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1] = vs_normal_idx;
     m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_SPECULAR | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_spec_idx;
     m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_TEX1] = vs_0x102_idx;
     m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_0x142_idx;
     m_VertexShaderMap[CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1] = vs_0x1c4_idx;
+    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE] = vs_0x42_idx;
     // m_CurrentVShader = vs_idx;
     m_CurrentPShader = ps_idx;
 
@@ -480,7 +497,17 @@ CKBOOL CKDX11RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD 
 }
 CKBOOL CKDX11RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 {
-    return CKRasterizerContext::SetTexture(Texture, Stage);
+#if LOG_SETTEXTURE
+    fprintf(stderr, "settexture %d %d\n", Texture, Stage);
+#endif
+    ZoneScopedN(__FUNCTION__);
+    if (Texture >= m_Textures.Size())
+        return FALSE;
+    CKDX11TextureDesc *desc = static_cast<CKDX11TextureDesc *>(m_Textures[Texture]);
+    if (!desc)
+        return FALSE;
+    desc->Bind(this);
+    return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
@@ -904,9 +931,9 @@ CKBOOL CKDX11RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
     VxDoBlitUpsideDown(SurfDesc, dst);
     if (!(SurfDesc.AlphaMask || SurfDesc.Flags >= _DXT1))
         VxDoAlphaBlit(dst, 255);
-    desc->Create(this, dst.Image);
+    CKBOOL ret = desc->Create(this, dst.Image);
     delete dst.Image;
-    return TRUE;
+    return ret;
 }
 CKBOOL CKDX11RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect *Src, VxRect *Dest, CKRST_CUBEFACE Face)
 {
