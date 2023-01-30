@@ -121,6 +121,17 @@ public:
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
 } CKDX11ConstantBufferDesc;
 
+typedef struct CKDX11TextureDesc : CKTextureDesc
+{
+    D3D11_TEXTURE2D_DESC DxDesc;
+    ComPtr<ID3D11Texture2D> DxTexture;
+    ComPtr<ID3D11ShaderResourceView> DxSRV;
+    CKDX11TextureDesc(CKTextureDesc *desc);
+    virtual CKBOOL Create(CKDX11RasterizerContext *ctx, void *data);
+    void Bind(CKDX11RasterizerContext *ctx);
+    void Load(CKDX11RasterizerContext *ctx, void *data);
+} CKDX11TextureDesc;
+
 class CKDX11RasterizerContext : public CKRasterizerContext
 {
 public:
@@ -257,6 +268,7 @@ public:
     ComPtr<ID3D11RenderTargetView> m_BackBuffer;
     ComPtr<ID3D11DepthStencilState> m_DepthStencilState;
     ComPtr<ID3D11DepthStencilView> m_DepthStencilView;
+    ComPtr<ID3D11SamplerState> m_SamplerState;
 
     D3D_FEATURE_LEVEL m_FeatureLevel;
     D3D11_VIEWPORT m_Viewport;

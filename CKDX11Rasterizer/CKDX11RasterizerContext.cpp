@@ -21,6 +21,7 @@ struct VS_OUTPUT
 {
     float4 position : SV_POSITION;
     float4 color : COLOR;
+    float2 texcoord: TEXCOORD;
 };
 
 struct VS_INPUT_COLOR {
@@ -39,6 +40,7 @@ VS_OUTPUT VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float
     output.position.w = 1.0;
     //output.position = mul(output.position, viewport_mat);
     output.color = float4(texcoord, 1.0, 1.0);
+    output.texcoord = texcoord;
     return output;
 }
 
@@ -49,6 +51,7 @@ VS_OUTPUT VShaderNormal(float3 position : SV_POSITION, float3 normal: NORMAL, fl
     float4 pos4 = float4(position, 1.0);
     output.position = mul(pos4, total_mat);
     output.color = float4(texcoord, 1.0, 1.0);
+    output.texcoord = texcoord;
     return output;
 }
 
@@ -58,6 +61,7 @@ VS_OUTPUT VShaderSpec(float3 position : SV_POSITION, float4 diffuse: COLOR, floa
     float4 pos4 = float4(position, 1.0);
     output.position = mul(pos4, total_mat);
     output.color = float4(texcoord, 1.0, 1.0);
+    output.texcoord = texcoord;
     return output;
 }
 
@@ -66,6 +70,7 @@ VS_OUTPUT VShader0x102(float3 position : SV_POSITION, float2 texcoord: TEXCOORD)
     float4 pos4 = float4(position, 1.0);
     output.position = mul(pos4, total_mat);
     output.color = float4(texcoord, 1.0, 1.0);
+    output.texcoord = texcoord;
     return output;
 }
 
@@ -74,6 +79,7 @@ VS_OUTPUT VShader0x142(float3 position : SV_POSITION, float4 diffuse: COLOR, flo
     float4 pos4 = float4(position, 1.0);
     output.position = mul(pos4, total_mat);
     output.color = float4(texcoord, 1.0, 1.0);
+    output.texcoord = texcoord;
     return output;
 }
 
@@ -82,12 +88,15 @@ VS_OUTPUT VShader0x1c4(float3 position : SV_POSITION, float4 diffuse: COLOR, flo
     float4 pos4 = float4(position, 1.0);
     output.position = mul(pos4, total_mat);
     output.color = float4(texcoord, 1.0, 1.0);
+    output.texcoord = texcoord;
     return output;
 }
 
-float4 PShader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
+Texture2D texture2d;
+SamplerState sampler_st;
+float4 PShader(float4 position : SV_POSITION, float4 color : COLOR, float2 texcoord: TEXCOORD) : SV_TARGET
 {
-    return color;
+    return texture2d.Sample(sampler_st, texcoord);
 }
 )";
 CKDX11RasterizerContext::CKDX11RasterizerContext() { CKRasterizerContext::CKRasterizerContext(); }
@@ -146,7 +155,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
                                          D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1};
 #if defined(DEBUG) || defined(_DEBUG)
-    creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    //creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
     hr = D3D11CreateDeviceAndSwapChain(static_cast<CKDX11RasterizerDriver *>(m_Driver)->m_Adapter.Get(),
                                        D3D_DRIVER_TYPE_UNKNOWN, nullptr, creationFlags, featureLevels,
@@ -221,6 +230,24 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(m_Device->CreateDepthStencilView(pBuffer, &descDSV, m_DepthStencilView.GetAddressOf()));
     D3DCall(pBuffer->Release());
     m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), m_DepthStencilView.Get());
+
+    D3D11_SAMPLER_DESC SamplerDesc = {};
+
+    SamplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    SamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    SamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    SamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    SamplerDesc.MipLODBias = 0.0f;
+    SamplerDesc.MaxAnisotropy = 1;
+    SamplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    SamplerDesc.BorderColor[0] = 1.0f;
+    SamplerDesc.BorderColor[1] = 1.0f;
+    SamplerDesc.BorderColor[2] = 1.0f;
+    SamplerDesc.BorderColor[3] = 1.0f;
+    SamplerDesc.MinLOD = -FLT_MAX;
+    SamplerDesc.MaxLOD = FLT_MAX;
+
+    D3DCall(m_Device->CreateSamplerState(&SamplerDesc, m_SamplerState.GetAddressOf()));
 
     m_Window = (HWND)Window;
 
@@ -411,36 +438,25 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
 {
     ZoneScopedN(__FUNCTION__);
     CKDWORD UnityMatrixMask = 0;
-    // switch (Type)
-    // {
-    //     case VXMATRIX_WORLD:
-    //         m_WorldMatrix = Mat;
-    //         Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-    //         m_MatrixUptodate &= ~0U ^ WORLD_TRANSFORM;
-    //         break;
-    //     case VXMATRIX_VIEW:
-    //         m_ViewMatrix = Mat;
-    //         Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-    //         m_MatrixUptodate = 0;
-    //         break;
-    //     case VXMATRIX_PROJECTION:
-    //         m_ProjectionMatrix = Mat;
-    //         m_MatrixUptodate = 0;
-    //         Vx3DMultiplyMatrix(m_ViewProjMatrix, m_ProjectionMatrix, m_ViewMatrix);
-    //         break;
-    //     case VXMATRIX_TEXTURE0:
-    //     case VXMATRIX_TEXTURE1:
-    //     case VXMATRIX_TEXTURE2:
-    //     case VXMATRIX_TEXTURE3:
-    //     case VXMATRIX_TEXTURE4:
-    //     case VXMATRIX_TEXTURE5:
-    //     case VXMATRIX_TEXTURE6:
-    //     case VXMATRIX_TEXTURE7:
-    //         UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
-    //         break;
-    //     default:
-    //         return FALSE;
-    // }
+     switch (Type)
+     {
+         case VXMATRIX_TEXTURE0:
+         case VXMATRIX_TEXTURE1:
+         case VXMATRIX_TEXTURE2:
+         case VXMATRIX_TEXTURE3:
+         case VXMATRIX_TEXTURE4:
+         case VXMATRIX_TEXTURE5:
+         case VXMATRIX_TEXTURE6:
+         case VXMATRIX_TEXTURE7:
+        {
+            UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
+            CKDWORD tex = Type - VXMATRIX_TEXTURE0;
+            // TODO
+            break;
+        }
+         default:
+             break;
+     }
     auto ret = CKRasterizerContext::SetTransformMatrix(Type, Mat);
     if (VxMatrix::Identity() == Mat)
     {
@@ -867,7 +883,31 @@ CKBOOL CKDX11RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE 
 
 CKBOOL CKDX11RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
 {
-    return CKRasterizerContext::LoadTexture(Texture, SurfDesc, miplevel);
+    ZoneScopedN(__FUNCTION__);
+    if (Texture >= m_Textures.Size())
+        return FALSE;
+    CKTextureDesc;
+    CKDX11TextureDesc *desc = static_cast<CKDX11TextureDesc *>(m_Textures[Texture]);
+    if (!desc)
+        return FALSE;
+    VxImageDescEx dst;
+    dst.Size = sizeof(VxImageDescEx);
+    ZeroMemory(&dst.Flags, sizeof(VxImageDescEx) - sizeof(dst.Size));
+    dst.Width = SurfDesc.Width;
+    dst.Height = SurfDesc.Height;
+    dst.BitsPerPixel = 32;
+    dst.BytesPerLine = 4 * SurfDesc.Width;
+    dst.AlphaMask = 0xFF000000;
+    dst.RedMask = 0x0000FF;
+    dst.GreenMask = 0x00FF00;
+    dst.BlueMask = 0xFF0000;
+    dst.Image = new uint8_t[dst.Width * dst.Height * (dst.BitsPerPixel / 8)];
+    VxDoBlitUpsideDown(SurfDesc, dst);
+    if (!(SurfDesc.AlphaMask || SurfDesc.Flags >= _DXT1))
+        VxDoAlphaBlit(dst, 255);
+    desc->Create(this, dst.Image);
+    delete dst.Image;
+    return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect *Src, VxRect *Dest, CKRST_CUBEFACE Face)
 {
