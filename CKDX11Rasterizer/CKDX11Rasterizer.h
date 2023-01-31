@@ -270,6 +270,9 @@ public:
     ComPtr<ID3D11DepthStencilState> m_DepthStencilState;
     ComPtr<ID3D11DepthStencilView> m_DepthStencilView;
     ComPtr<ID3D11SamplerState> m_SamplerState;
+    ComPtr<ID3D11BlendState> m_BlendState;
+    D3D11_BLEND_DESC m_BlendStateDesc;
+    CKBOOL m_BlendDescModified = FALSE;
 
     D3D_FEATURE_LEVEL m_FeatureLevel;
     D3D11_VIEWPORT m_Viewport;

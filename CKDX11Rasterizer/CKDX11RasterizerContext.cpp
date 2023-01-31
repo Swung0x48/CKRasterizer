@@ -105,6 +105,8 @@ Texture2D texture2d;
 SamplerState sampler_st;
 float4 PShader(float4 position : SV_POSITION, float4 color : COLOR, float2 texcoord: TEXCOORD) : SV_TARGET
 {
+    if (texcoord.x == 0.0 && texcoord.y == 0)
+        return color;
     return texture2d.Sample(sampler_st, texcoord);
 }
 )";
@@ -257,6 +259,21 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     SamplerDesc.MaxLOD = FLT_MAX;
 
     D3DCall(m_Device->CreateSamplerState(&SamplerDesc, m_SamplerState.GetAddressOf()));
+
+    ZeroMemory(&m_BlendStateDesc, sizeof(D3D11_BLEND_DESC));
+    m_BlendStateDesc.AlphaToCoverageEnable = FALSE;
+    m_BlendStateDesc.IndependentBlendEnable = FALSE;
+    m_BlendStateDesc.RenderTarget[0].BlendEnable = TRUE;
+    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+    m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+    m_BlendStateDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA;
+    m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_DEST_ALPHA;
+    m_BlendStateDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    m_BlendStateDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+    D3DCall(m_Device->CreateBlendState(&m_BlendStateDesc, m_BlendState.GetAddressOf()));
+    m_DeviceContext->OMSetBlendState(m_BlendState.Get(), NULL, 0xFFFFFF);
 
     m_Window = (HWND)Window;
 
