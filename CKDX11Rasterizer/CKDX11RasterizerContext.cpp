@@ -105,8 +105,8 @@ Texture2D texture2d;
 SamplerState sampler_st;
 float4 PShader(float4 position : SV_POSITION, float4 color : COLOR, float2 texcoord: TEXCOORD) : SV_TARGET
 {
-    if (texcoord.x == 0.0 && texcoord.y == 0)
-        return color;
+    //if (texcoord.x == 0.0 && texcoord.y == 0)
+        //return color;
     return texture2d.Sample(sampler_st, texcoord);
 }
 )";
@@ -166,7 +166,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
                                          D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1};
 #if defined(DEBUG) || defined(_DEBUG)
-    //creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
     hr = D3D11CreateDeviceAndSwapChain(static_cast<CKDX11RasterizerDriver *>(m_Driver)->m_Adapter.Get(),
                                        D3D_DRIVER_TYPE_UNKNOWN, nullptr, creationFlags, featureLevels,
@@ -259,6 +259,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     SamplerDesc.MaxLOD = FLT_MAX;
 
     D3DCall(m_Device->CreateSamplerState(&SamplerDesc, m_SamplerState.GetAddressOf()));
+    m_DeviceContext->PSSetSamplers(0, 1, m_SamplerState.GetAddressOf());
 
     ZeroMemory(&m_BlendStateDesc, sizeof(D3D11_BLEND_DESC));
     m_BlendStateDesc.AlphaToCoverageEnable = FALSE;
