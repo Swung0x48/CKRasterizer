@@ -75,22 +75,6 @@ CKGLRasterizerContext::~CKGLRasterizerContext()
     ReleaseDC((HWND)m_Window, m_DC);
 }
 
-LRESULT WINAPI GL_WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
-    switch (Msg) {
-        case WM_KEYDOWN:
-            if (wParam == VK_ESCAPE) {
-                ::PostQuitMessage(0);
-            }
-            break;
-        case WM_CLOSE:
-            ::PostQuitMessage(0);
-            break;
-        default:
-            return ::DefWindowProc(hWnd, Msg, wParam, lParam);
-    }
-    return 0;
-}
-
 PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = nullptr;
 CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
     CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)

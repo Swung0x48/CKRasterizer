@@ -2,7 +2,6 @@
 
 CKGLRasterizer::CKGLRasterizer(void): m_Init(FALSE)
 {
-	
 }
 
 CKGLRasterizer::~CKGLRasterizer(void)
@@ -68,26 +67,26 @@ void CKGLRasterizer::Close(void)
 }
 
 CKRasterizer* CKGLRasterizerStart(WIN_HANDLE AppWnd) {
-	CKRasterizer* rst = new CKGLRasterizer;
-	if (!rst)
-		return nullptr;
-	if (!rst->Start(AppWnd))
-		delete rst;
-	return rst;
+    CKRasterizer* rst = new CKGLRasterizer;
+    if (!rst)
+        return nullptr;
+    if (!rst->Start(AppWnd))
+        delete rst;
+    return rst;
 }
 
 void CKGLRasterizerClose(CKRasterizer* rst)
 {
-	if (rst)
-	{
-		rst->Close();
-		delete rst;
-	}
+    if (rst)
+    {
+        rst->Close();
+        delete rst;
+    }
 }
 
 PLUGIN_EXPORT void CKRasterizerGetInfo(CKRasterizerInfo* info)
 {
-	info->StartFct = CKGLRasterizerStart;
-	info->CloseFct = CKGLRasterizerClose;
-	info->Desc = "OpenGL Rasterizer";
+    info->StartFct = CKGLRasterizerStart;
+    info->CloseFct = CKGLRasterizerClose;
+    info->Desc = "OpenGL Rasterizer";
 }

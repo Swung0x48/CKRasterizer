@@ -71,10 +71,6 @@ public:
     CKBOOL m_Inited;
     UINT m_AdapterIndex;
     DISPLAY_DEVICEA m_Adapter;
-    WNDCLASSEXA m_WndClass;
-    HWND m_HWND;
-    HDC m_DC;
-    HGLRC m_RC;
 };
 
 struct pair_hash

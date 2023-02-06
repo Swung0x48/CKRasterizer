@@ -4,7 +4,7 @@
 
 CKGLRasterizerDriver::CKGLRasterizerDriver(CKGLRasterizer *rst)
 {
-	m_Owner = rst;
+    m_Owner = rst;
 }
 
 CKGLRasterizerDriver::~CKGLRasterizerDriver()
@@ -50,47 +50,6 @@ CKBOOL CKGLRasterizerDriver::InitializeCaps()
             m_DisplayModes.PushBack(mode);
     }
 
-    HINSTANCE hInstance = GetModuleHandle(NULL);
-
-    HWND fakeWND = CreateWindowA(
-        "Core", "Fake Window",      // window class, title
-        WS_CLIPSIBLINGS | WS_CLIPCHILDREN, // style
-        0, 0,                       // position x, y
-        1, 1,                       // width, height
-        NULL, NULL,                 // parent window, menu
-        hInstance, NULL);           // instance, param
-    
-    HDC fakeDC = GetDC(fakeWND);        // Device Context
-    PIXELFORMATDESCRIPTOR fakePFD;
-    ZeroMemory(&fakePFD, sizeof(fakePFD));
-    fakePFD.nSize = sizeof(fakePFD);
-    fakePFD.nVersion = 1;
-    fakePFD.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-    fakePFD.iPixelType = PFD_TYPE_RGBA;
-    fakePFD.cColorBits = 32;
-    fakePFD.cAlphaBits = 8;
-    fakePFD.cDepthBits = 24;
-     
-    int fakePFDID = ChoosePixelFormat(fakeDC, &fakePFD);
-    if (fakePFDID == 0) {
-        return 0;
-    }
-
-    if (SetPixelFormat(fakeDC, fakePFDID, &fakePFD) == false) {
-        return 0;
-    }
-    HGLRC fakeRC = wglCreateContext(fakeDC);    // Rendering Context
-    if (fakeRC == NULL) {
-        return 0;
-    }
-     
-    if (wglMakeCurrent(fakeDC, fakeRC) == false) {
-        return 0;
-    }
-
-    m_DC = fakeDC;
-    m_RC = fakeRC;
-    m_HWND = fakeWND;
     m_Desc << glGetString(GL_RENDERER);
     m_Desc << " (OpenGL)";
 
