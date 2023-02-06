@@ -51,15 +51,6 @@ CKBOOL CKGLRasterizerDriver::InitializeCaps()
     }
 
     HINSTANCE hInstance = GetModuleHandle(NULL);
-    WNDCLASSEXA wcex;
-    ZeroMemory(&wcex, sizeof(wcex));
-    wcex.cbSize = sizeof(wcex);
-    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    wcex.lpfnWndProc = GL_WndProc;
-    wcex.hInstance = GetModuleHandle(NULL);
-    wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wcex.lpszClassName = "Core";
-    RegisterClassExA(&wcex);
 
     HWND fakeWND = CreateWindowA(
         "Core", "Fake Window",      // window class, title
