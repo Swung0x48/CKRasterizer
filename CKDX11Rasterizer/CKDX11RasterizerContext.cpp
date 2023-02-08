@@ -37,6 +37,9 @@ VS_OUTPUT VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float
 {
     VS_OUTPUT output;
     output.position.xyzw = position.xywz;
+    output.position.x = (output.position.x/1024)*2-1;
+    output.position.y = ((output.position.y/768)*2-1);
+    output.position.z = 0.0;
     output.position.w = 1.0;
     //output.position = mul(output.position, viewport_mat);
     output.color = float4(texcoord, 1.0, 1.0);
@@ -275,7 +278,6 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
 
     D3DCall(m_Device->CreateBlendState(&m_BlendStateDesc, m_BlendState.GetAddressOf()));
     m_DeviceContext->OMSetBlendState(m_BlendState.Get(), NULL, 0xFFFFFF);
-
     m_Window = (HWND)Window;
 
     m_OriginalTitle.resize(GetWindowTextLengthA(GetAncestor((HWND)Window, GA_ROOT)) + 1);
@@ -755,7 +757,7 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
         case VX_TRIANGLEFAN:
             // D3D11 does not support triangle fan, leave it here.
             // assert(false);
-            return FALSE;
+            // return FALSE;
             topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
             break;
         default:
