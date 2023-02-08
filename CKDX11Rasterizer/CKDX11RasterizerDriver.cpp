@@ -6,6 +6,14 @@ CKDX11RasterizerDriver::CKDX11RasterizerDriver(CKDX11Rasterizer *rst) {
 }
 
 CKDX11RasterizerDriver::~CKDX11RasterizerDriver() {
+#if defined(DEBUG) || defined(_DEBUG)
+    IDXGIDebug1 *pDebug = NULL;
+    if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pDebug))))
+    {
+        pDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_SUMMARY);
+        pDebug->Release();
+    }
+#endif
 
 }
 

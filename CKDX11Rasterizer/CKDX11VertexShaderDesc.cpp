@@ -4,7 +4,12 @@
 CKBOOL CKDX11VertexShaderDesc::Create(CKDX11RasterizerContext *ctx)
 {
     HRESULT hr;
-    D3DCall(D3DCompile(m_Function, m_FunctionSize, nullptr, nullptr, nullptr, DxEntryPoint, DxTarget, 0, 0,
+
+    UINT flag1 = 0;
+#if defined(DEBUG) || defined(_DEBUG)
+    flag1 |= D3DCOMPILE_DEBUG;
+#endif
+    D3DCall(D3DCompile(m_Function, m_FunctionSize, nullptr, nullptr, nullptr, DxEntryPoint, DxTarget, flag1, 0,
                        DxBlob.GetAddressOf(), DxErrorMsgs.GetAddressOf()));
     if (FAILED(hr) && DxErrorMsgs)
     {
