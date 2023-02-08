@@ -15,6 +15,7 @@ endif()
 option(BUILD_DX9_RASTERIZER "Build Direct3D 9 Rasterizer" ON)
 option(BUILD_GL_RASTERIZER "Build OpenGL Core Profile Rasterizer" ON)
 option(BUILD_DX11_RASTERIZER "Build Direct3D 11 Rasterizer" ON)
+option(BUILD_VULKAN_RASTERIZER "Build Vulkan Rasterizer" ON)
 
 if(BUILD_DX9_RASTERIZER)
 	add_subdirectory(CKDX9Rasterizer)
@@ -26,6 +27,10 @@ endif()
 
 if(BUILD_DX11_RASTERIZER)
 	add_subdirectory(CKDX11Rasterizer)
+endif()
+
+if(BUILD_VULKAN_RASTERIZER)
+	add_subdirectory(CKVkRasterizer)
 endif()
 
 if(NOT DEFINED BALLANCE_DIR)
