@@ -36,11 +36,8 @@ cbuffer CBuf
 VS_OUTPUT VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float2 texcoord: TEXCOORD)
 {
     VS_OUTPUT output;
-    output.position.xyzw = position.xywz;
-    output.position.x = (output.position.x/1024)*2-1;
-    output.position.y = -(output.position.y/768)*2+1;
-    output.position.w = 1.0;
-    output.position = mul(output.position, viewport_mat);
+    output.position = float4(position.x, -position.y, position.w, 1.0);
+    output.position = mul(viewport_mat, output.position);
     output.color = float4(texcoord, 1.0, 1.0);
     output.texcoord = texcoord;
     return output;
@@ -109,7 +106,7 @@ float4 PShader(float4 position : SV_POSITION, float4 color : COLOR, float2 texco
 {
     //if (texcoord.x == 0.0 && texcoord.y == 0)
         //return color;
-    return texture2d.Sample(sampler_st, texcoord);
+    return texture2d.Sample(sampler_st, float2(texcoord.x, 1 - texcoord.y));
 }
 )";
 CKDX11RasterizerContext::CKDX11RasterizerContext() { CKRasterizerContext::CKRasterizerContext(); }
