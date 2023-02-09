@@ -81,6 +81,7 @@ void CKGLPostProcessingStage::parse_stage_config()
     {
         std::string line;
         std::getline(ssfsh, line);
+        while (line.size() && line.back() == '\r') line.pop_back();
         if (std::regex_search(line, begin_block) && !in_conf)
         {
             in_conf = true;
@@ -224,6 +225,7 @@ void CKGLPostProcessingPipeline::parse_pipeline_config(const std::string &cfg)
         std::string line;
         std::getline(ssfsh, line);
         std::smatch m;
+        while (line.size() && line.back() == '\r') line.pop_back();
         if (std::regex_match(line, m, xpair))
         {
             if (m[1] == "name")
