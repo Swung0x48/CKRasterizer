@@ -69,6 +69,7 @@ public:
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
     virtual void *Lock(CKDX11RasterizerContext *ctx, CKDWORD offset, CKDWORD len, bool overwrite);
     virtual void Unlock(CKDX11RasterizerContext *ctx);
+    virtual void Bind(CKDX11RasterizerContext *ctx);
 } CKDX11VertexBufferDesc;
 
 typedef struct CKDX11IndexBufferDesc : public CKIndexBufferDesc
@@ -80,6 +81,7 @@ public:
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
     virtual void *Lock(CKDX11RasterizerContext *ctx, CKDWORD offset, CKDWORD len, bool overwrite);
     virtual void Unlock(CKDX11RasterizerContext *ctx);
+    virtual void Bind(CKDX11RasterizerContext *ctx);
 } CKDX11IndexBufferDesc;
 
 typedef struct CKDX11VertexShaderDesc : public CKVertexShaderDesc
@@ -237,7 +239,7 @@ protected:
     CKBOOL CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat);
     CKBOOL CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat);
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
-    void AssemblyInput(CKDX11VertexBufferDesc *vbo);
+    void AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX11IndexBufferDesc *ibo, VXPRIMITIVETYPE pType);
     CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKDX11VertexBufferDesc *vbo,
                                                           CKDWORD StartVertex, CKDWORD VertexCount, CKWORD *indices,
                                                           int indexcount);

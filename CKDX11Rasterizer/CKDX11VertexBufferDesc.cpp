@@ -38,3 +38,11 @@ void CKDX11VertexBufferDesc::Unlock(CKDX11RasterizerContext *ctx)
 {
     ctx->m_DeviceContext->Unmap(DxBuffer.Get(), NULL);
 }
+
+void CKDX11VertexBufferDesc::Bind(CKDX11RasterizerContext *ctx)
+{
+    UINT stride = m_VertexSize;
+    UINT offset = 0;
+    ctx->m_DeviceContext->IASetVertexBuffers(0, 1, 
+        DxBuffer.GetAddressOf(), &stride, &offset);
+}

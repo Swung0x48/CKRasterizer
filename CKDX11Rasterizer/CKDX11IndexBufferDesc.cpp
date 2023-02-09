@@ -37,3 +37,8 @@ void CKDX11IndexBufferDesc::Unlock(CKDX11RasterizerContext *ctx)
 {
     ctx->m_DeviceContext->Unmap(DxBuffer.Get(), NULL);
 }
+
+void CKDX11IndexBufferDesc::Bind(CKDX11RasterizerContext *ctx)
+{
+    ctx->m_DeviceContext->IASetIndexBuffer(DxBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
+}

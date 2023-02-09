@@ -716,9 +716,6 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         CKRSTLoadVertexBuffer(static_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
     }
     vbo->Unlock(this);
-    UINT stride = vbo->m_VertexSize;
-    UINT offset = 0;
-    m_DeviceContext->IASetVertexBuffers(0, 1, vbo->DxBuffer.GetAddressOf(), &stride, &offset);
     return InternalDrawPrimitive(pType, vbo, vbase, data->VertexCount, indices, indexcount);
 }
 
@@ -745,79 +742,14 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
                                                         int indexcount)
 {
     ZoneScopedN(__FUNCTION__);
-    D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
-    switch (pType & 0xf)
-    {
-        case VX_LINELIST:
-            topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
-            break;
-        case VX_LINESTRIP:
-            topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
-            break;
-        case VX_TRIANGLELIST:
-            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-            break;
-        case VX_TRIANGLESTRIP:
-            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
-            break;
-        case VX_TRIANGLEFAN:
-            // D3D11 does not support triangle fan, leave it here.
-            // assert(false);
-            // return FALSE;
-            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
-            break;
-        default:
-            break;
-    }
-    m_DeviceContext->IASetPrimitiveTopology(topology);
-    UINT stride = vbo->m_VertexSize;
-    UINT offset = 0;
-    m_DeviceContext->IASetVertexBuffers(0, 1, vbo->DxBuffer.GetAddressOf(), &stride, &offset);
     int ibbasecnt = 0;
+    CKDX11IndexBufferDesc *ibo = nullptr;
     if (indices)
     {
-        CKDX11IndexBufferDesc *ibo = GenerateIB(indices, indexcount, &ibbasecnt);
-        // CKDX11IndexBufferDesc *ibo = nullptr;
-        // void *pdata = nullptr;
-        // auto iboid = m_DynamicIndexBufferCounter++;
-        // if (m_DynamicIndexBufferCounter >= DYNAMIC_IBO_COUNT)
-        //     m_DynamicIndexBufferCounter = 0;
-        // if (!m_DynamicIndexBuffer[iboid] || m_DynamicIndexBuffer[iboid]->m_MaxIndexCount < indexcount)
-        // {
-        //     if (m_DynamicIndexBuffer[iboid])
-        //         delete m_DynamicIndexBuffer[iboid];
-        //     ibo = new CKDX11IndexBufferDesc;
-        //     ibo->m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
-        //     ibo->m_MaxIndexCount = indexcount + 100 < DEFAULT_VB_SIZE ? DEFAULT_VB_SIZE : indexcount + 100;
-        //     ibo->m_CurrentICount = 0;
-        //     if (!ibo->Create(this))
-        //     {
-        //         m_DynamicIndexBuffer[iboid] = nullptr;
-        //         return FALSE;
-        //     }
-        //     m_DynamicIndexBuffer[iboid] = ibo;
-        // }
-        // ibo = m_DynamicIndexBuffer[iboid];
-        // if (indexcount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
-        // {
-        //     pdata = ibo->Lock(this, sizeof(CKWORD) * ibo->m_CurrentICount, sizeof(CKWORD) * indexcount, false);
-        //     ibbasecnt = ibo->m_CurrentICount;
-        //     ibo->m_CurrentICount += indexcount;
-        // }
-        // else
-        // {
-        //     pdata = ibo->Lock(this, 0, sizeof(CKWORD) * indexcount, true);
-        //     ibbasecnt = 0;
-        //     ibo->m_CurrentICount = indexcount;
-        // }
-        // if (pdata)
-        //     memcpy(pdata, indices, sizeof(CKWORD) * indexcount);
-        // ibo->Unlock(this);
-        if (ibo)
-            m_DeviceContext->IASetIndexBuffer(ibo->DxBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
+        ibo = GenerateIB(indices, indexcount, &ibbasecnt);
     }
 
-    AssemblyInput(vbo);
+    AssemblyInput(vbo, ibo, pType);
 
     if (indices)
     {
@@ -851,39 +783,7 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     if (!ibo)
         return FALSE;
 
-    AssemblyInput(vbo);
-
-    m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
-    // UINT vertexOffsetInBytes = 0;
-    // m_DeviceContext->IASetVertexBuffers(0, 1, vbo->DxBuffer.GetAddressOf(),
-    //     (UINT *)&vbo->m_VertexSize, &vertexOffsetInBytes);
-
-    m_DeviceContext->IASetIndexBuffer(ibo->DxBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
-    D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
-    switch (pType & 0xf)
-    {
-        case VX_LINELIST:
-            topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
-            break;
-        case VX_LINESTRIP:
-            topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
-            break;
-        case VX_TRIANGLELIST:
-            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-            break;
-        case VX_TRIANGLESTRIP:
-            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
-            break;
-        case VX_TRIANGLEFAN:
-            // D3D11 does not support triangle fan, leave it here.
-            // assert(false);
-            return FALSE;
-            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
-            break;
-        default:
-            break;
-    }
-    m_DeviceContext->IASetPrimitiveTopology(topology);
+    AssemblyInput(vbo, ibo, pType);
 
 #if LOGGING
     fprintf(stderr, "IA: VB offset: %d, vsize: %d\n", MinVIndex, vbo->m_VertexSize);
@@ -1209,14 +1109,43 @@ CKBOOL CKDX11RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc 
     return succeeded;
 }
 
-void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo)
+void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX11IndexBufferDesc *ibo,
+                                            VXPRIMITIVETYPE pType)
 {
-    HRESULT hr;
-    
-    // if (m_FVF == vbo->m_VertexFormat)
-    //     return; // no need to re-set input layout
     if (!vbo)
         return;
+
+    HRESULT hr;
+    D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+    switch (pType & 0xf)
+    {
+        case VX_LINELIST:
+            topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
+            break;
+        case VX_LINESTRIP:
+            topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
+            break;
+        case VX_TRIANGLELIST:
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+            break;
+        case VX_TRIANGLESTRIP:
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+            break;
+        case VX_TRIANGLEFAN:
+            // D3D11 does not support triangle fan, leave it here.
+            // assert(false);
+            // return FALSE;
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+            break;
+        default:
+            break;
+    }
+    m_DeviceContext->IASetPrimitiveTopology(topology);
+    vbo->Bind(this);
+    if (ibo)
+        ibo->Bind(this);
+    // if (m_FVF == vbo->m_VertexFormat)
+    //     return; // no need to re-set input layout
     CKDWORD VShader;
 #if defined(DEBUG) || defined(_DEBUG)
     try
@@ -1263,5 +1192,6 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo)
     fprintf(stderr, "IA: vs %s\n", vs->DxEntryPoint);
 #endif
     vs->Bind(this);
+    
     m_FVF = vbo->m_VertexFormat;
 }
