@@ -112,7 +112,7 @@ typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
 typedef struct ConstantBufferStruct
 {
     VxMatrix TotalMatrix;
-    // VxMatrix ViewportMatrix;
+    VxMatrix ViewportMatrix;
 } ConstantBufferStruct;
 
 typedef struct CKDX11ConstantBufferDesc

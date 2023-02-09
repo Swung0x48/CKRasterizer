@@ -1,7 +1,7 @@
 #include "CKDX11Rasterizer.h"
 #include "CKDX11RasterizerCommon.h"
 
-#define LOGGING 0
+#define LOGGING 1
 #define STATUS 1
 #define VB_STRICT 0
 
@@ -30,7 +30,7 @@ struct VS_INPUT_COLOR {
 cbuffer CBuf
 {
     matrix total_mat;
-    //matrix viewport_mat;
+    matrix viewport_mat;
 };
 
 VS_OUTPUT VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float2 texcoord: TEXCOORD)
@@ -38,10 +38,9 @@ VS_OUTPUT VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float
     VS_OUTPUT output;
     output.position.xyzw = position.xywz;
     output.position.x = (output.position.x/1024)*2-1;
-    output.position.y = ((output.position.y/768)*2-1);
-    output.position.z = 0.0;
+    output.position.y = -(output.position.y/768)*2+1;
     output.position.w = 1.0;
-    //output.position = mul(output.position, viewport_mat);
+    output.position = mul(output.position, viewport_mat);
     output.color = float4(texcoord, 1.0, 1.0);
     output.texcoord = texcoord;
     return output;
@@ -148,7 +147,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     HRESULT hr;
 
     m_InCreateDestroy = TRUE;
-    SetWindowLongA((HWND)Window, GWL_STYLE, WS_OVERLAPPED | WS_SYSMENU);
+    SetWindowLongA((HWND)Window, GWL_STYLE, WS_OVERLAPPED | WS_SYSMENU | (Fullscreen ? 0 : WS_CHILDWINDOW));
     SetClassLongPtr((HWND)Window, GCLP_HBRBACKGROUND, (LONG)GetStockObject(NULL_BRUSH));
 
     DXGI_SWAP_CHAIN_DESC scd;
@@ -368,14 +367,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     ps->Bind(this);
 
     m_ConstantBuffer.Create(this);
-
-    // m_WorldMatrix = VxMatrix::Identity();
-    // m_ViewMatrix = VxMatrix::Identity();
-    // m_ModelViewMatrix = VxMatrix::Identity();
-    // m_ProjectionMatrix = VxMatrix::Identity();
-    // m_ViewProjMatrix = VxMatrix::Identity();
-    // m_TotalMatrix = VxMatrix::Identity();
-
+    
     m_InCreateDestroy = FALSE;
 
     return SUCCEEDED(hr);
@@ -450,24 +442,47 @@ CKBOOL CKDX11RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 CKBOOL CKDX11RasterizerContext::SetMaterial(CKMaterialData *mat) { return CKRasterizerContext::SetMaterial(mat); }
 
 CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
-    ZeroMemory(&m_Viewport, sizeof(D3D11_VIEWPORT));
+    // ZeroMemory(&m_Viewport, sizeof(D3D11_VIEWPORT));
     m_Viewport.TopLeftX = (FLOAT)data->ViewX;
     m_Viewport.TopLeftY = (FLOAT)data->ViewY;
     m_Viewport.Width = (FLOAT)data->ViewWidth;
     m_Viewport.Height = (FLOAT)data->ViewHeight;
-    m_Viewport.MaxDepth = 1.0f;
-    m_Viewport.MinDepth = 0.0f;
-    //viewport.MaxDepth = data->ViewZMax;
-    //viewport.MinDepth = data->ViewZMin;
+    if (data->ViewZMax <= 1.0 && data->ViewZMin >= 0.0)
+    {
+        m_Viewport.MaxDepth = data->ViewZMax;
+        m_Viewport.MinDepth = data->ViewZMin;
+    }
+    else
+    {
+        m_Viewport.MaxDepth = 1.0f;
+        m_Viewport.MinDepth = 0.0f;
+    }
     m_DeviceContext->RSSetViewports(1, &m_Viewport);
-    //
-    // m_CBuffer.ViewportMatrix = VxMatrix::Identity();
-    // float(*m)[4] = (float(*)[4]) &m_CBuffer.ViewportMatrix;
-    // m[0][0] = 2. / data->ViewWidth;
-    // m[1][1] = 2. / data->ViewHeight;
-    // m[2][2] = 0;
-    // m[3][0] = -(-2. * data->ViewX + data->ViewWidth) / data->ViewWidth;
-    // m[3][1] = (-2. * data->ViewY + data->ViewHeight) / data->ViewHeight;
+    
+    m_CBuffer.ViewportMatrix = VxMatrix::Identity();
+    // float l = m_Viewport.TopLeftX;
+    // float r = m_Viewport.TopLeftX + m_Viewport.Width;
+    // float t = m_Viewport.TopLeftY;
+    // float b = m_Viewport.TopLeftY + m_Viewport.Height;
+    // float f = m_Viewport.MinDepth;
+    // float n = m_Viewport.MaxDepth;
+    // float m[4][4] = {{2.f / (r - l), 0., 0., -(r + l) / (r - l)},
+    //                  {0., 2.f / (t - b), 0., -(t + b) / (t - b)},
+    //                  {0., 0., -2.f / (f - n), -(f + n) / (f - n)},
+    //                  {0., 0., 0., 1.}};
+    float(*m)[4] = (float(*)[4]) &m_CBuffer.ViewportMatrix;
+    m[0][0] = 2. / data->ViewWidth;
+    m[1][1] = 2. / data->ViewHeight;
+    m[2][2] = 0;
+    m[3][0] = -(-2. * data->ViewX + data->ViewWidth) / data->ViewWidth;
+    m[3][1] = (-2. * data->ViewY + data->ViewHeight) / data->ViewHeight;
+    // m_CBuffer.ViewportMatrix[0][0] = m_Viewport.Width / 2.;
+    // m_CBuffer.ViewportMatrix[1][1] = -m_Viewport.Height / 2.;
+    // m_CBuffer.ViewportMatrix[2][2] = m_Viewport.MaxDepth - m_Viewport.MinDepth;
+    // m_CBuffer.ViewportMatrix[3][0] = m_Viewport.TopLeftX + m_Viewport.Width / 2;
+    // m_CBuffer.ViewportMatrix[3][1] = m_Viewport.TopLeftY + m_Viewport.Height / 2;
+    // m_CBuffer.ViewportMatrix[3][2] = m_Viewport.MinDepth;
+    
     return TRUE;
 }
 
@@ -617,7 +632,7 @@ CKDX11IndexBufferDesc* CKDX11RasterizerContext::GenerateIB(void *indices, int in
 
 CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToStrip(int VOffset, int VCount, int *startIndex)
 {
-    std::vector<int> strip_index;
+    std::vector<uint16_t> strip_index;
     // Center at VOffset
     for (int i = 1; i < VCount; ++i)
     {
@@ -632,7 +647,7 @@ CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToStrip(CKWORD *indic
 {
     if (!indices)
         return nullptr;
-    std::vector<int> strip_index;
+    std::vector<uint16_t> strip_index;
     CKWORD center = indices[0];
     for (int i = 1; i < count; ++i)
     {
@@ -746,12 +761,20 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
     CKDX11IndexBufferDesc *ibo = nullptr;
     if (indices)
     {
-        ibo = GenerateIB(indices, indexcount, &ibbasecnt);
+        // if (pType == VX_TRIANGLEFAN)
+        //     ibo = TriangleFanToStrip(indices, indexcount, &ibbasecnt);
+        // else
+            ibo = GenerateIB(indices, indexcount, &ibbasecnt);
     }
+    // else if (pType == VX_TRIANGLEFAN)
+    // {
+    //     ibo = TriangleFanToStrip(0, VertexCount, &ibbasecnt);
+    // }
+
 
     AssemblyInput(vbo, ibo, pType);
 
-    if (indices)
+    if (ibo)
     {
         m_DeviceContext->DrawIndexed(indexcount, ibbasecnt, StartVertex);
 
@@ -1163,14 +1186,7 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX11I
     }
 #endif
     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
-#if LOGGING
-    fprintf(stderr, "IA: Layout: ");
-    for (auto item: vbo->DxInputElementDesc)
-    {
-        fprintf(stderr, "%s | ", item.SemanticName);
-    }
-    fprintf(stderr, ", Size: %d\n", vbo->m_VertexSize);
-#endif
+
     // D3D11_INPUT_ELEMENT_DESC desc[] = {
     //     {"SV_POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
     //     {"COLOR", 0, DXGI_FORMAT_B8G8R8A8_UNORM, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -1181,6 +1197,7 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX11I
         this->UpdateMatrices(WORLD_TRANSFORM);
         // this->UpdateMatrices(VIEW_TRANSFORM);
         Vx3DTransposeMatrix(m_CBuffer.TotalMatrix, m_TotalMatrix);
+        // Vx3DTransposeMatrix(m_CBuffer.ViewportMatrix, m_CBuffer.ViewportMatrix);
         D3D11_MAPPED_SUBRESOURCE ms;
         D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
         memcpy(ms.pData, &m_CBuffer, sizeof(ConstantBufferStruct));
