@@ -247,9 +247,9 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3D11_SAMPLER_DESC SamplerDesc = {};
 
     SamplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    SamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-    SamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-    SamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    SamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    SamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    SamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
     SamplerDesc.MipLODBias = 0.0f;
     SamplerDesc.MaxAnisotropy = 1;
     SamplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
