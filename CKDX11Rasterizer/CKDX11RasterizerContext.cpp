@@ -572,44 +572,50 @@ CKBOOL CKDX11RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const v
 }
 
 
-CKDWORD CKDX11RasterizerContext::GenerateIB(void *indices, int indexCount, int *startIndex)
+CKDX11IndexBufferDesc* CKDX11RasterizerContext::GenerateIB(void *indices, int indexCount, int *startIndex)
 {
     if (!indices)
-        return -1;
-    // m_IBCounter = (m_IBCounter + 1) % m_IndexBuffers.Size();
-    CKDWORD IB = 0;
-    *startIndex = 0;
-    // Prepare index buffer for given IB index
-    auto *ibo = m_IndexBuffers[IB];
-    if (!ibo || ibo->m_MaxIndexCount < indexCount)
+        return nullptr;
+    CKDX11IndexBufferDesc *ibo = nullptr;
+    void *pdata = nullptr;
+    auto iboid = m_DynamicIndexBufferCounter++;
+    if (m_DynamicIndexBufferCounter >= DYNAMIC_IBO_COUNT)
+        m_DynamicIndexBufferCounter = 0;
+    if (!m_DynamicIndexBuffer[iboid] || m_DynamicIndexBuffer[iboid]->m_MaxIndexCount < indexCount)
     {
-        CKIndexBufferDesc desc;
-        desc.m_MaxIndexCount = indexCount + 100 < 4096 ? 4096 : indexCount + 100;
-        desc.m_CurrentICount = 0;
-        desc.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
-        if (!CreateIndexBuffer(IB, &desc))
-            return -1;
-        ibo = m_IndexBuffers[IB];
+        if (m_DynamicIndexBuffer[iboid])
+            delete m_DynamicIndexBuffer[iboid];
+        ibo = new CKDX11IndexBufferDesc;
+        ibo->m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+        ibo->m_MaxIndexCount = indexCount + 100 < DEFAULT_VB_SIZE ? DEFAULT_VB_SIZE : indexCount + 100;
+        ibo->m_CurrentICount = 0;
+        if (!ibo->Create(this))
+        {
+            m_DynamicIndexBuffer[iboid] = nullptr;
+            return FALSE;
+        }
+        m_DynamicIndexBuffer[iboid] = ibo;
     }
-    void *pData = nullptr;
-    if (indexCount + ibo->m_CurrentICount < ibo->m_MaxIndexCount)
+    ibo = m_DynamicIndexBuffer[iboid];
+    if (indexCount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
     {
-        pData = LockIndexBuffer(IB, ibo->m_CurrentICount, indexCount, CKRST_LOCK_NOOVERWRITE);
+        pdata = ibo->Lock(this, sizeof(CKWORD) * ibo->m_CurrentICount, sizeof(CKWORD) * indexCount, false);
         *startIndex = ibo->m_CurrentICount;
         ibo->m_CurrentICount += indexCount;
     }
     else
     {
-        pData = LockIndexBuffer(IB, 0, indexCount, CKRST_LOCK_DISCARD);
+        pdata = ibo->Lock(this, 0, sizeof(CKWORD) * indexCount, true);
+        *startIndex = 0;
         ibo->m_CurrentICount = indexCount;
     }
-    if (pData)
-        memcpy(pData, indices, indexCount * sizeof(CKWORD));
-    UnlockIndexBuffer(IB);
-    return IB;
+    if (pdata)
+        memcpy(pdata, indices, sizeof(CKWORD) * indexCount);
+    ibo->Unlock(this);
+    return ibo;
 }
 
-CKDWORD CKDX11RasterizerContext::TriangleFanToStrip(int VOffset, int VCount, int *startIndex)
+CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToStrip(int VOffset, int VCount, int *startIndex)
 {
     std::vector<int> strip_index;
     // Center at VOffset
@@ -622,10 +628,10 @@ CKDWORD CKDX11RasterizerContext::TriangleFanToStrip(int VOffset, int VCount, int
     return GenerateIB(strip_index.data(), strip_index.size(), startIndex);
 }
 
-CKDWORD CKDX11RasterizerContext::TriangleFanToStrip(CKWORD *indices, int count, int *startIndex)
+CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToStrip(CKWORD *indices, int count, int *startIndex)
 {
     if (!indices)
-        return -1;
+        return nullptr;
     std::vector<int> strip_index;
     CKWORD center = indices[0];
     for (int i = 1; i < count; ++i)
@@ -770,43 +776,45 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
     int ibbasecnt = 0;
     if (indices)
     {
-        CKDX11IndexBufferDesc *ibo = nullptr;
-        void *pdata = nullptr;
-        auto iboid = m_DynamicIndexBufferCounter++;
-        if (m_DynamicIndexBufferCounter >= DYNAMIC_IBO_COUNT)
-            m_DynamicIndexBufferCounter = 0;
-        if (!m_DynamicIndexBuffer[iboid] || m_DynamicIndexBuffer[iboid]->m_MaxIndexCount < indexcount)
-        {
-            if (m_DynamicIndexBuffer[iboid])
-                delete m_DynamicIndexBuffer[iboid];
-            ibo = new CKDX11IndexBufferDesc;
-            ibo->m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
-            ibo->m_MaxIndexCount = indexcount + 100 < DEFAULT_VB_SIZE ? DEFAULT_VB_SIZE : indexcount + 100;
-            ibo->m_CurrentICount = 0;
-            if (!ibo->Create(this))
-            {
-                m_DynamicIndexBuffer[iboid] = nullptr;
-                return FALSE;
-            }
-            m_DynamicIndexBuffer[iboid] = ibo;
-        }
-        ibo = m_DynamicIndexBuffer[iboid];
-        if (indexcount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
-        {
-            pdata = ibo->Lock(this, sizeof(CKWORD) * ibo->m_CurrentICount, sizeof(CKWORD) * indexcount, false);
-            ibbasecnt = ibo->m_CurrentICount;
-            ibo->m_CurrentICount += indexcount;
-        }
-        else
-        {
-            pdata = ibo->Lock(this, 0, sizeof(CKWORD) * indexcount, true);
-            ibbasecnt = 0;
-            ibo->m_CurrentICount = indexcount;
-        }
-        if (pdata)
-            memcpy(pdata, indices, sizeof(CKWORD) * indexcount);
-        ibo->Unlock(this);
-        m_DeviceContext->IASetIndexBuffer(ibo->DxBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
+        CKDX11IndexBufferDesc *ibo = GenerateIB(indices, indexcount, &ibbasecnt);
+        // CKDX11IndexBufferDesc *ibo = nullptr;
+        // void *pdata = nullptr;
+        // auto iboid = m_DynamicIndexBufferCounter++;
+        // if (m_DynamicIndexBufferCounter >= DYNAMIC_IBO_COUNT)
+        //     m_DynamicIndexBufferCounter = 0;
+        // if (!m_DynamicIndexBuffer[iboid] || m_DynamicIndexBuffer[iboid]->m_MaxIndexCount < indexcount)
+        // {
+        //     if (m_DynamicIndexBuffer[iboid])
+        //         delete m_DynamicIndexBuffer[iboid];
+        //     ibo = new CKDX11IndexBufferDesc;
+        //     ibo->m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+        //     ibo->m_MaxIndexCount = indexcount + 100 < DEFAULT_VB_SIZE ? DEFAULT_VB_SIZE : indexcount + 100;
+        //     ibo->m_CurrentICount = 0;
+        //     if (!ibo->Create(this))
+        //     {
+        //         m_DynamicIndexBuffer[iboid] = nullptr;
+        //         return FALSE;
+        //     }
+        //     m_DynamicIndexBuffer[iboid] = ibo;
+        // }
+        // ibo = m_DynamicIndexBuffer[iboid];
+        // if (indexcount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
+        // {
+        //     pdata = ibo->Lock(this, sizeof(CKWORD) * ibo->m_CurrentICount, sizeof(CKWORD) * indexcount, false);
+        //     ibbasecnt = ibo->m_CurrentICount;
+        //     ibo->m_CurrentICount += indexcount;
+        // }
+        // else
+        // {
+        //     pdata = ibo->Lock(this, 0, sizeof(CKWORD) * indexcount, true);
+        //     ibbasecnt = 0;
+        //     ibo->m_CurrentICount = indexcount;
+        // }
+        // if (pdata)
+        //     memcpy(pdata, indices, sizeof(CKWORD) * indexcount);
+        // ibo->Unlock(this);
+        if (ibo)
+            m_DeviceContext->IASetIndexBuffer(ibo->DxBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
     }
 
     AssemblyInput(vbo);
