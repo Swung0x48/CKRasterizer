@@ -489,7 +489,7 @@ CKBOOL CKGLRasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
     m_lights[Light].second = *data;
     if (m_lights[Light].first < MAX_ACTIVE_LIGHTS)
     {
-        m_lights_data[m_lights[Light].first] = CKGLLightUniform(*data);
+        m_lights_data[m_lights[Light].first] = CKGLLightUniform(m_lights[Light].second);
         //m_prgm->update_uniform_block("LightsUniformBlock", m_lights[Light].first * sizeof(CKGLLightUniform), sizeof(CKGLLightUniform), &m_lights_data[m_lights[Light].first]);
         m_prgm->update_uniform_block("LightsUniformBlock", 0, MAX_ACTIVE_LIGHTS * sizeof(CKGLLightUniform) , m_lights_data);
     }

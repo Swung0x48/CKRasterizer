@@ -76,7 +76,9 @@ vec4[3] light_point(light_t l, vec3 normal, vec3 fpos, vec3 vdir, bool spec_enab
     vec3 ldir = normalize(l.pos.xyz - fpos);
     float dist = length(l.pos.xyz - fpos);
     if (dist > range) return vec4[3](vec4(0.), vec4(0.), vec4(0.));
-    float atnf = 1. / (a0 + a1 * dist + a2 * dist * dist);
+    //CK2_3D always gives us DX5 light parameters... thus the DX5 light formula here.
+    dist = 1. - dist / range;
+    float atnf = a0 + (a1 * dist + a2 * dist * dist);
     float diff = max(dot(normal, ldir), 0.);
     vec4 amb = l.ambi * material.ambi;
     vec4 dif = diff * l.diff * material.diff;
@@ -250,6 +252,9 @@ void main()
                     break;
             }
         }
+        lighting_colors[0] = clamp_color(lighting_colors[0]);
+        lighting_colors[1] = clamp_color(lighting_colors[1]);
+        lighting_colors[2] = clamp_color(lighting_colors[2]);
         color = accum_light(lighting_colors);
         lighting_colors_e = vec4[4](lighting_colors[0], lighting_colors[1], lighting_colors[2], vec4(0.));
 #ifdef DEBUG
