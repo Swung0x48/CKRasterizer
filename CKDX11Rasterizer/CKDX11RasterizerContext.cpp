@@ -1,8 +1,8 @@
 #include "CKDX11Rasterizer.h"
 #include "CKDX11RasterizerCommon.h"
 
-#define LOGGING 1
-#define STATUS 1
+#define LOGGING 0
+#define STATUS 0
 #define VB_STRICT 0
 
 #if LOGGING
@@ -769,7 +769,8 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
     // }
 
 
-    AssemblyInput(vbo, ibo, pType);
+    auto succeeded = AssemblyInput(vbo, ibo, pType);
+    assert(succeeded);
 
     if (ibo)
     {
@@ -803,7 +804,8 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     if (!ibo)
         return FALSE;
 
-    AssemblyInput(vbo, ibo, pType);
+    auto succeeded = AssemblyInput(vbo, ibo, pType);
+    assert(succeeded);
 
 #if LOGGING
     fprintf(stderr, "IA: VB offset: %d, vsize: %d\n", MinVIndex, vbo->m_VertexSize);
@@ -1129,11 +1131,11 @@ CKBOOL CKDX11RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc 
     return succeeded;
 }
 
-void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX11IndexBufferDesc *ibo,
+CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX11IndexBufferDesc *ibo,
                                             VXPRIMITIVETYPE pType)
 {
     if (!vbo)
-        return;
+        return FALSE;
 
     HRESULT hr;
     D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
@@ -1179,7 +1181,7 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX11I
         fprintf(stderr, "FVF: 0x%x\n", vbo->m_VertexFormat);
 #endif
         assert(false);
-        return;
+        return FALSE;
     }
 #endif
     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
@@ -1208,4 +1210,5 @@ void CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX11I
     vs->Bind(this);
     
     m_FVF = vbo->m_VertexFormat;
+    return TRUE;
 }
