@@ -274,6 +274,22 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
 
     D3DCall(m_Device->CreateBlendState(&m_BlendStateDesc, m_BlendState.GetAddressOf()));
     m_DeviceContext->OMSetBlendState(m_BlendState.Get(), NULL, 0xFFFFFF);
+
+    // ID3D11RasterizerState *rs = nullptr;
+    // D3D11_RASTERIZER_DESC r;
+    // r.AntialiasedLineEnable = false;
+    // r.CullMode = D3D11_CULL_BACK;
+    // r.DepthBias = 0;
+    // r.DepthBiasClamp = 0.0f;
+    // r.DepthClipEnable = true;
+    // r.FillMode = D3D11_FILL_SOLID;
+    // r.FrontCounterClockwise = true;
+    // r.MultisampleEnable = false;
+    // r.ScissorEnable = false;
+    // r.SlopeScaledDepthBias = 0.0f;
+    // /*if (FAILED(*/ m_Device->CreateRasterizerState(&r, &rs);
+    // m_DeviceContext->RSSetState(rs);
+
     m_Window = (HWND)Window;
 
     m_OriginalTitle.resize(GetWindowTextLengthA(GetAncestor((HWND)Window, GA_ROOT)) + 1);
@@ -635,8 +651,8 @@ CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToList(CKWORD VOffset
     // Center at VOffset
     for (CKWORD i = 2; i < VCount; ++i)
     {
-        strip_index.emplace_back(i - 1 + VOffset);
         strip_index.emplace_back(VOffset);
+        strip_index.emplace_back(i - 1 + VOffset);
         strip_index.emplace_back(i + VOffset);
     }
     if (strip_index.empty())
@@ -654,8 +670,8 @@ CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToList(CKWORD *indice
     CKWORD center = indices[0];
     for (CKWORD i = 2; i < count; ++i)
     {
-        strip_index.emplace_back(indices[i - 1]);
         strip_index.emplace_back(center);
+        strip_index.emplace_back(indices[i - 1]);
         strip_index.emplace_back(indices[i]);
     }
     if (strip_index.empty())
