@@ -20,6 +20,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <XBitArray.h>
 
 #include "FlexibleVertexFormat.h"
 using Microsoft::WRL::ComPtr;
@@ -274,7 +275,11 @@ public:
     ComPtr<ID3D11SamplerState> m_SamplerState;
     ComPtr<ID3D11BlendState> m_BlendState;
     D3D11_BLEND_DESC m_BlendStateDesc;
-    CKBOOL m_BlendDescModified = FALSE;
+    CKBOOL m_BlendDescUpToDate = TRUE;
+
+    ComPtr<ID3D11RasterizerState> m_RasterizerState;
+    D3D11_RASTERIZER_DESC m_RasterizerDesc;
+    CKBOOL m_RasterizerStateUpToDate = TRUE;
 
     D3D_FEATURE_LEVEL m_FeatureLevel;
     D3D11_VIEWPORT m_Viewport;
@@ -314,8 +319,8 @@ public:
     // LPDIRECT3DVERTEXBUFFER9 m_CurrentVertexBufferCache;
     // CKDWORD m_CurrentVertexSizeCache;
 
-    // XBitArray m_StateCacheHitMask;
-    // XBitArray m_StateCacheMissMask;
+    XBitArray m_StateCacheHitMask;
+    XBitArray m_StateCacheMissMask;
 //
 //    //-----------------------------------------------------
 //    // + To do texture rendering, Z-buffers are created when

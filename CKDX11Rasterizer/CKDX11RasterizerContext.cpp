@@ -275,20 +275,19 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(m_Device->CreateBlendState(&m_BlendStateDesc, m_BlendState.GetAddressOf()));
     m_DeviceContext->OMSetBlendState(m_BlendState.Get(), NULL, 0xFFFFFF);
 
-    // ID3D11RasterizerState *rs = nullptr;
-    // D3D11_RASTERIZER_DESC r;
-    // r.AntialiasedLineEnable = false;
-    // r.CullMode = D3D11_CULL_BACK;
-    // r.DepthBias = 0;
-    // r.DepthBiasClamp = 0.0f;
-    // r.DepthClipEnable = true;
-    // r.FillMode = D3D11_FILL_SOLID;
-    // r.FrontCounterClockwise = true;
-    // r.MultisampleEnable = false;
-    // r.ScissorEnable = false;
-    // r.SlopeScaledDepthBias = 0.0f;
-    // /*if (FAILED(*/ m_Device->CreateRasterizerState(&r, &rs);
-    // m_DeviceContext->RSSetState(rs);
+    m_RasterizerDesc.AntialiasedLineEnable = false;
+    m_RasterizerDesc.CullMode = D3D11_CULL_FRONT;
+    m_RasterizerDesc.DepthBias = 0;
+    m_RasterizerDesc.DepthBiasClamp = 0.0f;
+    m_RasterizerDesc.DepthClipEnable = true;
+    m_RasterizerDesc.FillMode = D3D11_FILL_SOLID;
+    m_RasterizerDesc.FrontCounterClockwise = true;
+    m_RasterizerDesc.MultisampleEnable = false;
+    m_RasterizerDesc.ScissorEnable = false;
+    m_RasterizerDesc.SlopeScaledDepthBias = 0.0f;
+    D3DCall(m_Device->CreateRasterizerState(&m_RasterizerDesc, m_RasterizerState.GetAddressOf()));
+    m_DeviceContext->RSSetState(m_RasterizerState.Get());
+    m_RasterizerStateUpToDate = TRUE;
 
     m_Window = (HWND)Window;
 
@@ -380,6 +379,10 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     ps->Bind(this);
 
     m_ConstantBuffer.Create(this);
+
+    SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, 1);
+    SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
+    SetRenderState(VXRENDERSTATE_COLORVERTEX, 0);
     
     m_InCreateDestroy = FALSE;
 
@@ -539,8 +542,57 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
 }
 CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
-    return CKRasterizerContext::SetRenderState(State, Value);
+    if (m_StateCache[State].Flag != 0)
+        return TRUE;
+
+    if (m_StateCache[State].Valid != 0 && m_StateCache[State].Value == Value)
+    {
+        ++m_RenderStateCacheHit;
+        return TRUE;
+    }
+
+    ++m_RenderStateCacheMiss;
+    m_StateCache[State].Value = Value;
+    m_StateCache[State].Valid = 1;
+
+    if (State < m_StateCacheMissMask.Size() && m_StateCacheMissMask.IsSet(State))
+        return FALSE;
+
+    if (State < m_StateCacheHitMask.Size() && m_StateCacheHitMask.IsSet(State))
+    {
+        static D3D11_CULL_MODE VXCullModes[4] = {D3D11_CULL_NONE, D3D11_CULL_NONE, D3D11_CULL_FRONT, D3D11_CULL_BACK};
+        static D3D11_CULL_MODE VXCullModesInverted[4] = {D3D11_CULL_NONE, D3D11_CULL_NONE, D3D11_CULL_BACK,
+                                                         D3D11_CULL_FRONT};
+
+        if (State == VXRENDERSTATE_CULLMODE)
+        {
+            if (!m_InverseWinding)
+            {
+                m_RasterizerDesc.CullMode = VXCullModes[Value];
+                m_RasterizerStateUpToDate = FALSE;
+                return TRUE;
+            }
+            else
+            {
+                m_RasterizerDesc.CullMode = VXCullModesInverted[Value];
+                m_RasterizerStateUpToDate = FALSE;
+                return TRUE;
+            }
+        }
+        if (State == VXRENDERSTATE_INVERSEWINDING)
+        {
+            m_InverseWinding = Value != 0;
+            m_StateCache[VXRENDERSTATE_CULLMODE].Valid = 0;
+        }
+        return TRUE;
+    }
+
+    // TODO: Handle other states
+    return TRUE;
+    // return SUCCEEDED(m_Device->SetRenderState((D3DRENDERSTATETYPE)State, Value));
 }
+
+
 CKBOOL CKDX11RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *Value)
 {
     return CKRasterizerContext::GetRenderState(State, Value);
@@ -1238,5 +1290,8 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
     vs->Bind(this);
     
     m_FVF = vbo->m_VertexFormat;
+
+    if (!m_RasterizerStateUpToDate)
+        m_DeviceContext->RSSetState(m_RasterizerState.Get());
     return TRUE;
 }
