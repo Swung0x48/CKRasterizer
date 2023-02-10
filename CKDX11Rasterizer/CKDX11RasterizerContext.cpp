@@ -2,7 +2,7 @@
 #include "CKDX11RasterizerCommon.h"
 
 #define LOGGING 0
-#define STATUS 0
+#define STATUS 1
 #define VB_STRICT 0
 
 #if LOGGING
@@ -444,16 +444,18 @@ CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
     m_Viewport.TopLeftY = (FLOAT)data->ViewY;
     m_Viewport.Width = (FLOAT)data->ViewWidth;
     m_Viewport.Height = (FLOAT)data->ViewHeight;
-    if (data->ViewZMax <= 1.0 && data->ViewZMin >= 0.0)
-    {
-        m_Viewport.MaxDepth = data->ViewZMax;
-        m_Viewport.MinDepth = data->ViewZMin;
-    }
-    else
-    {
-        m_Viewport.MaxDepth = 1.0f;
-        m_Viewport.MinDepth = 0.0f;
-    }
+    // if (data->ViewZMax <= 1.0 && data->ViewZMin >= 0.0)
+    // {
+    //     m_Viewport.MaxDepth = data->ViewZMax;
+    //     m_Viewport.MinDepth = data->ViewZMin;
+    // }
+    // else
+    // {
+    //     m_Viewport.MaxDepth = 1.0f;
+    //     m_Viewport.MinDepth = 0.0f;
+    // }
+    m_Viewport.MaxDepth = 1.0f;
+    m_Viewport.MinDepth = 0.0f;
     m_DeviceContext->RSSetViewports(1, &m_Viewport);
     
     m_CBuffer.ViewportMatrix = VxMatrix::Identity();
@@ -627,31 +629,38 @@ CKDX11IndexBufferDesc* CKDX11RasterizerContext::GenerateIB(void *indices, int in
     return ibo;
 }
 
-CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToStrip(int VOffset, int VCount, int *startIndex)
+CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToList(CKWORD VOffset, CKDWORD VCount, int *startIndex, int* newIndexCount)
 {
-    std::vector<uint16_t> strip_index;
+    std::vector<CKWORD> strip_index;
     // Center at VOffset
-    for (int i = 1; i < VCount; ++i)
+    for (CKWORD i = 2; i < VCount; ++i)
     {
-        strip_index.emplace_back(i + VOffset);
+        strip_index.emplace_back(i - 1 + VOffset);
         strip_index.emplace_back(VOffset);
+        strip_index.emplace_back(i + VOffset);
     }
-    strip_index.pop_back();
+    if (strip_index.empty())
+        return nullptr;
+    *newIndexCount = strip_index.size();
     return GenerateIB(strip_index.data(), strip_index.size(), startIndex);
 }
 
-CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToStrip(CKWORD *indices, int count, int *startIndex)
+CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToList(CKWORD *indices, int count, int *startIndex,
+                                                                  int *newIndexCount)
 {
     if (!indices)
         return nullptr;
-    std::vector<uint16_t> strip_index;
+    std::vector<CKWORD> strip_index;
     CKWORD center = indices[0];
-    for (int i = 1; i < count; ++i)
+    for (CKWORD i = 2; i < count; ++i)
     {
-        strip_index.emplace_back(indices[i]);
+        strip_index.emplace_back(indices[i - 1]);
         strip_index.emplace_back(center);
+        strip_index.emplace_back(indices[i]);
     }
-    strip_index.pop_back();
+    if (strip_index.empty())
+        return nullptr;
+    *newIndexCount = strip_index.size();
     return GenerateIB(strip_index.data(), strip_index.size(), startIndex);
 }
 
@@ -756,18 +765,21 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
     ZoneScopedN(__FUNCTION__);
     int ibbasecnt = 0;
     CKDX11IndexBufferDesc *ibo = nullptr;
+    int newIndexCount;
     if (indices)
     {
-        // if (pType == VX_TRIANGLEFAN)
-        //     ibo = TriangleFanToStrip(indices, indexcount, &ibbasecnt);
-        // else
+        if (pType == VX_TRIANGLEFAN)
+            ibo = TriangleFanToList(indices, indexcount, &ibbasecnt, &newIndexCount);
+        else
             ibo = GenerateIB(indices, indexcount, &ibbasecnt);
     }
-    // else if (pType == VX_TRIANGLEFAN)
-    // {
-    //     ibo = TriangleFanToStrip(0, VertexCount, &ibbasecnt);
-    // }
+    else if (pType == VX_TRIANGLEFAN)
+    {
+        ibo = TriangleFanToList(0, VertexCount, &ibbasecnt, &newIndexCount);
+    }
 
+    if (pType == VX_TRIANGLEFAN)
+        indexcount = newIndexCount;
 
     auto succeeded = AssemblyInput(vbo, ibo, pType);
     assert(succeeded);
@@ -1157,7 +1169,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
             // D3D11 does not support triangle fan, leave it here.
             // assert(false);
             // return FALSE;
-            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+            topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
             break;
         default:
             break;

@@ -246,8 +246,8 @@ protected:
 
     CKDX11IndexBufferDesc* GenerateIB(void *indices, int indexcount, int *startIndex);
 
-    CKDX11IndexBufferDesc *TriangleFanToStrip(int VOffset, int VCount, int *startIndex);
-    CKDX11IndexBufferDesc *TriangleFanToStrip(CKWORD *indices, int count, int *startIndex);
+    CKDX11IndexBufferDesc *TriangleFanToList(CKWORD VOffset, CKDWORD VCount, int *startIndex, int* newIndexCount);
+    CKDX11IndexBufferDesc *TriangleFanToList(CKWORD *indices, int count, int *startIndex, int *newIndexCount);
     void SetTitleStatus(const char *fmt, ...);
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
