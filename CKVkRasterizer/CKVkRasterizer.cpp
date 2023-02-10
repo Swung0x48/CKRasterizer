@@ -135,15 +135,15 @@ XBOOL CKVkRasterizer::Start(WIN_HANDLE AppWnd)
         pqidx = ~0U;
         for (size_t i = 0; i < qf.size(); ++i)
         {
+            VkBool32 pres = false;
+            vkGetPhysicalDeviceSurfaceSupportKHR(phydev, i, sacs, &pres);
+            if (pres)
+                pqidx = i;
             if (qf[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
             {
                 gqidx = i;
                 break;
             }
-            VkBool32 pres = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(phydev, i, sacs, &pres);
-            if (pres)
-                pqidx = i;
         }
         return ~gqidx;
     };

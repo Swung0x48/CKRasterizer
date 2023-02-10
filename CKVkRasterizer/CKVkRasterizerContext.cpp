@@ -86,26 +86,6 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     swchc.imageArrayLayers = 1;
     swchc.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    auto select_qf = [this](const VkPhysicalDevice &phydev, uint32_t &gfxq, uint32_t &presq) {
-        uint32_t nqf = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(phydev, &nqf, nullptr);
-        std::vector<VkQueueFamilyProperties> qf(nqf);
-        vkGetPhysicalDeviceQueueFamilyProperties(phydev, &nqf, qf.data());
-        for (size_t i = 0; i < qf.size(); ++i)
-        {
-            //!!TODO: check present support?
-            if (qf[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
-            {
-                gfxq = i;
-                break;
-            }
-            VkBool32 pres = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(phydev, i, vksurface, &pres);
-            if (pres)
-                presq = i;
-        }
-    };
-
     uint32_t qfidx[2] = {gqidx, pqidx};
     vkGetDeviceQueue(vkdev, gqidx, 0, &gfxq);
     vkGetDeviceQueue(vkdev, pqidx, 0, &prsq);
