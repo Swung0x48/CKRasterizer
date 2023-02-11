@@ -25,10 +25,19 @@ CKBOOL CKDX11VertexShaderDesc::Create(CKDX11RasterizerContext* ctx)
     bool succeeded = FVF::CreateInputLayoutFromFVF(DxFVF, DxInputElementDesc);
     if (!succeeded)
         return FALSE;
-    D3DCall(ctx->m_Device->CreateInputLayout(DxInputElementDesc.data(), DxInputElementDesc.size(),
-                                             DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(),
-                                             DxInputLayout.GetAddressOf()));
-    D3DCall(ctx->m_Device->CreateVertexShader(DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(), nullptr, &DxShader));
+    // if (DxBlob->GetBufferPointer() != nullptr)
+    // {
+    //     D3DCall(ctx->m_Device->CreateInputLayout(DxInputElementDesc.data(), DxInputElementDesc.size(),
+    //                                              DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(),
+    //                                              DxInputLayout.GetAddressOf()));
+    //     D3DCall(ctx->m_Device->CreateVertexShader(DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(), nullptr, &DxShader));
+    // } else
+    // {
+        D3DCall(ctx->m_Device->CreateInputLayout(DxInputElementDesc.data(), DxInputElementDesc.size(),
+                                                 m_Function, m_FunctionSize,
+                                                 DxInputLayout.GetAddressOf()));
+        D3DCall(ctx->m_Device->CreateVertexShader(m_Function, m_FunctionSize, nullptr, &DxShader));
+    // }
     return SUCCEEDED(hr);
 }
 

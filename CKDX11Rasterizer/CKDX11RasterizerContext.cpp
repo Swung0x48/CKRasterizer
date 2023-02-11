@@ -12,7 +12,7 @@
 
 #define LOGGING 0
 #define STATUS 1
-#define VB_STRICT 0
+#define VB_STRICT 1
 
 #if LOGGING
 #include <conio.h>

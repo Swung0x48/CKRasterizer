@@ -21,7 +21,8 @@ CKBOOL CKDX11PixelShaderDesc::Compile(CKDX11RasterizerContext *ctx)
 CKBOOL CKDX11PixelShaderDesc::Create(CKDX11RasterizerContext *ctx)
 {
     HRESULT hr;
-    D3DCall(ctx->m_Device->CreatePixelShader(DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(), nullptr, &DxShader));
+    // D3DCall(ctx->m_Device->CreatePixelShader(DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(), nullptr, &DxShader));
+    D3DCall(ctx->m_Device->CreatePixelShader(m_Function, m_FunctionSize, nullptr, &DxShader));
     return SUCCEEDED(hr);
 }
 
