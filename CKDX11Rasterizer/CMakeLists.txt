@@ -47,6 +47,41 @@ else()
     
 endif()
 
+# Build HLSL shaders
+add_custom_target(shaders)
+
+file(GLOB HLSL_VSHADER_FILES
+    "VShader*.hlsl"
+)
+
+file(GLOB HLSL_PSHADER_FILES
+    "PShader.hlsl"
+)
+
+set(HLSL_SHADER_FILES
+    ${HLSL_VSHADER_FILES}
+    ${HLSL_PSHADER_FILES}
+)
+
+set_source_files_properties(${HLSL_VSHADER_FILES} PROPERTIES ShaderType "vs")
+set_source_files_properties(${HLSL_PSHADER_FILES} PROPERTIES ShaderType "ps")
+set_source_files_properties(${HLSL_SHADER_FILES} PROPERTIES ShaderModel "4_0")
+
+set(COMPILED_SHADERS_PATH ${CMAKE_BINARY_DIR}/shaderblob)
+file(MAKE_DIRECTORY ${COMPILED_SHADERS_PATH})
+
+foreach(FILE ${HLSL_SHADER_FILES})
+  get_filename_component(FILE_WE ${FILE} NAME_WE)
+  get_source_file_property(shadertype ${FILE} ShaderType)
+  get_source_file_property(shadermodel ${FILE} ShaderModel)
+  message(STATUS "${shadertype}_${shadermodel}: ${FILE} ${FILE_WE}")
+  add_custom_command(TARGET shaders
+                     COMMAND fxc.exe /nologo /E${FILE_WE} /T${shadertype}_${shadermodel} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fh ${COMPILED_SHADERS_PATH}/${FILE_WE}.h /Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb ${FILE}
+                     MAIN_DEPENDENCY ${FILE}
+                     COMMENT "Compiling HLSL: ${shadertype}_${shadermodel}: ${FILE} ${FILE_WE}\n"
+                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                     VERBATIM)
+endforeach(FILE)
 
 file(GLOB CKDX11_RASTERIZER_SRC
     "*.h"
@@ -57,7 +92,9 @@ message(STATUS "DirectX11_INCLUDE_DIR=${DirectX11_INCLUDE_DIR}")
 message(STATUS "DirectX11_LIBRARY=${DirectX11_LIBRARIES}")
 include_directories(${DirectX11_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_LIST_DIR}/../vendor/DirectXMesh/Utilities/)
+include_directories(${COMPILED_SHADERS_PATH})
 add_library(${PROJECT_NAME} SHARED ${CKDX11_RASTERIZER_SRC})
+add_dependencies(${PROJECT_NAME} shaders)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${DirectX11_LIBRARY})
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)

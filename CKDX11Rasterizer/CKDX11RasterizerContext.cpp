@@ -1,6 +1,15 @@
 #include "CKDX11Rasterizer.h"
 #include "CKDX11RasterizerCommon.h"
 
+#include "VShaderColor.h"
+#include "VShaderNormal.h"
+#include "VShaderSpec.h"
+#include "VShader0x102.h"
+#include "VShader0x142.h"
+#include "VShader0x1c4.h"
+#include "VShader0x42.h"
+#include "PShader.h"
+
 #define LOGGING 0
 #define STATUS 1
 #define VB_STRICT 0
@@ -22,9 +31,6 @@ struct VS_OUTPUT
     float4 position : SV_POSITION;
     float4 color : COLOR;
     float2 texcoord: TEXCOORD;
-};
-
-struct VS_INPUT_COLOR {
 };
 
 cbuffer CBuf
@@ -309,55 +315,55 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     CKDWORD vs_color_idx = 0, vs_normal_idx = 1, vs_spec_idx = 2, vs_0x102_idx = 3, vs_0x142_idx = 4, vs_0x1c4_idx = 5, vs_0x42_idx = 6;
     CKDWORD ps_idx = 0;
     CKDX11VertexShaderDesc vs_desc;
-    vs_desc.m_Function = (CKDWORD*)shader;
-    vs_desc.m_FunctionSize = strlen(shader);
+    vs_desc.m_Function = (CKDWORD*)g_VShaderColor;
+    vs_desc.m_FunctionSize = sizeof(g_VShaderColor);
     vs_desc.DxEntryPoint = "VShaderColor";
     vs_desc.DxFVF = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
     CreateObject(vs_color_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc);
 
     CKDX11PixelShaderDesc ps_desc;
-    ps_desc.m_Function = (CKDWORD *)shader;
-    ps_desc.m_FunctionSize = strlen(shader);
+    ps_desc.m_Function = (CKDWORD *)g_PShader;
+    ps_desc.m_FunctionSize = sizeof(g_PShader);
     CreateObject(ps_idx, CKRST_OBJ_PIXELSHADER, &ps_desc);
 
     CKDX11VertexShaderDesc vs_desc_normal;
-    vs_desc_normal.m_Function = (CKDWORD *)shader;
-    vs_desc_normal.m_FunctionSize = strlen(shader);
+    vs_desc_normal.m_Function = (CKDWORD *)g_VShaderNormal;
+    vs_desc_normal.m_FunctionSize = sizeof(g_VShaderNormal);
     vs_desc_normal.DxEntryPoint = "VShaderNormal";
     vs_desc_normal.DxFVF = CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1;
     CreateObject(vs_normal_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc_normal);
 
     CKDX11VertexShaderDesc vs_spec_normal;
-    vs_spec_normal.m_Function = (CKDWORD *)shader;
-    vs_spec_normal.m_FunctionSize = strlen(shader);
+    vs_spec_normal.m_Function = (CKDWORD *)g_VShaderSpec;
+    vs_spec_normal.m_FunctionSize = sizeof(g_VShaderSpec);
     vs_spec_normal.DxEntryPoint = "VShaderSpec";
     vs_spec_normal.DxFVF = CKRST_VF_POSITION | CKRST_VF_SPECULAR | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
     CreateObject(vs_spec_idx, CKRST_OBJ_VERTEXSHADER, &vs_spec_normal);
 
     CKDX11VertexShaderDesc vs_0x102;
-    vs_0x102.m_Function = (CKDWORD *)shader;
-    vs_0x102.m_FunctionSize = strlen(shader);
+    vs_0x102.m_Function = (CKDWORD *)g_VShader0x102;
+    vs_0x102.m_FunctionSize = sizeof(g_VShader0x102);
     vs_0x102.DxEntryPoint = "VShader0x102";
     vs_0x102.DxFVF = CKRST_VF_POSITION | CKRST_VF_TEX1;
     CreateObject(vs_0x102_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x102);
 
     CKDX11VertexShaderDesc vs_0x142;
-    vs_0x142.m_Function = (CKDWORD *)shader;
-    vs_0x142.m_FunctionSize = strlen(shader);
+    vs_0x142.m_Function = (CKDWORD *)g_VShader0x142;
+    vs_0x142.m_FunctionSize = sizeof(g_VShader0x142);
     vs_0x142.DxEntryPoint = "VShader0x142";
     vs_0x142.DxFVF = CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
     CreateObject(vs_0x142_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x142);
 
     CKDX11VertexShaderDesc vs_0x1c4;
-    vs_0x1c4.m_Function = (CKDWORD *)shader;
-    vs_0x1c4.m_FunctionSize = strlen(shader);
+    vs_0x1c4.m_Function = (CKDWORD *)g_VShader0x1c4;
+    vs_0x1c4.m_FunctionSize = sizeof(g_VShader0x1c4);
     vs_0x1c4.DxEntryPoint = "VShader0x1c4";
     vs_0x1c4.DxFVF = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1;
     CreateObject(vs_0x1c4_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x1c4);
 
     CKDX11VertexShaderDesc vs_0x42;
-    vs_0x42.m_Function = (CKDWORD *)shader;
-    vs_0x42.m_FunctionSize = strlen(shader);
+    vs_0x42.m_Function = (CKDWORD *)g_VShader0x42;
+    vs_0x42.m_FunctionSize = sizeof(g_VShader0x42);
     vs_0x42.DxEntryPoint = "VShader0x42";
     vs_0x42.DxFVF = CKRST_VF_POSITION | CKRST_VF_DIFFUSE;
     CreateObject(vs_0x42_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x42);
@@ -426,7 +432,8 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
 #endif
     HRESULT hr;
     
-    D3DCall(m_Swapchain->Present(vsync ? 1 : 0, (m_AllowTearing && !m_Fullscreen && !vsync) ? DXGI_PRESENT_ALLOW_TEARING : 0));
+    D3DCall(m_Swapchain->Present(vsync ? 1 : 0, 
+        (m_AllowTearing && !m_Fullscreen && !vsync) ? DXGI_PRESENT_ALLOW_TEARING : 0));
     return SUCCEEDED(hr);
 }
 
@@ -1234,9 +1241,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
             topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
             break;
         case VX_TRIANGLEFAN:
-            // D3D11 does not support triangle fan, leave it here.
-            // assert(false);
-            // return FALSE;
+            // D3D11 does not support triangle fan, turn it into triangle list
             topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
             break;
         default:

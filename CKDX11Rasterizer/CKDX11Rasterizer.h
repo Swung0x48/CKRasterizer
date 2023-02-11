@@ -95,6 +95,7 @@ typedef struct CKDX11VertexShaderDesc : public CKVertexShaderDesc
     CKDWORD DxFVF;
     std::vector<D3D11_INPUT_ELEMENT_DESC> DxInputElementDesc;
     ComPtr<ID3D11InputLayout> DxInputLayout;
+    virtual CKBOOL Compile(CKDX11RasterizerContext *ctx);
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
     virtual void Bind(CKDX11RasterizerContext *ctx);
 } CKDX11VertexShaderDesc;
@@ -106,6 +107,7 @@ typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
     LPCSTR DxEntryPoint = "PShader";
     LPCSTR DxTarget = "ps_4_0";
     ComPtr<ID3DBlob> DxErrorMsgs;
+    virtual CKBOOL Compile(CKDX11RasterizerContext *ctx);
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
     virtual void Bind(CKDX11RasterizerContext *ctx);
 } CKDX11PixelShaderDesc;

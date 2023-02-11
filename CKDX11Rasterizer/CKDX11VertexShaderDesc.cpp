@@ -1,7 +1,7 @@
 #include "CKDX11Rasterizer.h"
 #include "CKDX11RasterizerCommon.h"
 
-CKBOOL CKDX11VertexShaderDesc::Create(CKDX11RasterizerContext *ctx)
+CKBOOL CKDX11VertexShaderDesc::Compile(CKDX11RasterizerContext *ctx)
 {
     HRESULT hr;
 
@@ -16,6 +16,12 @@ CKBOOL CKDX11VertexShaderDesc::Create(CKDX11RasterizerContext *ctx)
         const char *errorMsg = (const char *)DxErrorMsgs->GetBufferPointer();
         MessageBox(nullptr, errorMsg, TEXT("Vertex Shader Compilation Error"), MB_RETRYCANCEL);
     }
+    return Create(ctx);
+}
+
+CKBOOL CKDX11VertexShaderDesc::Create(CKDX11RasterizerContext* ctx)
+{
+    HRESULT hr;
     bool succeeded = FVF::CreateInputLayoutFromFVF(DxFVF, DxInputElementDesc);
     if (!succeeded)
         return FALSE;
@@ -23,7 +29,6 @@ CKBOOL CKDX11VertexShaderDesc::Create(CKDX11RasterizerContext *ctx)
                                              DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(),
                                              DxInputLayout.GetAddressOf()));
     D3DCall(ctx->m_Device->CreateVertexShader(DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(), nullptr, &DxShader));
-    
     return SUCCEEDED(hr);
 }
 

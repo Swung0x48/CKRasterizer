@@ -1,7 +1,7 @@
 #include "CKDX11Rasterizer.h"
 #include "CKDX11RasterizerCommon.h"
 
-CKBOOL CKDX11PixelShaderDesc::Create(CKDX11RasterizerContext *ctx)
+CKBOOL CKDX11PixelShaderDesc::Compile(CKDX11RasterizerContext *ctx)
 {
     HRESULT hr;
     UINT flag1 = 0;
@@ -15,8 +15,13 @@ CKBOOL CKDX11PixelShaderDesc::Create(CKDX11RasterizerContext *ctx)
         const char *errorMsg = (const char *)DxErrorMsgs->GetBufferPointer();
         MessageBox(nullptr, errorMsg, TEXT("Pixel Shader Compilation Error"), MB_RETRYCANCEL);
     }
+    return Create(ctx);
+}
+
+CKBOOL CKDX11PixelShaderDesc::Create(CKDX11RasterizerContext *ctx)
+{
+    HRESULT hr;
     D3DCall(ctx->m_Device->CreatePixelShader(DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(), nullptr, &DxShader));
-    
     return SUCCEEDED(hr);
 }
 
