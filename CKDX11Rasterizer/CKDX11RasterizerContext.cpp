@@ -25,96 +25,6 @@ static int vbbat = 0;
 static int vbibbat = 0;
 #endif
 
-static const char *shader = R"(
-struct VS_OUTPUT
-{
-    float4 position : SV_POSITION;
-    float4 color : COLOR;
-    float2 texcoord: TEXCOORD;
-};
-
-cbuffer CBuf
-{
-    matrix total_mat;
-    matrix viewport_mat;
-};
-
-VS_OUTPUT VShaderColor(float4 position : SV_POSITION, float4 color: COLOR, float2 texcoord: TEXCOORD)
-{
-    VS_OUTPUT output;
-    output.position = float4(position.x, -position.y, position.w, 1.0);
-    output.position = mul(viewport_mat, output.position);
-    output.color = float4(texcoord, 1.0, 1.0);
-    output.texcoord = texcoord;
-    return output;
-}
-
-
-VS_OUTPUT VShaderNormal(float3 position : SV_POSITION, float3 normal: NORMAL, float2 texcoord: TEXCOORD)
-{
-    VS_OUTPUT output;
-    float4 pos4 = float4(position, 1.0);
-    output.position = mul(pos4, total_mat);
-    output.color = float4(texcoord, 1.0, 1.0);
-    output.texcoord = texcoord;
-    return output;
-}
-
-VS_OUTPUT VShaderSpec(float3 position : SV_POSITION, float4 diffuse: COLOR, float4 specular: COLOR, float2 texcoord: TEXCOORD)
-{
-    VS_OUTPUT output;
-    float4 pos4 = float4(position, 1.0);
-    output.position = mul(pos4, total_mat);
-    output.color = float4(texcoord, 1.0, 1.0);
-    output.texcoord = texcoord;
-    return output;
-}
-
-VS_OUTPUT VShader0x102(float3 position : SV_POSITION, float2 texcoord: TEXCOORD) {
-    VS_OUTPUT output;
-    float4 pos4 = float4(position, 1.0);
-    output.position = mul(pos4, total_mat);
-    output.color = float4(texcoord, 1.0, 1.0);
-    output.texcoord = texcoord;
-    return output;
-}
-
-VS_OUTPUT VShader0x142(float3 position : SV_POSITION, float4 diffuse: COLOR, float2 texcoord: TEXCOORD) {
-    VS_OUTPUT output;
-    float4 pos4 = float4(position, 1.0);
-    output.position = mul(pos4, total_mat);
-    output.color = float4(texcoord, 1.0, 1.0);
-    output.texcoord = texcoord;
-    return output;
-}
-
-VS_OUTPUT VShader0x1c4(float3 position : SV_POSITION, float4 diffuse: COLOR, float4 specular: COLOR, float2 texcoord: TEXCOORD) {
-    VS_OUTPUT output;
-    float4 pos4 = float4(position, 1.0);
-    output.position = mul(pos4, total_mat);
-    output.color = float4(texcoord, 1.0, 1.0);
-    output.texcoord = texcoord;
-    return output;
-}
-
-VS_OUTPUT VShader0x42(float3 position : SV_POSITION, float4 diffuse: COLOR) {
-    VS_OUTPUT output;
-    float4 pos4 = float4(position, 1.0);
-    output.position = mul(pos4, total_mat);
-    output.color = float4(1.0, 1.0, 1.0, 1.0);
-    output.texcoord = float2(0.0, 0.0);
-    return output;
-}
-
-Texture2D texture2d;
-SamplerState sampler_st;
-float4 PShader(float4 position : SV_POSITION, float4 color : COLOR, float2 texcoord: TEXCOORD) : SV_TARGET
-{
-    //if (texcoord.x == 0.0 && texcoord.y == 0)
-        //return color;
-    return texture2d.Sample(sampler_st, float2(texcoord.x, 1 - texcoord.y));
-}
-)";
 CKDX11RasterizerContext::CKDX11RasterizerContext() { CKRasterizerContext::CKRasterizerContext(); }
 CKDX11RasterizerContext::~CKDX11RasterizerContext() {}
 
@@ -485,29 +395,12 @@ CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
     m_DeviceContext->RSSetViewports(1, &m_Viewport);
     
     m_CBuffer.ViewportMatrix = VxMatrix::Identity();
-    // float l = m_Viewport.TopLeftX;
-    // float r = m_Viewport.TopLeftX + m_Viewport.Width;
-    // float t = m_Viewport.TopLeftY;
-    // float b = m_Viewport.TopLeftY + m_Viewport.Height;
-    // float f = m_Viewport.MinDepth;
-    // float n = m_Viewport.MaxDepth;
-    // float m[4][4] = {{2.f / (r - l), 0., 0., -(r + l) / (r - l)},
-    //                  {0., 2.f / (t - b), 0., -(t + b) / (t - b)},
-    //                  {0., 0., -2.f / (f - n), -(f + n) / (f - n)},
-    //                  {0., 0., 0., 1.}};
     float(*m)[4] = (float(*)[4]) &m_CBuffer.ViewportMatrix;
     m[0][0] = 2. / data->ViewWidth;
     m[1][1] = 2. / data->ViewHeight;
     m[2][2] = 0;
     m[3][0] = -(-2. * data->ViewX + data->ViewWidth) / data->ViewWidth;
     m[3][1] = (-2. * data->ViewY + data->ViewHeight) / data->ViewHeight;
-    // m_CBuffer.ViewportMatrix[0][0] = m_Viewport.Width / 2.;
-    // m_CBuffer.ViewportMatrix[1][1] = -m_Viewport.Height / 2.;
-    // m_CBuffer.ViewportMatrix[2][2] = m_Viewport.MaxDepth - m_Viewport.MinDepth;
-    // m_CBuffer.ViewportMatrix[3][0] = m_Viewport.TopLeftX + m_Viewport.Width / 2;
-    // m_CBuffer.ViewportMatrix[3][1] = m_Viewport.TopLeftY + m_Viewport.Height / 2;
-    // m_CBuffer.ViewportMatrix[3][2] = m_Viewport.MinDepth;
-    
     return TRUE;
 }
 
@@ -763,9 +656,6 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 
     CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
     auto *vbo = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
-    // if (++m_DirectVertexBufferCounter >= DYNAMIC_VBO_COUNT)
-    //     m_DirectVertexBufferCounter = 0;
-    // auto* vbo = m_DynamicVertexBuffer[m_DirectVertexBufferCounter];
     if (vbo && vbo->m_MaxVertexCount < data->VertexCount)
     {
         delete vbo;
@@ -1270,13 +1160,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
     }
 #endif
     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
-
-    // D3D11_INPUT_ELEMENT_DESC desc[] = {
-    //     {"SV_POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-    //     {"COLOR", 0, DXGI_FORMAT_B8G8R8A8_UNORM, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
-    //     {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, ~0U, D3D11_INPUT_PER_VERTEX_DATA, 0},
-    // };
-    // m_DeviceContext->IASetInputLayout(m_InputLayout.Get());
+    
     {
         this->UpdateMatrices(WORLD_TRANSFORM);
         // this->UpdateMatrices(VIEW_TRANSFORM);
