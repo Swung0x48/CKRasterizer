@@ -375,21 +375,10 @@ CKBOOL CKDX11RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 CKBOOL CKDX11RasterizerContext::SetMaterial(CKMaterialData *mat) { return CKRasterizerContext::SetMaterial(mat); }
 
 CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
-    // ZeroMemory(&m_Viewport, sizeof(D3D11_VIEWPORT));
     m_Viewport.TopLeftX = (FLOAT)data->ViewX;
     m_Viewport.TopLeftY = (FLOAT)data->ViewY;
     m_Viewport.Width = (FLOAT)data->ViewWidth;
     m_Viewport.Height = (FLOAT)data->ViewHeight;
-    // if (data->ViewZMax <= 1.0 && data->ViewZMin >= 0.0)
-    // {
-    //     m_Viewport.MaxDepth = data->ViewZMax;
-    //     m_Viewport.MinDepth = data->ViewZMin;
-    // }
-    // else
-    // {
-    //     m_Viewport.MaxDepth = 1.0f;
-    //     m_Viewport.MinDepth = 0.0f;
-    // }
     m_Viewport.MaxDepth = 1.0f;
     m_Viewport.MinDepth = 0.0f;
     m_DeviceContext->RSSetViewports(1, &m_Viewport);
