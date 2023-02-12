@@ -4,7 +4,7 @@
 CKBOOL CKDX11IndexBufferDesc::Create(CKDX11RasterizerContext *ctx)
 {
     HRESULT hr;
-    D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
+    D3D11_USAGE usage = D3D11_USAGE_DYNAMIC; // TODO: handle immutable buffer
     D3D11_CPU_ACCESS_FLAG flag = D3D11_CPU_ACCESS_WRITE;
     if (m_Flags & CKRST_VB_DYNAMIC)
         usage = D3D11_USAGE_DYNAMIC;
