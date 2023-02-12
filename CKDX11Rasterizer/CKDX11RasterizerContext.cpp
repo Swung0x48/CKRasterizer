@@ -120,32 +120,32 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     descDepth.MiscFlags = 0;
     D3DCall(m_Device->CreateTexture2D(&descDepth, NULL, &pBuffer));
 
-    D3D11_DEPTH_STENCIL_DESC dsDesc;
+    // D3D11_DEPTH_STENCIL_DESC dsDesc;
 
     // Depth test parameters
-    dsDesc.DepthEnable = true;
-    dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-    dsDesc.DepthFunc = D3D11_COMPARISON_LESS;
+    m_DepthStencilDesc.DepthEnable = true;
+    m_DepthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+    m_DepthStencilDesc.DepthFunc = D3D11_COMPARISON_LESS;
 
     // Stencil test parameters
-    dsDesc.StencilEnable = true;
-    dsDesc.StencilReadMask = 0xFF;
-    dsDesc.StencilWriteMask = 0xFF;
+    m_DepthStencilDesc.StencilEnable = true;
+    m_DepthStencilDesc.StencilReadMask = 0xFF;
+    m_DepthStencilDesc.StencilWriteMask = 0xFF;
 
     // Stencil operations if pixel is front-facing
-    dsDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-    dsDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
-    dsDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
-    dsDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+    m_DepthStencilDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
+    m_DepthStencilDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+    m_DepthStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 
     // Stencil operations if pixel is back-facing
-    dsDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-    dsDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
-    dsDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
-    dsDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
-
+    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+    m_DepthStencilDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+    m_DepthStencilDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+    m_DepthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+    
     // Create depth stencil state
-    D3DCall(m_Device->CreateDepthStencilState(&dsDesc, m_DepthStencilState.GetAddressOf()));
+    D3DCall(m_Device->CreateDepthStencilState(&m_DepthStencilDesc, m_DepthStencilState.GetAddressOf()));
     // Bind depth stencil state
     m_DeviceContext->OMSetDepthStencilState(m_DepthStencilState.Get(), 1);
 
@@ -157,23 +157,23 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(pBuffer->Release());
     m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), m_DepthStencilView.Get());
 
-    D3D11_SAMPLER_DESC SamplerDesc = {};
+    // D3D11_SAMPLER_DESC SamplerDesc = {};
 
-    SamplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    SamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-    SamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-    SamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-    SamplerDesc.MipLODBias = 0.0f;
-    SamplerDesc.MaxAnisotropy = 1;
-    SamplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-    SamplerDesc.BorderColor[0] = 1.0f;
-    SamplerDesc.BorderColor[1] = 1.0f;
-    SamplerDesc.BorderColor[2] = 1.0f;
-    SamplerDesc.BorderColor[3] = 1.0f;
-    SamplerDesc.MinLOD = -FLT_MAX;
-    SamplerDesc.MaxLOD = FLT_MAX;
+    m_SamplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    m_SamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    m_SamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    m_SamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    m_SamplerDesc.MipLODBias = 0.0f;
+    m_SamplerDesc.MaxAnisotropy = 1;
+    m_SamplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    m_SamplerDesc.BorderColor[0] = 1.0f;
+    m_SamplerDesc.BorderColor[1] = 1.0f;
+    m_SamplerDesc.BorderColor[2] = 1.0f;
+    m_SamplerDesc.BorderColor[3] = 1.0f;
+    m_SamplerDesc.MinLOD = -FLT_MAX;
+    m_SamplerDesc.MaxLOD = FLT_MAX;
 
-    D3DCall(m_Device->CreateSamplerState(&SamplerDesc, m_SamplerState.GetAddressOf()));
+    D3DCall(m_Device->CreateSamplerState(&m_SamplerDesc, m_SamplerState.GetAddressOf()));
     m_DeviceContext->PSSetSamplers(0, 1, m_SamplerState.GetAddressOf());
 
     ZeroMemory(&m_BlendStateDesc, sizeof(D3D11_BLEND_DESC));
@@ -431,10 +431,10 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
 }
 CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
-    if (m_StateCache[State].Flag != 0)
+    if (m_StateCache[State].Flag)
         return TRUE;
 
-    if (m_StateCache[State].Valid != 0 && m_StateCache[State].Value == Value)
+    if (m_StateCache[State].Valid && m_StateCache[State].Value == Value)
     {
         ++m_RenderStateCacheHit;
         return TRUE;
@@ -446,41 +446,462 @@ CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD 
 
     if (State < m_StateCacheMissMask.Size() && m_StateCacheMissMask.IsSet(State))
         return FALSE;
-
-    if (State < m_StateCacheHitMask.Size() && m_StateCacheHitMask.IsSet(State))
-    {
-        static D3D11_CULL_MODE VXCullModes[4] = {D3D11_CULL_NONE, D3D11_CULL_NONE, D3D11_CULL_FRONT, D3D11_CULL_BACK};
-        static D3D11_CULL_MODE VXCullModesInverted[4] = {D3D11_CULL_NONE, D3D11_CULL_NONE, D3D11_CULL_BACK,
-                                                         D3D11_CULL_FRONT};
-
-        if (State == VXRENDERSTATE_CULLMODE)
-        {
-            if (!m_InverseWinding)
-            {
-                m_RasterizerDesc.CullMode = VXCullModes[Value];
-                m_RasterizerStateUpToDate = FALSE;
-                return TRUE;
-            }
-            else
-            {
-                m_RasterizerDesc.CullMode = VXCullModesInverted[Value];
-                m_RasterizerStateUpToDate = FALSE;
-                return TRUE;
-            }
-        }
-        if (State == VXRENDERSTATE_INVERSEWINDING)
-        {
-            m_InverseWinding = Value != 0;
-            m_StateCache[VXRENDERSTATE_CULLMODE].Valid = 0;
-        }
-        return TRUE;
-    }
-
-    // TODO: Handle other states
-    return TRUE;
-    // return SUCCEEDED(m_Device->SetRenderState((D3DRENDERSTATETYPE)State, Value));
+    
+    return InternalSetRenderState(State, Value);
 }
 
+CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
+{
+    switch (State)
+    {
+        case VXRENDERSTATE_ANTIALIAS:
+            m_RasterizerStateUpToDate = FALSE;
+            m_RasterizerDesc.MultisampleEnable = Value;
+            return TRUE;
+        case VXRENDERSTATE_TEXTUREPERSPECTIVE:
+            return FALSE;
+            break;
+        case VXRENDERSTATE_ZENABLE:
+            m_DepthStencilStateUpToDate = FALSE;
+            m_DepthStencilDesc.DepthEnable = (BOOL)Value;
+            return TRUE;
+        case VXRENDERSTATE_FILLMODE:
+            m_RasterizerStateUpToDate = FALSE;
+            switch ((VXFILL_MODE)Value)
+            {
+                case VXFILL_POINT:
+                    // not supported.
+                case VXFILL_WIREFRAME:
+                    m_RasterizerDesc.FillMode = D3D11_FILL_WIREFRAME;
+                    break;
+                case VXFILL_SOLID:
+                    m_RasterizerDesc.FillMode = D3D11_FILL_SOLID;
+                    break;
+            }
+            return TRUE;
+        case VXRENDERSTATE_SHADEMODE:
+            return FALSE;
+        case VXRENDERSTATE_LINEPATTERN:
+            break;
+        case VXRENDERSTATE_ZWRITEENABLE:
+            m_DepthStencilStateUpToDate = FALSE;
+            m_DepthStencilDesc.DepthWriteMask = Value ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
+            return TRUE;
+        case VXRENDERSTATE_ALPHATESTENABLE:
+            // m_BlendStateUpToDate = FALSE;
+            // m_BlendStateDesc.AlphaToCoverageEnable = Value;
+            // return FALSE;
+            break;
+        case VXRENDERSTATE_SRCBLEND:
+            m_BlendStateUpToDate = FALSE;
+            switch ((VXBLEND_MODE) Value)
+            {
+                case VXBLEND_ZERO:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
+                    break;
+                case VXBLEND_ONE:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+                    break;
+                case VXBLEND_SRCCOLOR:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_COLOR;
+                    break;
+                case VXBLEND_INVSRCCOLOR:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_INV_SRC_COLOR;
+                    break;
+                case VXBLEND_SRCALPHA:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA;
+                    break;
+                case VXBLEND_INVSRCALPHA:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+                    break;
+                case VXBLEND_SRCALPHASAT:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA_SAT;
+                    break;
+                case VXBLEND_BOTHSRCALPHA:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC1_ALPHA;
+                    break;
+                case VXBLEND_BOTHINVSRCALPHA:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_INV_SRC1_ALPHA;
+                    break;
+                default:
+                    return FALSE;
+            }
+            return TRUE;
+        case VXRENDERSTATE_DESTBLEND:
+            m_BlendStateUpToDate = FALSE;
+            switch ((VXBLEND_MODE)Value)
+            {
+                case VXBLEND_ZERO:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
+                    break;
+                case VXBLEND_ONE:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+                    break;
+                case VXBLEND_DESTALPHA:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_DEST_ALPHA;
+                    break;
+                case VXBLEND_INVDESTALPHA:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_INV_DEST_ALPHA;
+                    break;
+                case VXBLEND_DESTCOLOR:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_COLOR;
+                    break;
+                case VXBLEND_INVDESTCOLOR:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_INV_DEST_COLOR;
+                    break;
+                case VXBLEND_BOTHSRCALPHA:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC1_ALPHA;
+                    break;
+                case VXBLEND_BOTHINVSRCALPHA:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_INV_SRC1_ALPHA;
+                    break;
+                default:
+                    return FALSE;
+            }
+            return TRUE;
+        case VXRENDERSTATE_CULLMODE:
+            m_RasterizerStateUpToDate = FALSE;
+            switch ((VXCULL)Value)
+            {
+                case VXCULL_NONE:
+                    m_RasterizerDesc.CullMode = D3D11_CULL_NONE;
+                    break;
+                case VXCULL_CW:
+                    m_RasterizerDesc.CullMode = D3D11_CULL_FRONT;
+                    break;
+                case VXCULL_CCW:
+                    m_RasterizerDesc.CullMode = D3D11_CULL_BACK;
+                    break;
+                default: 
+                    return FALSE;
+            }
+            return TRUE;
+        case VXRENDERSTATE_ZFUNC:
+            m_DepthStencilStateUpToDate = FALSE;
+            switch ((VXCMPFUNC) Value)
+            {
+                case VXCMP_NEVER:
+                    m_DepthStencilDesc.DepthFunc = D3D11_COMPARISON_NEVER;
+                    break;
+                case VXCMP_LESS:
+                    m_DepthStencilDesc.DepthFunc = D3D11_COMPARISON_LESS;
+                    break;
+                case VXCMP_EQUAL:
+                    m_DepthStencilDesc.DepthFunc = D3D11_COMPARISON_EQUAL;
+                    break;
+                case VXCMP_LESSEQUAL:
+                    m_DepthStencilDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+                    break;
+                case VXCMP_GREATER:
+                    m_DepthStencilDesc.DepthFunc = D3D11_COMPARISON_GREATER;
+                    break;
+                case VXCMP_NOTEQUAL:
+                    m_DepthStencilDesc.DepthFunc = D3D11_COMPARISON_NOT_EQUAL;
+                    break;
+                case VXCMP_GREATEREQUAL:
+                    m_DepthStencilDesc.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
+                    break;
+                case VXCMP_ALWAYS:
+                    m_DepthStencilDesc.DepthFunc = D3D11_COMPARISON_ALWAYS;
+                    break;
+                default:
+                    return FALSE;
+            }
+            return TRUE;
+        case VXRENDERSTATE_ALPHAREF:
+            break;
+        case VXRENDERSTATE_ALPHAFUNC:
+            break;
+        case VXRENDERSTATE_DITHERENABLE:
+            return FALSE;
+        case VXRENDERSTATE_ALPHABLENDENABLE:
+            m_BlendStateDesc.RenderTarget[0].BlendEnable = Value;
+            return TRUE;
+        case VXRENDERSTATE_FOGENABLE:
+            break;
+        case VXRENDERSTATE_SPECULARENABLE:
+            break;
+        case VXRENDERSTATE_FOGCOLOR:
+            break;
+        case VXRENDERSTATE_FOGPIXELMODE:
+            break;
+        case VXRENDERSTATE_FOGSTART:
+            break;
+        case VXRENDERSTATE_FOGEND:
+            break;
+        case VXRENDERSTATE_FOGDENSITY:
+            break;
+        case VXRENDERSTATE_EDGEANTIALIAS:
+            break;
+        case VXRENDERSTATE_ZBIAS:
+            break;
+        case VXRENDERSTATE_RANGEFOGENABLE:
+            break;
+        case VXRENDERSTATE_STENCILENABLE:
+            m_DepthStencilStateUpToDate = FALSE;
+            m_DepthStencilDesc.StencilEnable = Value;
+            return TRUE;
+        case VXRENDERSTATE_STENCILFAIL:
+            m_DepthStencilStateUpToDate = FALSE;
+            switch ((VXSTENCILOP) Value)
+            {
+                case VXSTENCILOP_KEEP:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+                    break;
+                case VXSTENCILOP_ZERO:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_ZERO;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_ZERO;
+                    break;
+                case VXSTENCILOP_REPLACE:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_REPLACE;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_REPLACE;
+                    break;
+                case VXSTENCILOP_INCRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_INCR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_INCR_SAT;
+                    break;
+                case VXSTENCILOP_DECRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_DECR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_DECR_SAT;
+                    break;
+                case VXSTENCILOP_INVERT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_INVERT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_INVERT;
+                    break;
+                case VXSTENCILOP_INCR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_INCR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_INCR;
+                    break;
+                case VXSTENCILOP_DECR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_DECR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_DECR;
+                    break;
+                default: return FALSE;
+            }
+            return TRUE;
+        case VXRENDERSTATE_STENCILZFAIL:
+            m_DepthStencilStateUpToDate = FALSE;
+            switch ((VXSTENCILOP)Value)
+            {
+                case VXSTENCILOP_KEEP:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+                    break;
+                case VXSTENCILOP_ZERO:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_ZERO;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_ZERO;
+                    break;
+                case VXSTENCILOP_REPLACE:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_REPLACE;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_REPLACE;
+                    break;
+                case VXSTENCILOP_INCRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_INCR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_INCR_SAT;
+                    break;
+                case VXSTENCILOP_DECRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_DECR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_DECR_SAT;
+                    break;
+                case VXSTENCILOP_INVERT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_INVERT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_INVERT;
+                    break;
+                case VXSTENCILOP_INCR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_INCR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_INCR;
+                    break;
+                case VXSTENCILOP_DECR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_DECR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_DECR;
+                    break;
+                default:
+                    return FALSE;
+            }
+            return TRUE;
+        case VXRENDERSTATE_STENCILPASS:
+            m_DepthStencilStateUpToDate = FALSE;
+            switch ((VXSTENCILOP)Value)
+            {
+                case VXSTENCILOP_KEEP:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+                    break;
+                case VXSTENCILOP_ZERO:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_ZERO;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_ZERO;
+                    break;
+                case VXSTENCILOP_REPLACE:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_REPLACE;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_REPLACE;
+                    break;
+                case VXSTENCILOP_INCRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_INCR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_INCR_SAT;
+                    break;
+                case VXSTENCILOP_DECRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_DECR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_DECR_SAT;
+                    break;
+                case VXSTENCILOP_INVERT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_INVERT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_INVERT;
+                    break;
+                case VXSTENCILOP_INCR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_INCR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_INCR;
+                    break;
+                case VXSTENCILOP_DECR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_DECR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_DECR;
+                    break;
+                default:
+                    return FALSE;
+            }
+            return TRUE;
+        case VXRENDERSTATE_STENCILFUNC:
+            m_DepthStencilStateUpToDate = FALSE;
+            switch ((VXCMPFUNC) Value)
+            {
+                case VXCMP_NEVER:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_NEVER;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_NEVER;
+                    break;
+                case VXCMP_LESS:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_LESS;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_LESS;
+                    break;
+                case VXCMP_EQUAL:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+                    break;
+                case VXCMP_LESSEQUAL:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_LESS_EQUAL;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_LESS_EQUAL;
+                    break;
+                case VXCMP_GREATER:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_GREATER;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_GREATER;
+                    break;
+                case VXCMP_NOTEQUAL:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_NOT_EQUAL;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_NOT_EQUAL;
+                    break;
+                case VXCMP_GREATEREQUAL:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_GREATER_EQUAL;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_GREATER_EQUAL;
+                    break;
+                case VXCMP_ALWAYS:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+                    break;
+                default: return FALSE;
+            }
+            return TRUE;
+        case VXRENDERSTATE_STENCILREF:
+            break;
+        case VXRENDERSTATE_STENCILMASK:
+            m_DepthStencilStateUpToDate = FALSE;
+            m_DepthStencilDesc.StencilReadMask = Value;
+            return TRUE;
+        case VXRENDERSTATE_STENCILWRITEMASK:
+            m_DepthStencilStateUpToDate = FALSE;
+            m_DepthStencilDesc.StencilWriteMask = Value;
+            return TRUE;
+        case VXRENDERSTATE_TEXTUREFACTOR:
+            break;
+        case VXRENDERSTATE_WRAP0:
+            switch ((VXWRAP_MODE) Value)
+            {
+                case VXWRAP_U:
+                    m_SamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+                    break;
+                case VXWRAP_V:
+                    m_SamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+                    break;
+                case VXWRAP_S:
+                    m_SamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+                    break;
+                case VXWRAP_T:
+                default:
+                    return FALSE;
+            }
+            return TRUE;
+        case VXRENDERSTATE_WRAP1:
+            break;
+        case VXRENDERSTATE_WRAP2:
+            break;
+        case VXRENDERSTATE_WRAP3:
+            break;
+        case VXRENDERSTATE_WRAP4:
+            break;
+        case VXRENDERSTATE_WRAP5:
+            break;
+        case VXRENDERSTATE_WRAP6:
+            break;
+        case VXRENDERSTATE_WRAP7:
+            break;
+        case VXRENDERSTATE_CLIPPING:
+            return FALSE;
+        case VXRENDERSTATE_LIGHTING:
+            break;
+        case VXRENDERSTATE_AMBIENT:
+            return FALSE;
+        case VXRENDERSTATE_FOGVERTEXMODE:
+            break;
+        case VXRENDERSTATE_COLORVERTEX:
+            break;
+        case VXRENDERSTATE_LOCALVIEWER:
+            break;
+        case VXRENDERSTATE_NORMALIZENORMALS:
+            return FALSE;
+        case VXRENDERSTATE_VERTEXBLEND:
+            break;
+        case VXRENDERSTATE_SOFTWAREVPROCESSING:
+            break;
+        case VXRENDERSTATE_CLIPPLANEENABLE:
+            break;
+        case VXRENDERSTATE_INDEXVBLENDENABLE:
+            break;
+        case VXRENDERSTATE_BLENDOP:
+            m_BlendStateUpToDate = FALSE;
+            switch ((VXBLENDOP) Value)
+            {
+                case VXBLENDOP_ADD:
+                    m_BlendStateDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+                    break;
+                case VXBLENDOP_SUBTRACT:
+                    m_BlendStateDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_SUBTRACT;
+                    break;
+                case VXBLENDOP_REVSUBTRACT:
+                    m_BlendStateDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_REV_SUBTRACT;
+                    break;
+                case VXBLENDOP_MIN:
+                    m_BlendStateDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_MIN;
+                    break;
+                case VXBLENDOP_MAX:
+                    m_BlendStateDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_MAX;
+                    break;
+                default: 
+                    return FALSE;
+            }
+            return TRUE;
+        case VXRENDERSTATE_TEXTURETARGET:
+            break;
+        case VXRENDERSTATE_INVERSEWINDING:
+            m_InverseWinding = (Value != 0);
+            m_RasterizerDesc.FrontCounterClockwise = m_InverseWinding;
+            m_RasterizerStateUpToDate = FALSE;
+            return TRUE;
+        default: ;
+    }
+    return FALSE;
+}
 
 CKBOOL CKDX11RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *Value)
 {
@@ -545,6 +966,7 @@ CKBOOL CKDX11RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const v
 
 CKDX11IndexBufferDesc* CKDX11RasterizerContext::GenerateIB(void *indices, int indexCount, int *startIndex)
 {
+    ZoneScopedN(__FUNCTION__);
     if (!indices)
         return nullptr;
     CKDX11IndexBufferDesc *ibo = nullptr;
@@ -588,6 +1010,7 @@ CKDX11IndexBufferDesc* CKDX11RasterizerContext::GenerateIB(void *indices, int in
 
 CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToList(CKWORD VOffset, CKDWORD VCount, int *startIndex, int* newIndexCount)
 {
+    ZoneScopedN(__FUNCTION__);
     std::vector<CKWORD> strip_index;
     // Center at VOffset
     for (CKWORD i = 2; i < VCount; ++i)
@@ -605,6 +1028,7 @@ CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToList(CKWORD VOffset
 CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToList(CKWORD *indices, int count, int *startIndex,
                                                                   int *newIndexCount)
 {
+    ZoneScopedN(__FUNCTION__);
     if (!indices)
         return nullptr;
     std::vector<CKWORD> strip_index;
@@ -1065,6 +1489,7 @@ CKBOOL CKDX11RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc 
     dx11ib->m_CurrentICount = DesiredFormat->m_CurrentICount;
     dx11ib->m_Flags = DesiredFormat->m_Flags;
     dx11ib->m_MaxIndexCount = DesiredFormat->m_MaxIndexCount;
+    dx11ib->m_Flags = DesiredFormat->m_Flags;
 
     CKBOOL succeeded = dx11ib->Create(this);
     if (succeeded)
@@ -1145,6 +1570,26 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
     m_FVF = vbo->m_VertexFormat;
 
     if (!m_RasterizerStateUpToDate)
+    {
         m_DeviceContext->RSSetState(m_RasterizerState.Get());
+        m_RasterizerStateUpToDate = TRUE;
+    }
+    if (!m_BlendStateUpToDate)
+    {
+        D3DCall(m_Device->CreateBlendState(&m_BlendStateDesc, m_BlendState.ReleaseAndGetAddressOf()));
+        m_DeviceContext->OMSetBlendState(m_BlendState.Get(), NULL, 0xFFFFFF);
+        m_BlendStateUpToDate = TRUE;
+    }
+    if (!m_DepthStencilStateUpToDate)
+    {
+        D3DCall(m_Device->CreateDepthStencilState(&m_DepthStencilDesc, m_DepthStencilState.ReleaseAndGetAddressOf()));
+        m_DeviceContext->OMSetDepthStencilState(m_DepthStencilState.Get(), 1);
+        m_DepthStencilStateUpToDate = TRUE;
+    }
+    if (!m_SamplerStateUpToDate)
+    {
+        D3DCall(m_Device->CreateSamplerState(&m_SamplerDesc, m_SamplerState.ReleaseAndGetAddressOf()));
+        m_DeviceContext->PSSetSamplers(0, 1, m_SamplerState.GetAddressOf());
+    }
     return TRUE;
 }

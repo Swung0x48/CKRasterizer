@@ -212,7 +212,7 @@ public:
     virtual int CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc);
     virtual int CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, const VxImageDescEx &img_desc);
 
-//    virtual void *GetImplementationSpecificData() { return &m_DirectXData; }
+    virtual void *GetImplementationSpecificData() { return &m_DirectXData; }
 
     virtual CKBOOL SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane &PlaneEquation);
     virtual CKBOOL GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane &PlaneEquation);
@@ -232,10 +232,6 @@ public:
 //    virtual CKBOOL CreateTextureFromFile(CKDWORD Texture, const char *Filename, TexFromFile *param);
 
 protected:
-//    CKBOOL InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX11VertexBufferDesc *VB, CKDWORD StartIndex,
-//                                   CKDWORD VertexCount, CKWORD *indices, int indexcount, CKBOOL Clip);
-//    void SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize);
-
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
     CKBOOL CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat);
@@ -246,6 +242,7 @@ protected:
     CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKDX11VertexBufferDesc *vbo,
                                                           CKDWORD StartVertex, CKDWORD VertexCount, CKWORD *indices,
                                                           int indexcount);
+    CKBOOL InternalSetRenderState(VXRENDERSTATETYPE State, CKDWORD Value);
 
     CKDX11IndexBufferDesc* GenerateIB(void *indices, int indexcount, int *startIndex);
 
@@ -255,29 +252,25 @@ protected:
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 #endif
-
-    //--- Temp Z-Buffers for texture rendering...
-//    void ReleaseTempZBuffers()
-//    {
-//        for (int i = 0; i < 256; ++i)
-//        {
-//            SAFELASTRELEASE(m_TempZBuffers[i]);
-//        }
-//    }
-
-//    LPDIRECT3DSURFACE9 GetTempZBuffer(int Width, int Height);
-
+    
 public:
     ComPtr<IDXGISwapChain> m_Swapchain;
     ComPtr<ID3D11Device> m_Device;
     ComPtr<ID3D11DeviceContext> m_DeviceContext;
     ComPtr<ID3D11RenderTargetView> m_BackBuffer;
-    ComPtr<ID3D11DepthStencilState> m_DepthStencilState;
     ComPtr<ID3D11DepthStencilView> m_DepthStencilView;
+
+    D3D11_SAMPLER_DESC m_SamplerDesc;
     ComPtr<ID3D11SamplerState> m_SamplerState;
+    CKBOOL m_SamplerStateUpToDate = TRUE;
+
+    D3D11_DEPTH_STENCIL_DESC m_DepthStencilDesc;
+    ComPtr<ID3D11DepthStencilState> m_DepthStencilState;
+    CKBOOL m_DepthStencilStateUpToDate = TRUE;
+
     ComPtr<ID3D11BlendState> m_BlendState;
     D3D11_BLEND_DESC m_BlendStateDesc;
-    CKBOOL m_BlendDescUpToDate = TRUE;
+    CKBOOL m_BlendStateUpToDate = TRUE;
 
     ComPtr<ID3D11RasterizerState> m_RasterizerState;
     D3D11_RASTERIZER_DESC m_RasterizerDesc;
@@ -289,14 +282,11 @@ public:
     CKDWORD m_CurrentVShader = -1;
     CKDWORD m_CurrentPShader = -1;
     CKDWORD m_FVF = 0;
-    // std::unordered_map<CKDWORD, ComPtr<ID3D11InputLayout>> m_InputLayout;
-    // ComPtr<ID3D11InputLayout> m_InputLayout;
 
     CKDX11ConstantBufferDesc m_ConstantBuffer;
     CKBOOL m_ConstantBufferUptodate;
     std::unordered_map<CKDWORD, CKDWORD> m_VertexShaderMap;
-
-    //    IDirect3DDevice9Ex *m_Device;
+    
     VxDirectXData m_DirectXData;
     //    //----------------------------------------------------
     //--- Index buffer filled when drawing primitives
@@ -306,11 +296,8 @@ public:
 
     // CKDX11VertexBufferDesc *m_DynamicVertexBuffer[DYNAMIC_VBO_COUNT] = {nullptr};
     CKDX11IndexBufferDesc *m_DynamicIndexBuffer[DYNAMIC_IBO_COUNT] = {nullptr};
-    // VxMatrix m_ViewportMat;
     ConstantBufferStruct m_CBuffer;
-    //
-    //    int m_CurrentTextureIndex;
-    //
+
     volatile CKBOOL m_InCreateDestroy;
     std::string m_OriginalTitle;
     //-------------------------------------------------
@@ -323,14 +310,6 @@ public:
 
     XBitArray m_StateCacheHitMask;
     XBitArray m_StateCacheMissMask;
-//
-//    //-----------------------------------------------------
-//    // + To do texture rendering, Z-buffers are created when
-//    // needed for any given size (power of two)
-//    // These Z buffers are stored in the rasterizer context
-//    // TempZbuffers array and are attached when doing
-//    // texture rendering
-//    LPDIRECT3DSURFACE9 m_TempZBuffers[NBTEMPZBUFFER];
 
     CKDX11Rasterizer *m_Owner;
 };
