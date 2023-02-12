@@ -645,7 +645,7 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 
     CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
     auto *vbo = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
-    if (vbo && vbo->m_MaxVertexCount < data->VertexCount)
+    if (vbo && (vbo->m_MaxVertexCount < data->VertexCount || vertexSize != vbo->m_VertexSize))
     {
         delete vbo;
         m_VertexBuffers[VB] = nullptr;
@@ -887,22 +887,9 @@ void *CKDX11RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
     if (VB > m_VertexBuffers.Size())
         return nullptr;
     auto *desc = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
-    if (!desc)
-        return nullptr;
-    D3D11_MAP mapType = D3D11_MAP_WRITE_DISCARD;
-    if (Lock == CKRST_LOCK_DISCARD)
-        mapType = D3D11_MAP_WRITE_DISCARD;
-    else if (Lock == CKRST_LOCK_NOOVERWRITE)
-        mapType = D3D11_MAP_WRITE_NO_OVERWRITE;
 
     assert(StartVertex + VertexCount <= desc->m_MaxVertexCount);
-    HRESULT hr;
-    D3D11_MAPPED_SUBRESOURCE ms;
-    D3DCall(m_DeviceContext->Map(desc->DxBuffer.Get(), NULL, mapType, NULL, &ms));
-    if (SUCCEEDED(hr))
-        // seems like d3d11 does not give us an option to map a portion of data...
-        return (char*)(ms.pData) + StartVertex * desc->m_VertexSize;
-    return nullptr;
+    return desc->Lock(this, StartVertex, VertexCount * desc->m_VertexSize, (Lock & CKRST_LOCK_DISCARD));
 }
 CKBOOL CKDX11RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     if (VB > m_IndexBuffers.Size())
@@ -910,7 +897,7 @@ CKBOOL CKDX11RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     auto *desc = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!desc)
         return FALSE;
-    m_DeviceContext->Unmap(desc->DxBuffer.Get(), NULL);
+    desc->Unlock(this);
     return TRUE;
 }
 
@@ -921,19 +908,7 @@ void *CKDX11RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, C
     auto *desc = static_cast<CKDX11IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return nullptr;
-    D3D11_MAP mapType = D3D11_MAP_WRITE_DISCARD;
-    if (Lock == CKRST_LOCK_DISCARD)
-        mapType = D3D11_MAP_WRITE_DISCARD;
-    else if (Lock == CKRST_LOCK_DEFAULT)
-        mapType = D3D11_MAP_WRITE_NO_OVERWRITE;
-    assert(StartIndex + IndexCount <= desc->m_MaxIndexCount);
-    HRESULT hr;
-    D3D11_MAPPED_SUBRESOURCE ms;
-    D3DCall(m_DeviceContext->Map(desc->DxBuffer.Get(), NULL, mapType, NULL, &ms));
-    if (SUCCEEDED(hr))
-        // seems like d3d11 does not give us an option to map a portion of data...
-        return (char*)ms.pData + StartIndex * sizeof(CKWORD);
-    return nullptr;
+    return desc->Lock(this, StartIndex * sizeof(CKWORD), IndexCount * sizeof(CKWORD), Lock & CKRST_LOCK_DISCARD);
 }
 CKBOOL CKDX11RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
@@ -942,7 +917,7 @@ CKBOOL CKDX11RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
     auto *desc = static_cast<CKDX11IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return FALSE;
-    m_DeviceContext->Unmap(desc->DxBuffer.Get(), NULL);
+    desc->Unlock(this);
     return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat) {
