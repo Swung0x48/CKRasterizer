@@ -81,7 +81,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
                                          D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1};
 #if defined(DEBUG) || defined(_DEBUG)
-    creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    //creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
     hr = D3D11CreateDeviceAndSwapChain(static_cast<CKDX11RasterizerDriver *>(m_Driver)->m_Adapter.Get(),
                                        D3D_DRIVER_TYPE_UNKNOWN, nullptr, creationFlags, featureLevels,
@@ -452,6 +452,14 @@ CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD 
     return InternalSetRenderState(State, Value);
 }
 
+void flag_toggle(uint32_t *state_dword, uint32_t flag, bool enabled)
+{
+    if (enabled)
+        *state_dword |= flag;
+    else
+        *state_dword &= ~0U ^ flag;
+}
+
 CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
     switch (State)
@@ -490,10 +498,9 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             m_DepthStencilDesc.DepthWriteMask = Value ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
             return TRUE;
         case VXRENDERSTATE_ALPHATESTENABLE:
-            // m_BlendStateUpToDate = FALSE;
-            // m_BlendStateDesc.AlphaToCoverageEnable = Value;
-            // return FALSE;
-            break;
+            m_ConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_CBuffer.AlphaFlags, AFLG_ALPHATESTEN, Value);
+            return TRUE;
         case VXRENDERSTATE_SRCBLEND:
             m_BlendStateUpToDate = FALSE;
             switch ((VXBLEND_MODE) Value)
@@ -615,9 +622,13 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             }
             return TRUE;
         case VXRENDERSTATE_ALPHAREF:
-            break;
+            m_ConstantBufferUpToDate = FALSE;
+            m_CBuffer.AlphaThreshold = Value / 255.;
+            return TRUE;
         case VXRENDERSTATE_ALPHAFUNC:
-            break;
+            m_ConstantBufferUpToDate = FALSE;
+            m_CBuffer.AlphaFlags |= (Value & ~VXCMP_MASK);
+            return TRUE;
         case VXRENDERSTATE_DITHERENABLE:
             return FALSE;
         case VXRENDERSTATE_ALPHABLENDENABLE:

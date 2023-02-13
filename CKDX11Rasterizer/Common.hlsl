@@ -5,8 +5,12 @@ struct VS_OUTPUT
     float2 texcoord : TEXCOORD;
 };
 
+static const dword AFLG_ALPHATESTEN = 10U;
+
 cbuffer CBuf
 {
     matrix total_mat;
     matrix viewport_mat;
+    dword alpha_flags;
+    float alpha_thresh;
 };

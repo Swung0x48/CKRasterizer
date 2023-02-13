@@ -112,11 +112,16 @@ typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
     virtual void Bind(CKDX11RasterizerContext *ctx);
 } CKDX11PixelShaderDesc;
 
+static constexpr uint32_t AFLG_ALPHATESTEN = 10U;
 typedef struct ConstantBufferStruct
 {
     VxMatrix TotalMatrix;
     VxMatrix ViewportMatrix;
+    uint32_t AlphaFlags;
+    float AlphaThreshold;
+    uint64_t _padding;
 } ConstantBufferStruct;
+
 
 typedef struct CKDX11ConstantBufferDesc
 {
