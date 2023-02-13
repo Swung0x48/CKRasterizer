@@ -2,7 +2,7 @@
 
 bool alpha_test(float in_alpha)
 {
-    switch (alpha_flags & 0xFU)
+    switch (alpha_flags & AFLG_ALPHAFUNCMASK)
     {
         case 1U: return false;
         case 2U: return in_alpha <  alpha_thresh;

@@ -5,7 +5,8 @@ struct VS_OUTPUT
     float2 texcoord : TEXCOORD;
 };
 
-static const dword AFLG_ALPHATESTEN = 0x10U;
+static const dword AFLG_ALPHATESTEN = 0x10u;
+static const dword AFLG_ALPHAFUNCMASK = 0xFu;
 
 cbuffer CBuf
 {
