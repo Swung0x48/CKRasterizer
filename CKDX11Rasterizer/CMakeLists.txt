@@ -48,7 +48,7 @@ else()
 endif()
 
 # Build HLSL shaders
-add_custom_target(shaders)
+add_custom_target(CKDX11RasterizerShader)
 
 file(GLOB HLSL_VSHADER_FILES
     "VShader*.hlsl"
@@ -75,7 +75,7 @@ foreach(FILE ${HLSL_SHADER_FILES})
   get_source_file_property(shadertype ${FILE} ShaderType)
   get_source_file_property(shadermodel ${FILE} ShaderModel)
   message(STATUS "${shadertype}_${shadermodel}: ${FILE} ${FILE_WE}")
-  add_custom_command(TARGET shaders
+  add_custom_command(TARGET CKDX11RasterizerShader
                      COMMAND fxc.exe /nologo /E${FILE_WE} /T${shadertype}_${shadermodel} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fh ${COMPILED_SHADERS_PATH}/${FILE_WE}.h /Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb ${FILE}
                      MAIN_DEPENDENCY ${FILE}
                      COMMENT "Compiling HLSL: ${shadertype}_${shadermodel}: ${FILE} ${FILE_WE}\n"
@@ -94,7 +94,7 @@ include_directories(${DirectX11_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_LIST_DIR}/../vendor/DirectXMesh/Utilities/)
 include_directories(${COMPILED_SHADERS_PATH})
 add_library(${PROJECT_NAME} SHARED ${CKDX11_RASTERIZER_SRC})
-add_dependencies(${PROJECT_NAME} shaders)
+add_dependencies(${PROJECT_NAME} CKDX11RasterizerShader)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${DirectX11_LIBRARY})
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)
