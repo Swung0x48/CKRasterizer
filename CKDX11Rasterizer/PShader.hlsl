@@ -11,6 +11,7 @@ bool alpha_test(float in_alpha)
         case 5U: return in_alpha >  alpha_thresh;
         case 6U: return in_alpha != alpha_thresh;
         case 7U: return in_alpha >= alpha_thresh;
+        case 8U:
         default: return true;
     }
 }

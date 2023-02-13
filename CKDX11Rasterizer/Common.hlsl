@@ -5,7 +5,7 @@ struct VS_OUTPUT
     float2 texcoord : TEXCOORD;
 };
 
-static const dword AFLG_ALPHATESTEN = 10U;
+static const dword AFLG_ALPHATESTEN = 0x10U;
 
 cbuffer CBuf
 {
