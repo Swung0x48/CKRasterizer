@@ -1,15 +1,4 @@
-struct VS_OUTPUT
-{
-    float4 position : SV_POSITION;
-    float4 color : COLOR;
-    float2 texcoord : TEXCOORD;
-};
-
-cbuffer CBuf
-{
-    matrix total_mat;
-    matrix viewport_mat;
-};
+#include "Common.hlsl"
 
 VS_OUTPUT VShaderNormal(float3 position : SV_POSITION, float3 normal : NORMAL, float2 texcoord : TEXCOORD)
 {
