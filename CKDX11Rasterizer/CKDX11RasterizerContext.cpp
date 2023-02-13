@@ -360,7 +360,7 @@ CKBOOL CKDX11RasterizerContext::EndScene()
     if (!m_SceneBegined)
         return FALSE;
     m_MatrixUptodate = 0;
-    m_ConstantBufferUptodate = FALSE;
+    m_ConstantBufferUpToDate = FALSE;
     m_SceneBegined = FALSE;
     return TRUE;
 }
@@ -383,6 +383,7 @@ CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
     m_Viewport.MinDepth = 0.0f;
     m_DeviceContext->RSSetViewports(1, &m_Viewport);
     
+    m_ConstantBufferUpToDate = FALSE;
     m_CBuffer.ViewportMatrix = VxMatrix::Identity();
     float(*m)[4] = (float(*)[4]) &m_CBuffer.ViewportMatrix;
     m[0][0] = 2. / data->ViewWidth;
@@ -427,6 +428,7 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
     {
         m_UnityMatrixMask &= ~UnityMatrixMask;
     }
+    m_ConstantBufferUpToDate = FALSE;
     return ret;
 }
 CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
@@ -1550,6 +1552,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 #endif
     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
     
+    if (!m_ConstantBufferUpToDate)
     {
         this->UpdateMatrices(WORLD_TRANSFORM);
         // this->UpdateMatrices(VIEW_TRANSFORM);
@@ -1560,7 +1563,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         memcpy(ms.pData, &m_CBuffer, sizeof(ConstantBufferStruct));
         m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
         m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
-        m_ConstantBufferUptodate = TRUE;
+        m_ConstantBufferUpToDate = TRUE;
     }
 #if LOGGING
     fprintf(stderr, "IA: vs %s\n", vs->DxEntryPoint);

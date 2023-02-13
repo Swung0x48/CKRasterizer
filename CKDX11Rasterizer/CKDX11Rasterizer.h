@@ -284,7 +284,7 @@ public:
     CKDWORD m_FVF = 0;
 
     CKDX11ConstantBufferDesc m_ConstantBuffer;
-    CKBOOL m_ConstantBufferUptodate;
+    CKBOOL m_ConstantBufferUpToDate;
     std::unordered_map<CKDWORD, CKDWORD> m_VertexShaderMap;
     
     VxDirectXData m_DirectXData;
