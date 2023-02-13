@@ -1,5 +1,6 @@
 #include "CKDX11Rasterizer.h"
 #include "CKDX11RasterizerCommon.h"
+#include "EnumMaps.h"
 
 #include "VShaderColor.h"
 #include "VShaderNormal.h"
@@ -10,11 +11,14 @@
 #include "VShader0x42.h"
 #include "PShader.h"
 
-#define LOGGING 0
+#define LOGGING 1
+#define LOG_IA 0
+#define LOG_RENDERSTATE 1
+#define LOG_STATEBEFOREDRAW 1
 #define STATUS 1
 #define VB_STRICT 1
 
-#if LOGGING
+#if LOG_IA
 #include <conio.h>
 static bool step_mode = false;
 #endif
@@ -183,8 +187,8 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
     m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
     m_BlendStateDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA;
-    m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_DEST_ALPHA;
+    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+    m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
     m_BlendStateDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
     m_BlendStateDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
@@ -299,6 +303,8 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, 1);
     SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
     SetRenderState(VXRENDERSTATE_COLORVERTEX, 0);
+    SetRenderState(VXRENDERSTATE_SRCBLEND, VXBLEND_ONE);
+    SetRenderState(VXRENDERSTATE_DESTBLEND, VXBLEND_ZERO);
     
     m_InCreateDestroy = FALSE;
 
@@ -442,13 +448,19 @@ CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD 
         return TRUE;
     }
 
+#if LOG_RENDERSTATE
+    if (State == VXRENDERSTATE_SRCBLEND || State == VXRENDERSTATE_DESTBLEND)
+    fprintf(stderr, "set render state %s -> %x, currently %x %s\n", rstytostr(State), Value,
+            m_StateCache[State].Valid ? m_StateCache[State].Value : m_StateCache[State].DefaultValue,
+            m_StateCache[State].Valid ? "" : "[Invalid]");
+#endif
     ++m_RenderStateCacheMiss;
     m_StateCache[State].Value = Value;
     m_StateCache[State].Valid = 1;
 
     if (State < m_StateCacheMissMask.Size() && m_StateCacheMissMask.IsSet(State))
         return FALSE;
-    
+
     return InternalSetRenderState(State, Value);
 }
 
@@ -470,7 +482,6 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             return TRUE;
         case VXRENDERSTATE_TEXTUREPERSPECTIVE:
             return FALSE;
-            break;
         case VXRENDERSTATE_ZENABLE:
             m_DepthStencilStateUpToDate = FALSE;
             m_DepthStencilDesc.DepthEnable = (BOOL)Value;
@@ -481,6 +492,7 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             {
                 case VXFILL_POINT:
                     // not supported.
+                    return FALSE;
                 case VXFILL_WIREFRAME:
                     m_RasterizerDesc.FillMode = D3D11_FILL_WIREFRAME;
                     break;
@@ -507,11 +519,11 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             {
                 case VXBLEND_ZERO:
                     m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
+                    // m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
                     break;
                 case VXBLEND_ONE:
                     m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+                    // m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
                     break;
                 case VXBLEND_SRCCOLOR:
                     m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_COLOR;
@@ -520,57 +532,66 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
                     m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_INV_SRC_COLOR;
                     break;
                 case VXBLEND_SRCALPHA:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA;
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+                    // m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA;
                     break;
                 case VXBLEND_INVSRCALPHA:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_INV_SRC_ALPHA;
+                    // m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
                     break;
                 case VXBLEND_SRCALPHASAT:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA_SAT;
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA_SAT;
+                    // m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA_SAT;
                     break;
                 case VXBLEND_BOTHSRCALPHA:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC1_ALPHA;
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC1_ALPHA;
+                    // m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC1_ALPHA;
                     break;
                 case VXBLEND_BOTHINVSRCALPHA:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_INV_SRC1_ALPHA;
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_INV_SRC1_ALPHA;
+                    // m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_INV_SRC1_ALPHA;
                     break;
                 default:
                     return FALSE;
             }
             return TRUE;
         case VXRENDERSTATE_DESTBLEND:
-            m_BlendStateUpToDate = FALSE;
-            switch ((VXBLEND_MODE)Value)
-            {
-                case VXBLEND_ZERO:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
-                    break;
-                case VXBLEND_ONE:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-                    break;
-                case VXBLEND_DESTALPHA:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_DEST_ALPHA;
-                    break;
-                case VXBLEND_INVDESTALPHA:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_INV_DEST_ALPHA;
-                    break;
-                case VXBLEND_DESTCOLOR:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_COLOR;
-                    break;
-                case VXBLEND_INVDESTCOLOR:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_INV_DEST_COLOR;
-                    break;
-                case VXBLEND_BOTHSRCALPHA:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC1_ALPHA;
-                    break;
-                case VXBLEND_BOTHINVSRCALPHA:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_INV_SRC1_ALPHA;
-                    break;
-                default:
-                    return FALSE;
-            }
+            // m_BlendStateUpToDate = FALSE;
+            // switch ((VXBLEND_MODE)Value)
+            // {
+            //     case VXBLEND_ZERO:
+            //         m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ZERO;
+            //         // m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+            //         break;
+            //     case VXBLEND_ONE:
+            //         m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+            //         // m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+            //         break;
+            //     case VXBLEND_DESTALPHA:
+            //         m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_DEST_ALPHA;
+            //         // m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_DEST_ALPHA;
+            //         break;
+            //     case VXBLEND_INVDESTALPHA:
+            //         m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_DEST_ALPHA;
+            //         // m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_DEST_ALPHA;
+            //         break;
+            //     case VXBLEND_DESTCOLOR:
+            //         m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_DEST_COLOR;
+            //         break;
+            //     case VXBLEND_INVDESTCOLOR:
+            //         m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_DEST_COLOR;
+            //         break;
+            //     case VXBLEND_BOTHSRCALPHA:
+            //         m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_SRC1_ALPHA;
+            //         // m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_SRC1_ALPHA;
+            //         break;
+            //     case VXBLEND_BOTHINVSRCALPHA:
+            //         m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC1_ALPHA;
+            //         // m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC1_ALPHA;
+            //         break;
+            //     default:
+            //         return FALSE;
+            // }
             return TRUE;
         case VXRENDERSTATE_CULLMODE:
             m_RasterizerStateUpToDate = FALSE;
@@ -828,37 +849,37 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             return TRUE;
         case VXRENDERSTATE_TEXTUREFACTOR:
             break;
-        case VXRENDERSTATE_WRAP0:
-            switch ((VXWRAP_MODE) Value)
-            {
-                case VXWRAP_U:
-                    m_SamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-                    break;
-                case VXWRAP_V:
-                    m_SamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-                    break;
-                case VXWRAP_S:
-                    m_SamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-                    break;
-                case VXWRAP_T:
-                default:
-                    return FALSE;
-            }
-            return TRUE;
-        case VXRENDERSTATE_WRAP1:
-            break;
-        case VXRENDERSTATE_WRAP2:
-            break;
-        case VXRENDERSTATE_WRAP3:
-            break;
-        case VXRENDERSTATE_WRAP4:
-            break;
-        case VXRENDERSTATE_WRAP5:
-            break;
-        case VXRENDERSTATE_WRAP6:
-            break;
-        case VXRENDERSTATE_WRAP7:
-            break;
+        // case VXRENDERSTATE_WRAP0:
+        //     switch ((VXWRAP_MODE) Value)
+        //     {
+        //         case VXWRAP_U:
+        //             m_SamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+        //             break;
+        //         case VXWRAP_V:
+        //             m_SamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+        //             break;
+        //         case VXWRAP_S:
+        //             m_SamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+        //             break;
+        //         case VXWRAP_T:
+        //         default:
+        //             return FALSE;
+        //     }
+        //     return TRUE;
+        // case VXRENDERSTATE_WRAP1:
+        //     break;
+        // case VXRENDERSTATE_WRAP2:
+        //     break;
+        // case VXRENDERSTATE_WRAP3:
+        //     break;
+        // case VXRENDERSTATE_WRAP4:
+        //     break;
+        // case VXRENDERSTATE_WRAP5:
+        //     break;
+        // case VXRENDERSTATE_WRAP6:
+        //     break;
+        // case VXRENDERSTATE_WRAP7:
+        //     break;
         case VXRENDERSTATE_CLIPPING:
             return FALSE;
         case VXRENDERSTATE_LIGHTING:
@@ -934,6 +955,48 @@ CKBOOL CKDX11RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
     desc->Bind(this);
     return TRUE;
 }
+
+D3D11_TEXTURE_ADDRESS_MODE Vx2D3DTextureAddressMode(VXTEXTURE_ADDRESSMODE mode)
+{
+    switch (mode)
+    {
+        case VXTEXTURE_ADDRESSWRAP:
+            return D3D11_TEXTURE_ADDRESS_WRAP;
+        case VXTEXTURE_ADDRESSMIRROR:
+            return D3D11_TEXTURE_ADDRESS_MIRROR;
+        case VXTEXTURE_ADDRESSCLAMP:
+            return D3D11_TEXTURE_ADDRESS_CLAMP;
+        case VXTEXTURE_ADDRESSBORDER:
+            return D3D11_TEXTURE_ADDRESS_BORDER;
+        case VXTEXTURE_ADDRESSMIRRORONCE:
+            return D3D11_TEXTURE_ADDRESS_MIRROR_ONCE;
+        default: break;
+    }
+    return D3D11_TEXTURE_ADDRESS_WRAP;
+}
+
+D3D11_FILTER Vx2D3DFilterMode(VXTEXTURE_FILTERMODE mode)
+{
+    switch (mode)
+    {
+        case VXTEXTUREFILTER_NEAREST:
+            break;
+        case VXTEXTUREFILTER_LINEAR:
+            break;
+        case VXTEXTUREFILTER_MIPNEAREST:
+            break;
+        case VXTEXTUREFILTER_MIPLINEAR:
+            break;
+        case VXTEXTUREFILTER_LINEARMIPNEAREST:
+            break;
+        case VXTEXTUREFILTER_LINEARMIPLINEAR:
+            break;
+        case VXTEXTUREFILTER_ANISOTROPIC:
+            return D3D11_FILTER_ANISOTROPIC;
+        default: ;
+    }
+}
+
 CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
     return CKRasterizerContext::SetTextureStageState(Stage, Tss, Value);
@@ -947,7 +1010,7 @@ CKBOOL CKDX11RasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
 //     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShaderIndex]);
 //     if (!vs)
 //         return FALSE;
-// #if LOGGING
+// #if LOG_IA
 //     fprintf(stderr, "IA: vs %s\n", vs->DxEntryPoint);
 // #endif
 //     vs->Bind(this);
@@ -1061,7 +1124,7 @@ CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToList(CKWORD *indice
 CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
                                               VxDrawPrimitiveData *data)
 {
-#if (LOGGING) || (STATUS)
+#if (LOG_IA) || (STATUS)
     ++directbat;
 #endif
     ZoneScopedN(__FUNCTION__);
@@ -1134,7 +1197,7 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 CKBOOL CKDX11RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD StartVIndex,
                                                 CKDWORD VertexCount, CKWORD *indices, int indexcount)
 {
-#if (LOGGING) || (STATUS)
+#if (LOG_IA) || (STATUS)
     ++vbbat;
 #endif
     ZoneScopedN(__FUNCTION__);
@@ -1187,9 +1250,10 @@ CKBOOL CKDX11RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
 CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                                   CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
-#if (LOGGING) || (STATUS)
+#if (LOG_IA) || (STATUS)
     ++vbibbat;
 #endif
+
     // assert(pType != VX_TRIANGLEFAN);
 
     ZoneScopedN(__FUNCTION__);
@@ -1210,7 +1274,7 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     auto succeeded = AssemblyInput(vbo, ibo, pType);
     assert(succeeded);
 
-#if LOGGING
+#if LOG_IA
     fprintf(stderr, "IA: VB offset: %d, vsize: %d\n", MinVIndex, vbo->m_VertexSize);
     fprintf(stderr, "IA: IB offset: %d\n", StartIndex);
 #endif
@@ -1554,7 +1618,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 #if defined(DEBUG) || defined(_DEBUG)
     } catch (...)
     {
-#if LOGGING
+#if LOG_IA
         fprintf(stderr, "FVF: 0x%x\n", vbo->m_VertexFormat);
 #endif
         assert(false);
@@ -1563,8 +1627,11 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 #endif
     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
     
-    if (!m_ConstantBufferUpToDate)
+    // if (!m_ConstantBufferUpToDate)
     {
+#ifdef LOG_STATEBEFOREDRAW
+        fprintf(stderr, "IA: Alpha flag, thr: 0x%x, %.2f\n", m_CBuffer.AlphaFlags, m_CBuffer.AlphaThreshold);
+#endif
         this->UpdateMatrices(WORLD_TRANSFORM);
         // this->UpdateMatrices(VIEW_TRANSFORM);
         Vx3DTransposeMatrix(m_CBuffer.TotalMatrix, m_TotalMatrix);
@@ -1576,7 +1643,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
         m_ConstantBufferUpToDate = TRUE;
     }
-#if LOGGING
+#if LOG_IA
     fprintf(stderr, "IA: vs %s\n", vs->DxEntryPoint);
 #endif
     vs->Bind(this);
