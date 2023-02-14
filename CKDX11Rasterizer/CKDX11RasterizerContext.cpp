@@ -519,7 +519,6 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             {
                 case VXBLEND_ZERO:
                     m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
-                    // m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
                     break;
                 case VXBLEND_ONE:
                     m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
@@ -543,13 +542,17 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
                     m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA_SAT;
                     // m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA_SAT;
                     break;
-                case VXBLEND_BOTHSRCALPHA:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC1_ALPHA;
-                    // m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC1_ALPHA;
+                case VXBLEND_DESTALPHA:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_ALPHA;
                     break;
-                case VXBLEND_BOTHINVSRCALPHA:
-                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_INV_SRC1_ALPHA;
-                    // m_BlendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_INV_SRC1_ALPHA;
+                case VXBLEND_INVDESTALPHA:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_INV_DEST_ALPHA;
+                    break;
+                case VXBLEND_DESTCOLOR:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_COLOR;
+                    break;
+                case VXBLEND_INVDESTCOLOR:
+                    m_BlendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_INV_DEST_COLOR;
                     break;
                 default:
                     return FALSE;
@@ -567,22 +570,32 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
                     m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
             //         // m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
                     break;
+                 case VXBLEND_SRCCOLOR:
+                    m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_SRC_COLOR;
+                    break;
+                 case VXBLEND_INVSRCCOLOR:
+                    m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_COLOR;
+                    break;
+                 case VXBLEND_SRCALPHA:
+                    m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_SRC_ALPHA;
+                    break;
                  case VXBLEND_INVSRCALPHA:
                     m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
                     break;
                 case VXBLEND_DESTALPHA:
                     m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_DEST_ALPHA;
-            //         // m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_DEST_ALPHA;
                     break;
                 case VXBLEND_INVDESTALPHA:
                     m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_DEST_ALPHA;
-            //         // m_BlendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_DEST_ALPHA;
                     break;
                 case VXBLEND_DESTCOLOR:
                     m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_DEST_COLOR;
                     break;
                 case VXBLEND_INVDESTCOLOR:
                     m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_DEST_COLOR;
+                    break;
+                case VXBLEND_SRCALPHASAT:
+                    m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_SRC_ALPHA_SAT;
                     break;
             //     case VXBLEND_BOTHSRCALPHA:
             //         m_BlendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_SRC1_ALPHA;
