@@ -690,7 +690,7 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
         case VXRENDERSTATE_DITHERENABLE:
             return FALSE;
         case VXRENDERSTATE_ALPHABLENDENABLE:
-            m_ConstantBufferUpToDate = FALSE;
+            m_BlendStateUpToDate = FALSE;
             m_BlendStateDesc.RenderTarget[0].BlendEnable = Value;
             return TRUE;
         case VXRENDERSTATE_FOGENABLE:
@@ -966,9 +966,9 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
         case VXRENDERSTATE_TEXTURETARGET:
             break;
         case VXRENDERSTATE_INVERSEWINDING:
+            m_RasterizerStateUpToDate = FALSE;
             m_InverseWinding = (Value != 0);
             m_RasterizerDesc.FrontCounterClockwise = m_InverseWinding;
-            m_RasterizerStateUpToDate = FALSE;
             return TRUE;
         default: ;
     }
@@ -1703,13 +1703,13 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         m_DeviceContext->OMSetBlendState(m_BlendState.Get(), NULL, 0xFFFFFF);
         m_BlendStateUpToDate = TRUE;
     }
-    if (!m_DepthStencilStateUpToDate)
+    // if (!m_DepthStencilStateUpToDate)
     {
         D3DCall(m_Device->CreateDepthStencilState(&m_DepthStencilDesc, m_DepthStencilState.ReleaseAndGetAddressOf()));
         m_DeviceContext->OMSetDepthStencilState(m_DepthStencilState.Get(), 1);
         m_DepthStencilStateUpToDate = TRUE;
     }
-    if (!m_SamplerStateUpToDate)
+    // if (!m_SamplerStateUpToDate)
     {
         D3DCall(m_Device->CreateSamplerState(&m_SamplerDesc, m_SamplerState.ReleaseAndGetAddressOf()));
         m_DeviceContext->PSSetSamplers(0, 1, m_SamplerState.GetAddressOf());
