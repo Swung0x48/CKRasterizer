@@ -127,12 +127,12 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     // D3D11_DEPTH_STENCIL_DESC dsDesc;
 
     // Depth test parameters
-    m_DepthStencilDesc.DepthEnable = true;
+    m_DepthStencilDesc.DepthEnable = TRUE;
     m_DepthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-    m_DepthStencilDesc.DepthFunc = D3D11_COMPARISON_LESS;
+    m_DepthStencilDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
 
     // Stencil test parameters
-    m_DepthStencilDesc.StencilEnable = true;
+    m_DepthStencilDesc.StencilEnable = TRUE;
     m_DepthStencilDesc.StencilReadMask = 0xFF;
     m_DepthStencilDesc.StencilWriteMask = 0xFF;
 
@@ -299,6 +299,12 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     ps->Bind(this);
 
     m_ConstantBuffer.Create(this);
+
+    CKTextureDesc blank;
+    blank.Format.Width = 1;
+    blank.Format.Height = 1;
+    CreateTexture(0, &blank);
+
 
     SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, 1);
     SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
@@ -482,7 +488,8 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             return FALSE;
         case VXRENDERSTATE_ZENABLE:
             m_DepthStencilStateUpToDate = FALSE;
-            m_DepthStencilDesc.DepthEnable = (BOOL)Value;
+            // m_DepthStencilDesc.DepthEnable = (BOOL)Value;
+            m_DepthStencilDesc.DepthEnable = TRUE;
             return TRUE;
         case VXRENDERSTATE_FILLMODE:
             m_RasterizerStateUpToDate = FALSE;
@@ -683,6 +690,7 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
         case VXRENDERSTATE_DITHERENABLE:
             return FALSE;
         case VXRENDERSTATE_ALPHABLENDENABLE:
+            m_ConstantBufferUpToDate = FALSE;
             m_BlendStateDesc.RenderTarget[0].BlendEnable = Value;
             return TRUE;
         case VXRENDERSTATE_FOGENABLE:
@@ -981,7 +989,11 @@ CKBOOL CKDX11RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
         return FALSE;
     CKDX11TextureDesc *desc = static_cast<CKDX11TextureDesc *>(m_Textures[Texture]);
     if (!desc)
-        return FALSE;
+    {
+        // ID3D11ShaderResourceView *srv_ptr = nullptr;
+        // m_DeviceContext->PSSetShaderResources(0, 1, &srv_ptr);
+        return TRUE;
+    }
     desc->Bind(this);
     return TRUE;
 }
