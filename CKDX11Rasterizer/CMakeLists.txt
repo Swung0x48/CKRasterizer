@@ -75,12 +75,33 @@ foreach(FILE ${HLSL_SHADER_FILES})
   get_source_file_property(shadertype ${FILE} ShaderType)
   get_source_file_property(shadermodel ${FILE} ShaderModel)
   message(STATUS "${shadertype}_${shadermodel}: ${FILE} ${FILE_WE}")
-  add_custom_command(TARGET CKDX11RasterizerShader
-                     COMMAND fxc.exe /nologo /Emain /T${shadertype}_${shadermodel} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fh ${COMPILED_SHADERS_PATH}/${FILE_WE}.h /Vn g_${FILE_WE} /Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb ${FILE}
-                     MAIN_DEPENDENCY ${FILE}
-                     COMMENT "Compiling HLSL: ${shadertype}_${shadermodel}: ${FILE} ${FILE_WE}\n"
-                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                     VERBATIM)
+  if (CMAKE_GENERATOR MATCHES "Visual Studio")
+      set_source_files_properties(${HLSL_VSHADER_FILES} PROPERTIES
+            VS_SHADER_OUTPUT_HEADER_FILE ${COMPILED_SHADERS_PATH}/${FILE_WE}.h
+            VS_SHADER_VARIABLE_NAME g_${FILE_WE}
+            VS_SHADER_DISABLE_OPTIMIZATIONS $<IF:$<CONFIG:DEBUG>,true,false>
+            VS_SHADER_ENABLE_DEBUG $<IF:$<CONFIG:DEBUG>,true,false>
+            VS_SHADER_TYPE Vertex
+            VS_SHADER_MODEL 4.0
+            VS_SHADER_ENTRYPOINT main
+            VS_SHADER_FLAGS "/Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb")
+      set_source_files_properties(${HLSL_PSHADER_FILES} PROPERTIES
+            VS_SHADER_OUTPUT_HEADER_FILE ${COMPILED_SHADERS_PATH}/${FILE_WE}.h
+            VS_SHADER_VARIABLE_NAME g_${FILE_WE}
+            VS_SHADER_DISABLE_OPTIMIZATIONS $<IF:$<CONFIG:DEBUG>,true,false>
+            VS_SHADER_ENABLE_DEBUG $<IF:$<CONFIG:DEBUG>,true,false>
+            VS_SHADER_TYPE Pixel
+            VS_SHADER_MODEL 4.0
+            VS_SHADER_ENTRYPOINT main
+            VS_SHADER_FLAGS "/Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb")
+  else()
+      add_custom_command(TARGET CKDX11RasterizerShader
+                         COMMAND fxc.exe /nologo /Emain /T${shadertype}_${shadermodel} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fh ${COMPILED_SHADERS_PATH}/${FILE_WE}.h /Vn g_${FILE_WE} /Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb ${FILE}
+                         MAIN_DEPENDENCY ${FILE}
+                         COMMENT "Compiling HLSL: ${shadertype}_${shadermodel}: ${FILE} ${FILE_WE}\n"
+                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                         VERBATIM)
+  endif()
 endforeach(FILE)
 
 file(GLOB CKDX11_RASTERIZER_SRC
@@ -93,7 +114,11 @@ message(STATUS "DirectX11_LIBRARY=${DirectX11_LIBRARIES}")
 include_directories(${DirectX11_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_LIST_DIR}/../vendor/DirectXMesh/Utilities/)
 include_directories(${COMPILED_SHADERS_PATH})
-add_library(${PROJECT_NAME} SHARED ${CKDX11_RASTERIZER_SRC})
+if (CMAKE_GENERATOR MATCHES "Visual Studio")
+    add_library(${PROJECT_NAME} SHARED ${CKDX11_RASTERIZER_SRC} ${HLSL_SHADER_FILES})
+else()
+    add_library(${PROJECT_NAME} SHARED ${CKDX11_RASTERIZER_SRC})
+endif()
 add_dependencies(${PROJECT_NAME} CKDX11RasterizerShader)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${DirectX11_LIBRARY})
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
