@@ -63,9 +63,15 @@ set(HLSL_SHADER_FILES
     ${HLSL_PSHADER_FILES}
 )
 
-set_source_files_properties(${HLSL_VSHADER_FILES} PROPERTIES ShaderType "vs")
-set_source_files_properties(${HLSL_PSHADER_FILES} PROPERTIES ShaderType "ps")
-set_source_files_properties(${HLSL_SHADER_FILES} PROPERTIES ShaderModel "4_0")
+set_source_files_properties(${HLSL_VSHADER_FILES} PROPERTIES ShaderType "vs"
+                                                             VS_SHADER_TYPE Vertex)
+set_source_files_properties(${HLSL_PSHADER_FILES} PROPERTIES ShaderType "ps"
+                                                             VS_SHADER_TYPE Pixel)
+set_source_files_properties(${HLSL_SHADER_FILES} PROPERTIES
+                                VS_SHADER_DISABLE_OPTIMIZATIONS $<IF:$<CONFIG:DEBUG>,true,false>
+                                VS_SHADER_ENABLE_DEBUG $<IF:$<CONFIG:DEBUG>,true,false>
+                                VS_SHADER_MODEL 4.0
+                                ShaderModel "4_0")
 
 set(COMPILED_SHADERS_PATH ${CMAKE_BINARY_DIR}/shaderblob)
 file(MAKE_DIRECTORY ${COMPILED_SHADERS_PATH})
@@ -76,22 +82,9 @@ foreach(FILE ${HLSL_SHADER_FILES})
   get_source_file_property(shadermodel ${FILE} ShaderModel)
   message(STATUS "${shadertype}_${shadermodel}: ${FILE} ${FILE_WE}")
   if (CMAKE_GENERATOR MATCHES "Visual Studio")
-      set_source_files_properties(${HLSL_VSHADER_FILES} PROPERTIES
+      set_source_files_properties(${FILE} PROPERTIES
             VS_SHADER_OUTPUT_HEADER_FILE ${COMPILED_SHADERS_PATH}/${FILE_WE}.h
             VS_SHADER_VARIABLE_NAME g_${FILE_WE}
-            VS_SHADER_DISABLE_OPTIMIZATIONS $<IF:$<CONFIG:DEBUG>,true,false>
-            VS_SHADER_ENABLE_DEBUG $<IF:$<CONFIG:DEBUG>,true,false>
-            VS_SHADER_TYPE Vertex
-            VS_SHADER_MODEL 4.0
-            VS_SHADER_ENTRYPOINT main
-            VS_SHADER_FLAGS $<IF:$<CONFIG:DEBUG>,"/Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb",>)
-      set_source_files_properties(${HLSL_PSHADER_FILES} PROPERTIES
-            VS_SHADER_OUTPUT_HEADER_FILE ${COMPILED_SHADERS_PATH}/${FILE_WE}.h
-            VS_SHADER_VARIABLE_NAME g_${FILE_WE}
-            VS_SHADER_DISABLE_OPTIMIZATIONS $<IF:$<CONFIG:DEBUG>,true,false>
-            VS_SHADER_ENABLE_DEBUG $<IF:$<CONFIG:DEBUG>,true,false>
-            VS_SHADER_TYPE Pixel
-            VS_SHADER_MODEL 4.0
             VS_SHADER_ENTRYPOINT main
             VS_SHADER_FLAGS $<IF:$<CONFIG:DEBUG>,"/Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb",>)
   else()
@@ -115,11 +108,12 @@ include_directories(${DirectX11_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_LIST_DIR}/../vendor/DirectXMesh/Utilities/)
 include_directories(${COMPILED_SHADERS_PATH})
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
+    message(STATUS "Direct")
     add_library(${PROJECT_NAME} SHARED ${CKDX11_RASTERIZER_SRC} ${HLSL_SHADER_FILES})
 else()
     add_library(${PROJECT_NAME} SHARED ${CKDX11_RASTERIZER_SRC})
+    add_dependencies(${PROJECT_NAME} CKDX11RasterizerShader)
 endif()
-add_dependencies(${PROJECT_NAME} CKDX11RasterizerShader)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${DirectX11_LIBRARY})
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)
