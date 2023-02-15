@@ -76,7 +76,7 @@ foreach(FILE ${HLSL_SHADER_FILES})
   get_source_file_property(shadermodel ${FILE} ShaderModel)
   message(STATUS "${shadertype}_${shadermodel}: ${FILE} ${FILE_WE}")
   add_custom_command(TARGET CKDX11RasterizerShader
-                     COMMAND fxc.exe /nologo /E${FILE_WE} /T${shadertype}_${shadermodel} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fh ${COMPILED_SHADERS_PATH}/${FILE_WE}.h /Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb ${FILE}
+                     COMMAND fxc.exe /nologo /Emain /T${shadertype}_${shadermodel} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fh ${COMPILED_SHADERS_PATH}/${FILE_WE}.h /Vn g_${FILE_WE} /Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb ${FILE}
                      MAIN_DEPENDENCY ${FILE}
                      COMMENT "Compiling HLSL: ${shadertype}_${shadermodel}: ${FILE} ${FILE_WE}\n"
                      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}

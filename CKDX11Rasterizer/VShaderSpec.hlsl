@@ -1,6 +1,6 @@
 #include "Common.hlsl"
 
-VS_OUTPUT VShaderSpec(float3 position
+VS_OUTPUT main(float3 position
                       : SV_POSITION, float4 diffuse
                       : COLOR, float4 specular
                       : COLOR, float2 texcoord

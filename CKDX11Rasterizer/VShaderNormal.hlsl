@@ -1,6 +1,6 @@
 #include "Common.hlsl"
 
-VS_OUTPUT VShaderNormal(float3 position : SV_POSITION, float3 normal : NORMAL, float2 texcoord : TEXCOORD)
+VS_OUTPUT main(float3 position : SV_POSITION, float3 normal : NORMAL, float2 texcoord : TEXCOORD)
 {
     VS_OUTPUT output;
     float4 pos4 = float4(position, 1.0);

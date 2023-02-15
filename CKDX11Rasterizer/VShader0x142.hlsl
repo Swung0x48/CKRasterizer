@@ -1,6 +1,6 @@
 #include "Common.hlsl"
 
-VS_OUTPUT VShader0x142(float3 position : SV_POSITION, float4 diffuse : COLOR, float2 texcoord : TEXCOORD)
+VS_OUTPUT main(float3 position : SV_POSITION, float4 diffuse : COLOR, float2 texcoord : TEXCOORD)
 {
     VS_OUTPUT output;
     float4 pos4 = float4(position, 1.0);

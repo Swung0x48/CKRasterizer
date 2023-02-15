@@ -18,7 +18,7 @@ bool alpha_test(float in_alpha)
 
 Texture2D texture2d;
 SamplerState sampler_st;
-float4 PShader(float4 position : SV_POSITION, float4 color : COLOR, float2 texcoord : TEXCOORD) : SV_TARGET
+float4 main(float4 position : SV_POSITION, float4 color : COLOR, float2 texcoord : TEXCOORD) : SV_TARGET
 {
     if ((alpha_flags & AFLG_ALPHATESTEN) && !alpha_test(color.a)) {
         discard;
