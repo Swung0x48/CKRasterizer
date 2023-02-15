@@ -84,7 +84,7 @@ foreach(FILE ${HLSL_SHADER_FILES})
             VS_SHADER_TYPE Vertex
             VS_SHADER_MODEL 4.0
             VS_SHADER_ENTRYPOINT main
-            VS_SHADER_FLAGS "/Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb")
+            VS_SHADER_FLAGS $<IF:$<CONFIG:DEBUG>,"/Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb",>)
       set_source_files_properties(${HLSL_PSHADER_FILES} PROPERTIES
             VS_SHADER_OUTPUT_HEADER_FILE ${COMPILED_SHADERS_PATH}/${FILE_WE}.h
             VS_SHADER_VARIABLE_NAME g_${FILE_WE}
@@ -93,7 +93,7 @@ foreach(FILE ${HLSL_SHADER_FILES})
             VS_SHADER_TYPE Pixel
             VS_SHADER_MODEL 4.0
             VS_SHADER_ENTRYPOINT main
-            VS_SHADER_FLAGS "/Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb")
+            VS_SHADER_FLAGS $<IF:$<CONFIG:DEBUG>,"/Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb",>)
   else()
       add_custom_command(TARGET CKDX11RasterizerShader
                          COMMAND fxc.exe /nologo /Emain /T${shadertype}_${shadermodel} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fh ${COMPILED_SHADERS_PATH}/${FILE_WE}.h /Vn g_${FILE_WE} /Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb ${FILE}
