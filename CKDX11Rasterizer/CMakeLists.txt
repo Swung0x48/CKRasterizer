@@ -85,8 +85,13 @@ foreach(FILE ${HLSL_SHADER_FILES})
       set_source_files_properties(${FILE} PROPERTIES
             VS_SHADER_OUTPUT_HEADER_FILE ${COMPILED_SHADERS_PATH}/${FILE_WE}.h
             VS_SHADER_VARIABLE_NAME g_${FILE_WE}
-            VS_SHADER_ENTRYPOINT main
-            VS_SHADER_FLAGS $<IF:$<CONFIG:DEBUG>,"/Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb",>)
+            VS_SHADER_ENTRYPOINT main)
+      if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set_source_files_properties(${FILE} PROPERTIES
+                VS_SHADER_FLAGS "/Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb")
+      endif()
+      get_source_file_property(vsshflag ${FILE} VS_SHADER_FLAGS)
+      message(STATUS "out=${vsshflag}")
   else()
       add_custom_command(TARGET CKDX11RasterizerShader
                          COMMAND fxc.exe /nologo /Emain /T${shadertype}_${shadermodel} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fh ${COMPILED_SHADERS_PATH}/${FILE_WE}.h /Vn g_${FILE_WE} /Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb ${FILE}
@@ -108,7 +113,6 @@ include_directories(${DirectX11_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_LIST_DIR}/../vendor/DirectXMesh/Utilities/)
 include_directories(${COMPILED_SHADERS_PATH})
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
-    message(STATUS "Direct")
     add_library(${PROJECT_NAME} SHARED ${CKDX11_RASTERIZER_SRC} ${HLSL_SHADER_FILES})
 else()
     add_library(${PROJECT_NAME} SHARED ${CKDX11_RASTERIZER_SRC})
