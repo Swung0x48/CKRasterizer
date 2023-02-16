@@ -15,10 +15,11 @@
 
 #define LOGGING 1
 #define LOG_IA 0
-#define LOG_RENDERSTATE 1
-#define LOG_STATEBEFOREDRAW 1
+#define LOG_RENDERSTATE 0
+#define LOG_ALPHAFLAG 1
+#define UNHANDLED_TEXSTATE 0
 #define STATUS 1
-#define VB_STRICT 1
+#define VB_STRICT 0
 
 #if LOG_IA
 #include <conio.h>
@@ -480,7 +481,7 @@ CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD 
         return TRUE;
     }
 
-#if LOG_RENDERSTATE
+#if LOGGING && LOG_RENDERSTATE
     if (State == VXRENDERSTATE_SRCBLEND || State == VXRENDERSTATE_DESTBLEND)
     fprintf(stderr, "set render state %s -> %x, currently %x %s\n", rstytostr(State), Value,
             m_StateCache[State].Valid ? m_StateCache[State].Value : m_StateCache[State].DefaultValue,
@@ -1094,7 +1095,9 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
             }
         case CKRST_TSS_TEXCOORDINDEX:
         default:
+#if UNHANDLED_TEXSTATE
             fprintf(stderr, "unhandled texture stage state %s -> %d\n", tstytostr(Tss), Value);
+#endif
             return FALSE;
     }
 }
@@ -1725,9 +1728,9 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 #endif
     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
 
-    // if (!m_ConstantBufferUpToDate)
+    if (!m_ConstantBufferUpToDate)
     {
-#ifdef LOG_STATEBEFOREDRAW
+#ifdef LOG_ALPHAFLAG
         fprintf(stderr, "IA: Alpha flag, thr: 0x%x, %.2f\n", m_CBuffer.AlphaFlags, m_CBuffer.AlphaThreshold);
 #endif
         UpdateMatrices(WORLD_TRANSFORM);
@@ -1739,6 +1742,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         memcpy(ms.pData, &m_CBuffer, sizeof(ConstantBufferStruct));
         m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
         m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
+        m_DeviceContext->PSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
         m_ConstantBufferUpToDate = TRUE;
     }
 #if LOG_IA
@@ -1771,8 +1775,11 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         if (!m_SamplerStateUpToDate[i])
         {
             if (m_Filter[i].modified_)
+            {
                 m_SamplerDesc[i].Filter = m_Filter[i].GetFilterMode(true);
+            }
             D3DCall(m_Device->CreateSamplerState(&m_SamplerDesc[i], m_SamplerState[i].ReleaseAndGetAddressOf()));
+            m_SamplerStateUpToDate[i] = TRUE;
         }
         m_SamplerRaw[i] = m_SamplerState[i].Get();
     }
