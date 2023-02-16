@@ -1387,7 +1387,7 @@ CKBOOL CKDX11RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
     dst.GreenMask = 0x00FF00;
     dst.BlueMask = 0xFF0000;
     dst.Image = new uint8_t[dst.Width * dst.Height * (dst.BitsPerPixel / 8)];
-    VxDoBlitUpsideDown(SurfDesc, dst);
+    VxDoBlit(SurfDesc, dst);
     if (!(SurfDesc.AlphaMask || SurfDesc.Flags >= _DXT1))
         VxDoAlphaBlit(dst, 255);
     CKBOOL ret = desc->Create(this, dst.Image);
@@ -1674,7 +1674,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 #ifdef LOG_STATEBEFOREDRAW
         fprintf(stderr, "IA: Alpha flag, thr: 0x%x, %.2f\n", m_CBuffer.AlphaFlags, m_CBuffer.AlphaThreshold);
 #endif
-        this->UpdateMatrices(WORLD_TRANSFORM);
+        UpdateMatrices(WORLD_TRANSFORM);
         // this->UpdateMatrices(VIEW_TRANSFORM);
         Vx3DTransposeMatrix(m_CBuffer.TotalMatrix, m_TotalMatrix);
         // Vx3DTransposeMatrix(m_CBuffer.ViewportMatrix, m_CBuffer.ViewportMatrix);

@@ -23,5 +23,5 @@ float4 main(float4 position : SV_POSITION, float4 color : COLOR, float2 texcoord
     if ((alpha_flags & AFLG_ALPHATESTEN) && !alpha_test(color.a)) {
         discard;
     }
-    return texture2d.Sample(sampler_st, float2(texcoord.x, 1 - texcoord.y));
+    return texture2d.Sample(sampler_st, float2(texcoord.x, texcoord.y));
 }
