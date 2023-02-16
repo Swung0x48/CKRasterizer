@@ -23,6 +23,8 @@
 #include <XBitArray.h>
 
 #include "FlexibleVertexFormat.h"
+
+#include "CKDX11TextureFilter.h"
 using Microsoft::WRL::ComPtr;
 
 class CKDX11Rasterizer : public CKRasterizer
@@ -265,9 +267,11 @@ public:
     ComPtr<ID3D11RenderTargetView> m_BackBuffer;
     ComPtr<ID3D11DepthStencilView> m_DepthStencilView;
 
-    D3D11_SAMPLER_DESC m_SamplerDesc;
-    ComPtr<ID3D11SamplerState> m_SamplerState;
-    CKBOOL m_SamplerStateUpToDate = TRUE;
+    D3D11_SAMPLER_DESC m_SamplerDesc[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
+    ComPtr<ID3D11SamplerState> m_SamplerState[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
+    CKBOOL m_SamplerStateUpToDate[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT] = {TRUE};
+    CKDX11TextureFilter m_Filter[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
+    ID3D11SamplerState *m_SamplerRaw[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT] = {nullptr};
 
     D3D11_DEPTH_STENCIL_DESC m_DepthStencilDesc;
     ComPtr<ID3D11DepthStencilState> m_DepthStencilState;

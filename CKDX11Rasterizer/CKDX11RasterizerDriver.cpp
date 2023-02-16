@@ -218,7 +218,7 @@ CKBOOL CKDX11RasterizerDriver::InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapte
             CKRST_SPECIFICCAPS_GLATTENUATIONMODEL | 
             CKRST_SPECIFICCAPS_HARDWARETL | 
             CKRST_SPECIFICCAPS_DX8);
-    m_3DCaps.MaxNumberTextureStage = 1; //?
+    m_3DCaps.MaxNumberTextureStage = D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; //?
     m_3DCaps.MaxNumberBlendStage = 8; // fake it until we make it
     m_3DCaps.MaxActiveLights = 16; // this is a lie (at least for now)
     m_3DCaps.MinTextureWidth = 1; // we are using texture of width 1 for blank textures

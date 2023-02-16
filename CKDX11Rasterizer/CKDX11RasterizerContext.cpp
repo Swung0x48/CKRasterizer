@@ -11,6 +11,8 @@
 #include "VShader0x42.h"
 #include "PShader.h"
 
+#include <algorithm>
+
 #define LOGGING 1
 #define LOG_IA 0
 #define LOG_RENDERSTATE 1
@@ -163,22 +165,29 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
 
     // D3D11_SAMPLER_DESC SamplerDesc = {};
 
-    m_SamplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    m_SamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-    m_SamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-    m_SamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-    m_SamplerDesc.MipLODBias = 0.0f;
-    m_SamplerDesc.MaxAnisotropy = 1;
-    m_SamplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-    m_SamplerDesc.BorderColor[0] = 1.0f;
-    m_SamplerDesc.BorderColor[1] = 1.0f;
-    m_SamplerDesc.BorderColor[2] = 1.0f;
-    m_SamplerDesc.BorderColor[3] = 1.0f;
-    m_SamplerDesc.MinLOD = -FLT_MAX;
-    m_SamplerDesc.MaxLOD = FLT_MAX;
+    VxColor border(1.0f, 1.0f, 1.0f, 1.0f);
+    for (int i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        m_SamplerDesc[i].Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        m_SamplerDesc[i].AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+        m_SamplerDesc[i].AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+        m_SamplerDesc[i].AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+        m_SamplerDesc[i].MipLODBias = 0.0f;
+        m_SamplerDesc[i].MaxAnisotropy = 1;
+        m_SamplerDesc[i].ComparisonFunc = D3D11_COMPARISON_NEVER;
+        std::copy_n(border.col, 4, m_SamplerDesc[i].BorderColor);
+        m_SamplerDesc[i].MinLOD = -FLT_MAX;
+        m_SamplerDesc[i].MaxLOD = FLT_MAX;
+        D3DCall(m_Device->CreateSamplerState(&m_SamplerDesc[i], m_SamplerState[i].GetAddressOf()));
+    }
 
-    D3DCall(m_Device->CreateSamplerState(&m_SamplerDesc, m_SamplerState.GetAddressOf()));
-    m_DeviceContext->PSSetSamplers(0, 1, m_SamplerState.GetAddressOf());
+    ID3D11SamplerState *samplers[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
+    for (int i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        samplers[i] = m_SamplerState[i].Get();
+    }
+    // m_DeviceContext->PSSetSamplers(0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, m_SamplerState->GetAddressOf());
+    m_DeviceContext->PSSetSamplers(0, static_cast<UINT>(std::size(samplers)), samplers);
 
     ZeroMemory(&m_BlendStateDesc, sizeof(D3D11_BLEND_DESC));
     m_BlendStateDesc.AlphaToCoverageEnable = FALSE;
@@ -303,8 +312,27 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     CKTextureDesc blank;
     blank.Format.Width = 1;
     blank.Format.Height = 1;
+    blank.Format.AlphaMask = 0xFF000000;
+    blank.Format.RedMask = 0x0000FF;
+    blank.Format.GreenMask = 0x00FF00;
+    blank.Format.BlueMask = 0xFF0000;
+    blank.MipMapCount = 0;
     CreateTexture(0, &blank);
-
+    CKDWORD white = ~0U;
+    // VxImageDescEx image;
+    // image.Height = 1;
+    // image.Width = 1;
+    // image.BitsPerPixel = 32;
+    // image.BytesPerLine = 4 * image.Width;
+    // image.AlphaMask = 0xFF000000;
+    // image.RedMask = 0x0000FF;
+    // image.GreenMask = 0x00FF00;
+    // image.BlueMask = 0xFF0000;
+    // image.Image = (XBYTE*)&white;
+    auto dx11tex = static_cast<CKDX11TextureDesc *>(m_Textures[0]);
+    if (!dx11tex->Create(this, &white))
+        return FALSE;
+    dx11tex->Bind(this);
 
     SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, 1);
     SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
@@ -990,9 +1018,10 @@ CKBOOL CKDX11RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
     CKDX11TextureDesc *desc = static_cast<CKDX11TextureDesc *>(m_Textures[Texture]);
     if (!desc)
     {
+        desc = static_cast<CKDX11TextureDesc *>(m_Textures[0]);
         // ID3D11ShaderResourceView *srv_ptr = nullptr;
         // m_DeviceContext->PSSetShaderResources(0, 1, &srv_ptr);
-        return TRUE;
+        // return TRUE;
     }
     desc->Bind(this);
     return TRUE;
@@ -1017,31 +1046,57 @@ D3D11_TEXTURE_ADDRESS_MODE Vx2D3DTextureAddressMode(VXTEXTURE_ADDRESSMODE mode)
     return D3D11_TEXTURE_ADDRESS_WRAP;
 }
 
-D3D11_FILTER Vx2D3DFilterMode(VXTEXTURE_FILTERMODE mode)
-{
-    switch (mode)
-    {
-        case VXTEXTUREFILTER_NEAREST:
-            break;
-        case VXTEXTUREFILTER_LINEAR:
-            break;
-        case VXTEXTUREFILTER_MIPNEAREST:
-            break;
-        case VXTEXTUREFILTER_MIPLINEAR:
-            break;
-        case VXTEXTUREFILTER_LINEARMIPNEAREST:
-            break;
-        case VXTEXTUREFILTER_LINEARMIPLINEAR:
-            break;
-        case VXTEXTUREFILTER_ANISOTROPIC:
-            return D3D11_FILTER_ANISOTROPIC;
-        default: ;
-    }
-}
+
 
 CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
-    return CKRasterizerContext::SetTextureStageState(Stage, Tss, Value);
+    switch (Tss)
+    {
+        case CKRST_TSS_ADDRESS:
+        {
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            auto mode = Vx2D3DTextureAddressMode((VXTEXTURE_ADDRESSMODE)Value);
+            m_SamplerDesc[Stage].AddressU = mode;
+            m_SamplerDesc[Stage].AddressV = mode;
+            m_SamplerDesc[Stage].AddressW = mode;
+            return TRUE;
+        }
+        case CKRST_TSS_ADDRESSU:
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            m_SamplerDesc[Stage].AddressU = Vx2D3DTextureAddressMode((VXTEXTURE_ADDRESSMODE)Value);
+            return TRUE;
+        case CKRST_TSS_ADDRESSV:
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            m_SamplerDesc[Stage].AddressV = Vx2D3DTextureAddressMode((VXTEXTURE_ADDRESSMODE)Value);
+            return TRUE;
+        case CKRST_TSS_BORDERCOLOR:
+        {
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            VxColor c(Value);
+            std::copy_n(c.col, 4, m_SamplerDesc[Stage].BorderColor);
+            return TRUE;
+        }
+        case CKRST_TSS_MINFILTER:
+        case CKRST_TSS_MAGFILTER:
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            return m_Filter[Stage].SetFilterMode(Tss, static_cast<VXTEXTURE_FILTERMODE>(Value));
+        case CKRST_TSS_STAGEBLEND:
+            {
+                
+            }
+        case CKRST_TSS_TEXTUREMAPBLEND:
+            {
+                
+            }
+        case CKRST_TSS_TEXTURETRANSFORMFLAGS:
+            {
+                
+            }
+        case CKRST_TSS_TEXCOORDINDEX:
+        default:
+            fprintf(stderr, "unhandled texture stage state %s -> %d\n", tstytostr(Tss), Value);
+            return FALSE;
+    }
 }
 CKBOOL CKDX11RasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
 {
@@ -1617,7 +1672,7 @@ CKBOOL CKDX11RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc 
 }
 
 CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX11IndexBufferDesc *ibo,
-                                            VXPRIMITIVETYPE pType)
+                                              VXPRIMITIVETYPE pType)
 {
     if (!vbo)
         return FALSE;
@@ -1658,7 +1713,8 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 #endif
         VShader = m_VertexShaderMap.at(vbo->m_VertexFormat);
 #if defined(DEBUG) || defined(_DEBUG)
-    } catch (...)
+    }
+    catch (...)
     {
 #if LOG_IA
         fprintf(stderr, "FVF: 0x%x\n", vbo->m_VertexFormat);
@@ -1668,7 +1724,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
     }
 #endif
     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
-    
+
     // if (!m_ConstantBufferUpToDate)
     {
 #ifdef LOG_STATEBEFOREDRAW
@@ -1689,7 +1745,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
     fprintf(stderr, "IA: vs %s\n", vs->DxEntryPoint);
 #endif
     vs->Bind(this);
-    
+
     m_FVF = vbo->m_VertexFormat;
 
     if (!m_RasterizerStateUpToDate)
@@ -1709,10 +1765,18 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         m_DeviceContext->OMSetDepthStencilState(m_DepthStencilState.Get(), 1);
         m_DepthStencilStateUpToDate = TRUE;
     }
-    if (!m_SamplerStateUpToDate)
+
+    for (int i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
     {
-        D3DCall(m_Device->CreateSamplerState(&m_SamplerDesc, m_SamplerState.ReleaseAndGetAddressOf()));
-        m_DeviceContext->PSSetSamplers(0, 1, m_SamplerState.GetAddressOf());
+        if (!m_SamplerStateUpToDate[i])
+        {
+            if (m_Filter[i].modified_)
+                m_SamplerDesc[i].Filter = m_Filter[i].GetFilterMode(true);
+            D3DCall(m_Device->CreateSamplerState(&m_SamplerDesc[i], m_SamplerState[i].ReleaseAndGetAddressOf()));
+        }
+        m_SamplerRaw[i] = m_SamplerState[i].Get();
     }
+    m_DeviceContext->PSSetSamplers(0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, m_SamplerRaw);
+    
     return TRUE;
 }
