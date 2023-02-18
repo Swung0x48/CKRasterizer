@@ -13,7 +13,7 @@
 
 #include <algorithm>
 
-#define LOGGING 1
+#define LOGGING 0
 #define LOG_IA 0
 #define LOG_RENDERSTATE 0
 #define LOG_ALPHAFLAG 1
@@ -308,7 +308,8 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     // vs->Bind(this);
     ps->Bind(this);
 
-    m_ConstantBuffer.Create(this);
+    m_VSConstantBuffer.Create(this, sizeof(VSConstantBufferStruct));
+    m_PSConstantBuffer.Create(this, sizeof(PSConstantBufferStruct));
 
     CKTextureDesc blank;
     blank.Format.Width = 1;
@@ -399,7 +400,7 @@ CKBOOL CKDX11RasterizerContext::EndScene()
     if (!m_SceneBegined)
         return FALSE;
     m_MatrixUptodate = 0;
-    m_ConstantBufferUpToDate = FALSE;
+    m_VSConstantBufferUpToDate = FALSE;
     m_SceneBegined = FALSE;
     return TRUE;
 }
@@ -422,9 +423,9 @@ CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
     m_Viewport.MinDepth = 0.0f;
     m_DeviceContext->RSSetViewports(1, &m_Viewport);
     
-    m_ConstantBufferUpToDate = FALSE;
-    m_CBuffer.ViewportMatrix = VxMatrix::Identity();
-    float(*m)[4] = (float(*)[4]) &m_CBuffer.ViewportMatrix;
+    m_VSConstantBufferUpToDate = FALSE;
+    m_VSCBuffer.ViewportMatrix = VxMatrix::Identity();
+    float(*m)[4] = (float(*)[4]) &m_VSCBuffer.ViewportMatrix;
     m[0][0] = 2. / data->ViewWidth;
     m[1][1] = 2. / data->ViewHeight;
     m[2][2] = 0;
@@ -467,7 +468,7 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
     {
         m_UnityMatrixMask &= ~UnityMatrixMask;
     }
-    m_ConstantBufferUpToDate = FALSE;
+    m_VSConstantBufferUpToDate = FALSE;
     return ret;
 }
 CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
@@ -544,8 +545,8 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             m_DepthStencilDesc.DepthWriteMask = Value ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
             return TRUE;
         case VXRENDERSTATE_ALPHATESTENABLE:
-            m_ConstantBufferUpToDate = FALSE;
-            flag_toggle(&m_CBuffer.AlphaFlags, AFLG_ALPHATESTEN, Value);
+            m_PSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_PSCBuffer.AlphaFlags, AFLG_ALPHATESTEN, Value);
             return TRUE;
         case VXRENDERSTATE_SRCBLEND:
             m_BlendStateUpToDate = FALSE;
@@ -709,13 +710,13 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             }
             return TRUE;
         case VXRENDERSTATE_ALPHAREF:
-            m_ConstantBufferUpToDate = FALSE;
-            m_CBuffer.AlphaThreshold = Value / 255.;
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.AlphaThreshold = Value / 255.;
             return TRUE;
         case VXRENDERSTATE_ALPHAFUNC:
-            m_ConstantBufferUpToDate = FALSE;
-            m_CBuffer.AlphaFlags &= ~VXCMP_MASK;
-            m_CBuffer.AlphaFlags |= (Value & VXCMP_MASK);
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.AlphaFlags &= ~VXCMP_MASK;
+            m_PSCBuffer.AlphaFlags |= (Value & VXCMP_MASK);
             return TRUE;
         case VXRENDERSTATE_DITHERENABLE:
             return FALSE;
@@ -1729,24 +1730,34 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 #endif
     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
 
-    if (!m_ConstantBufferUpToDate)
+    if (!m_VSConstantBufferUpToDate)
     {
-#ifdef LOG_ALPHAFLAG
-        fprintf(stderr, "IA: Alpha flag, thr: 0x%x, %.2f\n", m_CBuffer.AlphaFlags, m_CBuffer.AlphaThreshold);
-#endif
         UpdateMatrices(WORLD_TRANSFORM);
         // this->UpdateMatrices(VIEW_TRANSFORM);
-        Vx3DTransposeMatrix(m_CBuffer.TotalMatrix, m_TotalMatrix);
-        // Vx3DTransposeMatrix(m_CBuffer.ViewportMatrix, m_CBuffer.ViewportMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
+        // Vx3DTransposeMatrix(m_VSCBuffer.ViewportMatrix, m_VSCBuffer.ViewportMatrix);
         D3D11_MAPPED_SUBRESOURCE ms;
-        D3DCall(m_DeviceContext->Map(m_ConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
-        memcpy(ms.pData, &m_CBuffer, sizeof(ConstantBufferStruct));
-        m_DeviceContext->Unmap(m_ConstantBuffer.DxBuffer.Get(), NULL);
-        m_DeviceContext->VSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
-        m_DeviceContext->PSSetConstantBuffers(0, 1, m_ConstantBuffer.DxBuffer.GetAddressOf());
-        m_ConstantBufferUpToDate = TRUE;
+        D3DCall(m_DeviceContext->Map(m_VSConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
+        memcpy(ms.pData, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
+        m_DeviceContext->Unmap(m_VSConstantBuffer.DxBuffer.Get(), NULL);
+
+        m_DeviceContext->VSSetConstantBuffers(0, 1, m_VSConstantBuffer.DxBuffer.GetAddressOf());
+        m_VSConstantBufferUpToDate = TRUE;
     }
-#if LOG_IA
+
+    if (!m_PSConstantBufferUpToDate)
+    {
+#if LOGGING && (LOG_ALPHAFLAG)
+        fprintf(stderr, "IA: Alpha flag, thr: 0x%x, %.2f\n", m_PSCBuffer.AlphaFlags, m_PSCBuffer.AlphaThreshold);
+#endif
+        D3D11_MAPPED_SUBRESOURCE ms;
+        D3DCall(m_DeviceContext->Map(m_PSConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
+        memcpy(ms.pData, &m_PSCBuffer, sizeof(PSConstantBufferStruct));
+        m_DeviceContext->Unmap(m_PSConstantBuffer.DxBuffer.Get(), NULL);
+        m_DeviceContext->PSSetConstantBuffers(0, 1, m_PSConstantBuffer.DxBuffer.GetAddressOf());
+        m_PSConstantBufferUpToDate = TRUE;
+    }
+#if LOGGING && LOG_IA
     fprintf(stderr, "IA: vs %s\n", vs->DxEntryPoint);
 #endif
     vs->Bind(this);

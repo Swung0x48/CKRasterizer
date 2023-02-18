@@ -8,10 +8,14 @@ struct VS_OUTPUT
 static const dword AFLG_ALPHATESTEN = 0x10u;
 static const dword AFLG_ALPHAFUNCMASK = 0xFu;
 
-cbuffer CBuf: register(b0)
+cbuffer VSCBuf: register(b0)
 {
     matrix total_mat;
     matrix viewport_mat;
+};
+
+cbuffer PSCBuf : register(b0)
+{
     dword alpha_flags;
     float alpha_thresh;
 };

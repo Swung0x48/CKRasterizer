@@ -8,7 +8,6 @@
 #include "CKRasterizer.h"
 #include <Windows.h>
 #include <d3d11.h>
-#include <d3d10.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
 #include <wrl.h>
@@ -26,6 +25,8 @@
 
 #include "CKDX11TextureFilter.h"
 using Microsoft::WRL::ComPtr;
+
+static constexpr int MAX_ACTIVE_LIGHTS = 16;
 
 class CKDX11Rasterizer : public CKRasterizer
 {
@@ -115,14 +116,18 @@ typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
 } CKDX11PixelShaderDesc;
 
 static constexpr uint32_t AFLG_ALPHATESTEN = 0x10U;
-typedef struct ConstantBufferStruct
+typedef struct VSConstantBufferStruct
 {
     VxMatrix TotalMatrix;
     VxMatrix ViewportMatrix;
+} VSConstantBufferStruct;
+
+typedef struct PSConstantBufferStruct
+{
     uint32_t AlphaFlags = 0;
     float AlphaThreshold = 0.0f;
     uint64_t _padding;
-} ConstantBufferStruct;
+} PSConstantBufferStruct;
 
 
 typedef struct CKDX11ConstantBufferDesc
@@ -131,7 +136,7 @@ public:
     ComPtr<ID3D11Buffer> DxBuffer;
     D3D11_BUFFER_DESC DxDesc;
     CKDX11ConstantBufferDesc() { ZeroMemory(&DxDesc, sizeof(D3D11_BUFFER_DESC)); }
-    virtual CKBOOL Create(CKDX11RasterizerContext *ctx);
+    virtual CKBOOL Create(CKDX11RasterizerContext *ctx, UINT size);
 } CKDX11ConstantBufferDesc;
 
 typedef struct CKDX11TextureDesc : CKTextureDesc
@@ -292,8 +297,10 @@ public:
     CKDWORD m_CurrentPShader = -1;
     CKDWORD m_FVF = 0;
 
-    CKDX11ConstantBufferDesc m_ConstantBuffer;
-    CKBOOL m_ConstantBufferUpToDate;
+    CKDX11ConstantBufferDesc m_VSConstantBuffer;
+    CKBOOL m_VSConstantBufferUpToDate;
+    CKDX11ConstantBufferDesc m_PSConstantBuffer;
+    CKBOOL m_PSConstantBufferUpToDate;
     std::unordered_map<CKDWORD, CKDWORD> m_VertexShaderMap;
     
     VxDirectXData m_DirectXData;
@@ -305,7 +312,8 @@ public:
 
     // CKDX11VertexBufferDesc *m_DynamicVertexBuffer[DYNAMIC_VBO_COUNT] = {nullptr};
     CKDX11IndexBufferDesc *m_DynamicIndexBuffer[DYNAMIC_IBO_COUNT] = {nullptr};
-    ConstantBufferStruct m_CBuffer;
+    VSConstantBufferStruct m_VSCBuffer;
+    PSConstantBufferStruct m_PSCBuffer;
 
     volatile CKBOOL m_InCreateDestroy;
     std::string m_OriginalTitle;
