@@ -32,6 +32,14 @@ static int vbbat = 0;
 static int vbibbat = 0;
 #endif
 
+void flag_toggle(uint32_t *state_dword, uint32_t flag, bool enabled)
+{
+    if (enabled)
+        *state_dword |= flag;
+    else
+        *state_dword &= ~0U ^ flag;
+}
+
 CKDX11RasterizerContext::CKDX11RasterizerContext() { CKRasterizerContext::CKRasterizerContext(); }
 CKDX11RasterizerContext::~CKDX11RasterizerContext() {}
 
@@ -406,11 +414,21 @@ CKBOOL CKDX11RasterizerContext::EndScene()
 }
 CKBOOL CKDX11RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
-    return CKRasterizerContext::SetLight(Light, data);
+    if (Light >= MAX_ACTIVE_LIGHTS)
+        return FALSE;
+    m_CurrentLightData[Light] = *data;
+    m_PSCBuffer.Lights[Light] = *data;
+    ConvertAttenuationModelFromDX5(m_PSCBuffer.Lights[Light].a0, m_PSCBuffer.Lights[Light].a1,
+                                   m_PSCBuffer.Lights[Light].a2,
+                                   data->Range);
+    return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 {
-    return CKRasterizerContext::EnableLight(Light, Enable);
+    if (Light >= MAX_ACTIVE_LIGHTS)
+        return FALSE;
+    flag_toggle(&m_PSCBuffer.Lights[Light].type, LFLG_LIGHTEN, Enable);
+    return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::SetMaterial(CKMaterialData *mat) { return CKRasterizerContext::SetMaterial(mat); }
 
@@ -496,14 +514,6 @@ CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD 
         return FALSE;
 
     return InternalSetRenderState(State, Value);
-}
-
-void flag_toggle(uint32_t *state_dword, uint32_t flag, bool enabled)
-{
-    if (enabled)
-        *state_dword |= flag;
-    else
-        *state_dword &= ~0U ^ flag;
 }
 
 CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
@@ -1744,7 +1754,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         m_DeviceContext->VSSetConstantBuffers(0, 1, m_VSConstantBuffer.DxBuffer.GetAddressOf());
         m_VSConstantBufferUpToDate = TRUE;
     }
-
+     
     if (!m_PSConstantBufferUpToDate)
     {
 #if LOGGING && (LOG_ALPHAFLAG)
@@ -1762,7 +1772,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 #endif
     vs->Bind(this);
 
-    m_FVF = vbo->m_VertexFormat;
+    m_VSCBuffer.FVF = vbo->m_VertexFormat;
 
     if (!m_RasterizerStateUpToDate)
     {

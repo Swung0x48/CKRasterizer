@@ -115,20 +115,49 @@ typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
     virtual void Bind(CKDX11RasterizerContext *ctx);
 } CKDX11PixelShaderDesc;
 
+struct CKDX11LightConstant
+{
+    uint32_t type; // highest bit as LIGHTEN
+    float a0;
+    float a1;
+    float a2; // align
+    VxColor ambient; // a
+    VxColor diffuse; // a
+    VxColor specular; // a
+    VxVector4 direction; // a
+    VxVector4 position; // a
+    float range;
+    float falloff;
+    float theta;
+    float phi; // a
+
+    CKDX11LightConstant() {}
+    CKDX11LightConstant(CKLightData ld) :
+        type(ld.Type), ambient(ld.Ambient), diffuse(ld.Diffuse), specular(ld.Specular),
+        direction(VxVector4(ld.Direction.x, ld.Direction.y, ld.Direction.z, 0.)),
+        position(VxVector4(ld.Position.x, ld.Position.y, ld.Position.z, 1.)), range(ld.Range), falloff(ld.Falloff),
+        theta(ld.InnerSpotCone), phi(ld.OuterSpotCone), a0(ld.Attenuation0), a1(ld.Attenuation1), a2(ld.Attenuation2)
+    {
+    }
+};
+
 static constexpr uint32_t AFLG_ALPHATESTEN = 0x10U;
 typedef struct VSConstantBufferStruct
 {
     VxMatrix TotalMatrix;
     VxMatrix ViewportMatrix;
+    uint32_t FVF = 0;
+    uint32_t _padding[3];
 } VSConstantBufferStruct;
 
+static constexpr uint32_t LFLG_LIGHTEN = 1U << 31;
 typedef struct PSConstantBufferStruct
 {
     uint32_t AlphaFlags = 0;
     float AlphaThreshold = 0.0f;
     uint64_t _padding;
+    CKDX11LightConstant Lights[MAX_ACTIVE_LIGHTS];
 } PSConstantBufferStruct;
-
 
 typedef struct CKDX11ConstantBufferDesc
 {
@@ -295,7 +324,7 @@ public:
     CKBOOL m_AllowTearing;
     CKDWORD m_CurrentVShader = -1;
     CKDWORD m_CurrentPShader = -1;
-    CKDWORD m_FVF = 0;
+    // CKDWORD m_FVF = 0;
 
     CKDX11ConstantBufferDesc m_VSConstantBuffer;
     CKBOOL m_VSConstantBufferUpToDate;
