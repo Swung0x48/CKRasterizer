@@ -20,8 +20,10 @@ Texture2D texture2d;
 SamplerState sampler_st;
 float4 main(float4 position : SV_POSITION, float4 color : COLOR, float2 texcoord : TEXCOORD) : SV_TARGET
 {
-    if ((alpha_flags & AFLG_ALPHATESTEN) && !alpha_test(color.a)) {
+    float4 samp_color = texture2d.Sample(sampler_st, float2(texcoord.x, texcoord.y));
+    if ((alpha_flags & AFLG_ALPHATESTEN) && !alpha_test(samp_color.a))
+    {
         discard;
     }
-    return texture2d.Sample(sampler_st, float2(texcoord.x, texcoord.y));
+    return samp_color;
 }

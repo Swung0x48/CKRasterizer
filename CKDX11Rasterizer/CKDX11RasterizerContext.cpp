@@ -714,6 +714,7 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             return TRUE;
         case VXRENDERSTATE_ALPHAFUNC:
             m_ConstantBufferUpToDate = FALSE;
+            m_CBuffer.AlphaFlags &= ~VXCMP_MASK;
             m_CBuffer.AlphaFlags |= (Value & VXCMP_MASK);
             return TRUE;
         case VXRENDERSTATE_DITHERENABLE:

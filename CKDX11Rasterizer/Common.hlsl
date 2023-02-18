@@ -8,7 +8,7 @@ struct VS_OUTPUT
 static const dword AFLG_ALPHATESTEN = 0x10u;
 static const dword AFLG_ALPHAFUNCMASK = 0xFu;
 
-cbuffer CBuf
+cbuffer CBuf: register(b0)
 {
     matrix total_mat;
     matrix viewport_mat;
