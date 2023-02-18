@@ -175,7 +175,7 @@ typedef struct CKDX11TextureDesc : CKTextureDesc
     ComPtr<ID3D11ShaderResourceView> DxSRV;
     CKDX11TextureDesc(CKTextureDesc *desc);
     virtual CKBOOL Create(CKDX11RasterizerContext *ctx, void *data);
-    void Bind(CKDX11RasterizerContext *ctx);
+    void Bind(CKDX11RasterizerContext *ctx, int stage);
     void Load(CKDX11RasterizerContext *ctx, void *data);
 } CKDX11TextureDesc;
 

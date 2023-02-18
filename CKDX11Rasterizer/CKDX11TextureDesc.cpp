@@ -33,7 +33,7 @@ CKBOOL CKDX11TextureDesc::Create(CKDX11RasterizerContext *ctx, void* data)
     return SUCCEEDED(hr);
 }
 
-void CKDX11TextureDesc::Bind(CKDX11RasterizerContext *ctx) {
+void CKDX11TextureDesc::Bind(CKDX11RasterizerContext *ctx, int stage) {
     ctx->m_DeviceContext->PSSetShaderResources(0, 1, DxSRV.GetAddressOf());
 }
 

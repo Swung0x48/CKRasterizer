@@ -342,7 +342,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     auto dx11tex = static_cast<CKDX11TextureDesc *>(m_Textures[0]);
     if (!dx11tex->Create(this, &white))
         return FALSE;
-    dx11tex->Bind(this);
+    // dx11tex->Bind(this, 0);
 
     SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, 1);
     SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
@@ -1036,7 +1036,7 @@ CKBOOL CKDX11RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
         // m_DeviceContext->PSSetShaderResources(0, 1, &srv_ptr);
         // return TRUE;
     }
-    desc->Bind(this);
+    desc->Bind(this, Stage);
     return TRUE;
 }
 
