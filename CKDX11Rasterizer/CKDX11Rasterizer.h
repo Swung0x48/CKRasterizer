@@ -92,7 +92,7 @@ typedef struct CKDX11VertexShaderDesc : public CKVertexShaderDesc
 {
     ComPtr<ID3DBlob> DxBlob;
     ComPtr<ID3D11VertexShader> DxShader;
-    LPCSTR DxEntryPoint = "VShader";
+    LPCSTR DxEntryPoint = "main";
     LPCSTR DxTarget = "vs_4_0";
     ComPtr<ID3DBlob> DxErrorMsgs;
     CKDWORD DxFVF;
@@ -107,7 +107,7 @@ typedef struct CKDX11PixelShaderDesc : public CKPixelShaderDesc
 {
     ComPtr<ID3DBlob> DxBlob;
     ComPtr<ID3D11PixelShader> DxShader;
-    LPCSTR DxEntryPoint = "PShader";
+    LPCSTR DxEntryPoint = "main";
     LPCSTR DxTarget = "ps_4_0";
     ComPtr<ID3DBlob> DxErrorMsgs;
     virtual CKBOOL Compile(CKDX11RasterizerContext *ctx);

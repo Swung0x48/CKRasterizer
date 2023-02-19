@@ -2,13 +2,11 @@
 #include "CKDX11RasterizerCommon.h"
 #include "EnumMaps.h"
 
+#include "VShader2D.h"
 #include "VShaderColor.h"
-#include "VShaderNormal.h"
-#include "VShaderSpec.h"
-#include "VShader0x102.h"
-#include "VShader0x142.h"
-#include "VShader0x1c4.h"
-#include "VShader0x42.h"
+#include "VShaderColorTex.h"
+#include "VShaderNormalTex.h"
+#include "VShaderTex.h"
 #include "PShader.h"
 
 #include <algorithm>
@@ -244,76 +242,57 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     if (m_Fullscreen)
         m_Driver->m_Owner->m_FullscreenContext = this;
 
-    CKDWORD vs_2d_idx = 0, vs_normal_idx = 1, vs_spec_idx = 2, vs_0x102_idx = 3, vs_0x142_idx = 4, vs_0x1c4_idx = 5, vs_0x42_idx = 6;
+    CKDWORD vs_2d_idx = 0, vs_normal_tex_idx = 1, vs_color_tex_idx = 2, vs_tex_idx = 3, vs_0x142_idx = 4, vs_0x1c4_idx = 5, vs_color_idx = 6;
     CKDWORD ps_idx = 0;
-    CKDX11VertexShaderDesc vs_desc;
-    vs_desc.m_Function = (CKDWORD*)g_VShaderColor;
-    vs_desc.m_FunctionSize = sizeof(g_VShaderColor);
-    vs_desc.DxEntryPoint = "VShaderColor";
-    vs_desc.DxFVF = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
-    CreateObject(vs_2d_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc);
+    CKDX11VertexShaderDesc vs_2d_desc;
+    vs_2d_desc.m_Function = (CKDWORD*)g_VShader2D;
+    vs_2d_desc.m_FunctionSize = sizeof(g_VShader2D);
+    vs_2d_desc.DxFVF = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
+    CreateObject(vs_2d_idx, CKRST_OBJ_VERTEXSHADER, &vs_2d_desc);
 
     CKDX11PixelShaderDesc ps_desc;
     ps_desc.m_Function = (CKDWORD *)g_PShader;
     ps_desc.m_FunctionSize = sizeof(g_PShader);
     CreateObject(ps_idx, CKRST_OBJ_PIXELSHADER, &ps_desc);
 
-    CKDX11VertexShaderDesc vs_desc_normal;
-    vs_desc_normal.m_Function = (CKDWORD *)g_VShaderNormal;
-    vs_desc_normal.m_FunctionSize = sizeof(g_VShaderNormal);
-    vs_desc_normal.DxEntryPoint = "VShaderNormal";
-    vs_desc_normal.DxFVF = CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1;
-    CreateObject(vs_normal_idx, CKRST_OBJ_VERTEXSHADER, &vs_desc_normal);
+    CKDX11VertexShaderDesc vs_normal_tex;
+    vs_normal_tex.m_Function = (CKDWORD *)g_VShaderNormalTex;
+    vs_normal_tex.m_FunctionSize = sizeof(g_VShaderNormalTex);
+    vs_normal_tex.DxFVF = CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1;
+    CreateObject(vs_normal_tex_idx, CKRST_OBJ_VERTEXSHADER, &vs_normal_tex);
 
-    CKDX11VertexShaderDesc vs_spec_normal;
-    vs_spec_normal.m_Function = (CKDWORD *)g_VShaderSpec;
-    vs_spec_normal.m_FunctionSize = sizeof(g_VShaderSpec);
-    vs_spec_normal.DxEntryPoint = "VShaderSpec";
-    vs_spec_normal.DxFVF = CKRST_VF_POSITION | CKRST_VF_SPECULAR | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
-    CreateObject(vs_spec_idx, CKRST_OBJ_VERTEXSHADER, &vs_spec_normal);
+    CKDX11VertexShaderDesc vs_color_tex;
+    vs_color_tex.m_Function = (CKDWORD *)g_VShaderColorTex;
+    vs_color_tex.m_FunctionSize = sizeof(g_VShaderColorTex);
+    vs_color_tex.DxFVF = CKRST_VF_POSITION | CKRST_VF_SPECULAR | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
+    CreateObject(vs_color_tex_idx, CKRST_OBJ_VERTEXSHADER, &vs_color_tex);
 
-    CKDX11VertexShaderDesc vs_0x102;
-    vs_0x102.m_Function = (CKDWORD *)g_VShader0x102;
-    vs_0x102.m_FunctionSize = sizeof(g_VShader0x102);
-    vs_0x102.DxEntryPoint = "VShader0x102";
-    vs_0x102.DxFVF = CKRST_VF_POSITION | CKRST_VF_TEX1;
-    CreateObject(vs_0x102_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x102);
+    CKDX11VertexShaderDesc vs_tex;
+    vs_tex.m_Function = (CKDWORD *)g_VShaderTex;
+    vs_tex.m_FunctionSize = sizeof(g_VShaderTex);
+    vs_tex.DxFVF = CKRST_VF_POSITION | CKRST_VF_TEX1;
+    CreateObject(vs_tex_idx, CKRST_OBJ_VERTEXSHADER, &vs_tex);
 
-    CKDX11VertexShaderDesc vs_0x142;
-    vs_0x142.m_Function = (CKDWORD *)g_VShader0x142;
-    vs_0x142.m_FunctionSize = sizeof(g_VShader0x142);
-    vs_0x142.DxEntryPoint = "VShader0x142";
-    vs_0x142.DxFVF = CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
-    CreateObject(vs_0x142_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x142);
-
-    CKDX11VertexShaderDesc vs_0x1c4;
-    vs_0x1c4.m_Function = (CKDWORD *)g_VShader0x1c4;
-    vs_0x1c4.m_FunctionSize = sizeof(g_VShader0x1c4);
-    vs_0x1c4.DxEntryPoint = "VShader0x1c4";
-    vs_0x1c4.DxFVF = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1;
-    CreateObject(vs_0x1c4_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x1c4);
-
-    CKDX11VertexShaderDesc vs_0x42;
-    vs_0x42.m_Function = (CKDWORD *)g_VShader0x42;
-    vs_0x42.m_FunctionSize = sizeof(g_VShader0x42);
-    vs_0x42.DxEntryPoint = "VShader0x42";
-    vs_0x42.DxFVF = CKRST_VF_POSITION | CKRST_VF_DIFFUSE;
-    CreateObject(vs_0x42_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x42);
+    CKDX11VertexShaderDesc vs_color;
+    vs_color.m_Function = (CKDWORD *)g_VShaderColor;
+    vs_color.m_FunctionSize = sizeof(g_VShaderColor);
+    vs_color.DxFVF = CKRST_VF_POSITION | CKRST_VF_DIFFUSE;
+    CreateObject(vs_color_idx, CKRST_OBJ_VERTEXSHADER, &vs_color);
 
     m_VertexShaderMap[CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_2d_idx;
     m_VertexShaderMap[CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1] = vs_2d_idx;
 
-    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1] = vs_normal_idx;
-    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX2] = vs_normal_idx;
+    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1] = vs_normal_tex_idx;
+    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX2] = vs_normal_tex_idx;
 
-    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_TEX1] = vs_0x102_idx;
+    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_TEX1] = vs_tex_idx;
 
-    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1] = vs_spec_idx;
+    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1] = vs_color_tex_idx;
     // m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_0x142_idx;
-    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_spec_idx;
+    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_color_tex_idx;
 
 
-    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE] = vs_0x42_idx;
+    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE] = vs_color_idx;
     // m_CurrentVShader = vs_idx;
     m_CurrentPShader = ps_idx;
 
