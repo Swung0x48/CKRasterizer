@@ -38,6 +38,19 @@ void flag_toggle(uint32_t *state_dword, uint32_t flag, bool enabled)
         *state_dword &= ~0U ^ flag;
 }
 
+void InverseMatrix(VxMatrix& result, const VxMatrix &m)
+{
+    using namespace DirectX;
+
+    XMFLOAT4X4 src((const float*) &m);
+    XMMATRIX srcmat = XMLoadFloat4x4(&src);
+
+    XMMATRIX invmat = XMMatrixInverse(nullptr, srcmat);
+
+    XMFLOAT4X4 dest((const float*) &result);
+    XMStoreFloat4x4(&dest, invmat);
+}
+
 CKDX11RasterizerContext::CKDX11RasterizerContext() { CKRasterizerContext::CKRasterizerContext(); }
 CKDX11RasterizerContext::~CKDX11RasterizerContext() {}
 
@@ -404,9 +417,9 @@ CKBOOL CKDX11RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
         return FALSE;
     m_CurrentLightData[Light] = *data;
     m_PSCBuffer.Lights[Light] = *data;
-    ConvertAttenuationModelFromDX5(m_PSCBuffer.Lights[Light].a0, m_PSCBuffer.Lights[Light].a1,
-                                   m_PSCBuffer.Lights[Light].a2,
-                                   data->Range);
+    // ConvertAttenuationModelFromDX5(m_PSCBuffer.Lights[Light].a0, m_PSCBuffer.Lights[Light].a1,
+    //                                m_PSCBuffer.Lights[Light].a2,
+    //                                data->Range);
     return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
@@ -416,7 +429,13 @@ CKBOOL CKDX11RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
     flag_toggle(&m_PSCBuffer.Lights[Light].type, LFLG_LIGHTEN, Enable);
     return TRUE;
 }
-CKBOOL CKDX11RasterizerContext::SetMaterial(CKMaterialData *mat) { return CKRasterizerContext::SetMaterial(mat); }
+CKBOOL CKDX11RasterizerContext::SetMaterial(CKMaterialData *mat)
+{
+    m_CurrentMaterialData = *mat;
+    m_PSConstantBufferUpToDate = FALSE;
+    m_PSCBuffer.Material = *mat;
+    return TRUE;
+}
 
 CKBOOL CKDX11RasterizerContext::SetViewport(CKViewportData *data) {
     m_Viewport.TopLeftX = (FLOAT)data->ViewX;
@@ -722,8 +741,6 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             return TRUE;
         case VXRENDERSTATE_FOGENABLE:
             break;
-        case VXRENDERSTATE_SPECULARENABLE:
-            break;
         case VXRENDERSTATE_FOGCOLOR:
             break;
         case VXRENDERSTATE_FOGPIXELMODE:
@@ -948,13 +965,21 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
         case VXRENDERSTATE_CLIPPING:
             return FALSE;
         case VXRENDERSTATE_LIGHTING:
-            break;
+            m_PSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_PSCBuffer.GlobalLightSwitches, LSW_LIGHTINGEN, Value);
+            return TRUE;
+        case VXRENDERSTATE_SPECULARENABLE:
+            m_PSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_PSCBuffer.GlobalLightSwitches, LSW_SPECULAREN, Value);
+            return TRUE;
         case VXRENDERSTATE_AMBIENT:
             return FALSE;
         case VXRENDERSTATE_FOGVERTEXMODE:
             break;
         case VXRENDERSTATE_COLORVERTEX:
-            break;
+            m_PSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_PSCBuffer.GlobalLightSwitches, LSW_VRTCOLOREN, Value);
+            return TRUE;
         case VXRENDERSTATE_LOCALVIEWER:
             break;
         case VXRENDERSTATE_NORMALIZENORMALS:
@@ -962,7 +987,7 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
         case VXRENDERSTATE_VERTEXBLEND:
             break;
         case VXRENDERSTATE_SOFTWAREVPROCESSING:
-            break;
+            return FALSE;
         case VXRENDERSTATE_CLIPPLANEENABLE:
             break;
         case VXRENDERSTATE_INDEXVBLENDENABLE:
@@ -1749,6 +1774,10 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         Vx3DTransposeMatrix(m_VSCBuffer.ViewMatrix, m_ViewMatrix);
         Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
         Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
+        InverseMatrix(m_VSCBuffer.InvWorldMatrix, m_VSCBuffer.WorldMatrix);
+        VxMatrix mat;
+        Vx3DTransposeMatrix(mat, m_ModelViewMatrix);
+        InverseMatrix(m_VSCBuffer.InvWorldViewMatrix, mat);
         // Vx3DTransposeMatrix(m_VSCBuffer.ViewportMatrix, m_VSCBuffer.ViewportMatrix);
         D3D11_MAPPED_SUBRESOURCE ms;
         D3DCall(m_DeviceContext->Map(m_VSConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));

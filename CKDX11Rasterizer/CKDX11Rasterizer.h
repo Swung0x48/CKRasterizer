@@ -149,16 +149,26 @@ typedef struct VSConstantBufferStruct
     VxMatrix ProjectionMatrix;
     VxMatrix TotalMatrix;
     VxMatrix ViewportMatrix;
+    VxMatrix InvWorldMatrix;
+    VxMatrix InvWorldViewMatrix;
     uint32_t FVF = 0;
     uint32_t _padding[3];
 } VSConstantBufferStruct;
 
 static constexpr uint32_t LFLG_LIGHTEN = 1U << 31;
+
+static constexpr uint32_t LSW_SPECULAREN = 1U << 0;
+static constexpr uint32_t LSW_LIGHTINGEN = 1U << 0;
+static constexpr uint32_t LSW_VRTCOLOREN = 1U << 0;
+
 typedef struct PSConstantBufferStruct
 {
+    CKMaterialData Material;
     uint32_t AlphaFlags = 0;
     float AlphaThreshold = 0.0f;
-    uint64_t _padding;
+    uint32_t GlobalLightSwitches = 0;
+    VxVector ViewPosition;
+    uint32_t _padding;
     CKDX11LightConstant Lights[MAX_ACTIVE_LIGHTS];
 } PSConstantBufferStruct;
 
