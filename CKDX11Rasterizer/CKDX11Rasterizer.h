@@ -144,6 +144,9 @@ struct CKDX11LightConstant
 static constexpr uint32_t AFLG_ALPHATESTEN = 0x10U;
 typedef struct VSConstantBufferStruct
 {
+    VxMatrix WorldMatrix;
+    VxMatrix ViewMatrix;
+    VxMatrix ProjectionMatrix;
     VxMatrix TotalMatrix;
     VxMatrix ViewportMatrix;
     uint32_t FVF = 0;

@@ -12,8 +12,10 @@ struct VS_INPUT
 VS_OUTPUT main(VS_INPUT input)
 {
     VS_OUTPUT output;
-    float4 pos4 = float4(input.position, 1.0);
-    output.position = mul(pos4, total_mat);
+    output.position = float4(input.position, 1.0);
+    output.position = mul(output.position, world_mat);
+    output.position = mul(output.position, view_mat);
+    output.position = mul(output.position, proj_mat);
     output.texcoord = input.texcoord0;
     return output;
 }

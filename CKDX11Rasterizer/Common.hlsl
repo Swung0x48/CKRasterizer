@@ -7,6 +7,9 @@ struct VS_OUTPUT
 
 cbuffer VSCBuf: register(b0)
 {
+    matrix world_mat;
+    matrix view_mat;
+    matrix proj_mat;
     matrix total_mat;
     matrix viewport_mat;
     dword fvf;
