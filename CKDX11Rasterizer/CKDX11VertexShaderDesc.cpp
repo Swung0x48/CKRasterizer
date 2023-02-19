@@ -22,9 +22,9 @@ CKBOOL CKDX11VertexShaderDesc::Compile(CKDX11RasterizerContext *ctx)
 CKBOOL CKDX11VertexShaderDesc::Create(CKDX11RasterizerContext* ctx)
 {
     HRESULT hr;
-    bool succeeded = FVF::CreateInputLayoutFromFVF(DxFVF, DxInputElementDesc);
-    if (!succeeded)
-        return FALSE;
+    // bool succeeded = FVF::CreateInputLayoutFromFVF(DxFVF, DxInputElementDesc);
+    // if (!succeeded)
+    //     return FALSE;
     // if (DxBlob->GetBufferPointer() != nullptr)
     // {
     //     D3DCall(ctx->m_Device->CreateInputLayout(DxInputElementDesc.data(), DxInputElementDesc.size(),
