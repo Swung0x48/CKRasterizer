@@ -96,7 +96,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
                                          D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1};
 #if defined(DEBUG) || defined(_DEBUG)
-    //creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
     hr = D3D11CreateDeviceAndSwapChain(static_cast<CKDX11RasterizerDriver *>(m_Driver)->m_Adapter.Get(),
                                        D3D_DRIVER_TYPE_UNKNOWN, nullptr, creationFlags, featureLevels,
@@ -301,10 +301,15 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     CreateObject(vs_0x42_idx, CKRST_OBJ_VERTEXSHADER, &vs_0x42);
 
     m_VertexShaderMap[CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_color_idx;
+
     m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1] = vs_normal_idx;
-    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_SPECULAR | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_spec_idx;
+    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX2] = vs_normal_idx;
+
     m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_TEX1] = vs_0x102_idx;
+
+    m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1] = vs_spec_idx;
     m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_0x142_idx;
+    // m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1] = vs_spec_idx;
     m_VertexShaderMap[CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1] = vs_0x1c4_idx;
     m_VertexShaderMap[CKRST_VF_POSITION | CKRST_VF_DIFFUSE] = vs_0x42_idx;
     // m_CurrentVShader = vs_idx;
@@ -1106,6 +1111,7 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
                 
             }
         case CKRST_TSS_TEXCOORDINDEX:
+            return TRUE;
         default:
 #if UNHANDLED_TEXSTATE
             fprintf(stderr, "unhandled texture stage state %s -> %d\n", tstytostr(Tss), Value);
@@ -1719,8 +1725,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
     vbo->Bind(this);
     if (ibo)
         ibo->Bind(this);
-    // if (m_FVF == vbo->m_VertexFormat)
-    //     return; // no need to re-set input layout
+
     CKDWORD VShader;
 #if defined(DEBUG) || defined(_DEBUG)
     try
@@ -1739,6 +1744,21 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
     }
 #endif
     auto *vs = static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[VShader]);
+    vs->Bind(this);
+    if (vbo->m_VertexFormat != m_VSCBuffer.FVF)
+    {
+        m_VSConstantBufferUpToDate = FALSE;
+        m_VSCBuffer.FVF = vbo->m_VertexFormat;
+        if (m_InputLayoutMap.find(vbo->m_VertexFormat) == m_InputLayoutMap.end())
+        {
+            if (!FVF::CreateInputLayoutFromFVF(vbo->m_VertexFormat, m_InputElementMap[vbo->m_VertexFormat]))
+                return FALSE;
+            D3DCall(m_Device->CreateInputLayout(m_InputElementMap[vbo->m_VertexFormat].data(),
+                                                m_InputElementMap[vbo->m_VertexFormat].size(), 
+                vs->m_Function, vs->m_FunctionSize, m_InputLayoutMap[vbo->m_VertexFormat].GetAddressOf()))
+        }
+        m_DeviceContext->IASetInputLayout(m_InputLayoutMap[vbo->m_VertexFormat].Get());
+    }
 
     if (!m_VSConstantBufferUpToDate)
     {
@@ -1770,7 +1790,6 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 #if LOGGING && LOG_IA
     fprintf(stderr, "IA: vs %s\n", vs->DxEntryPoint);
 #endif
-    vs->Bind(this);
 
     m_VSCBuffer.FVF = vbo->m_VertexFormat;
 

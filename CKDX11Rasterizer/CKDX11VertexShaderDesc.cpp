@@ -33,15 +33,15 @@ CKBOOL CKDX11VertexShaderDesc::Create(CKDX11RasterizerContext* ctx)
     //     D3DCall(ctx->m_Device->CreateVertexShader(DxBlob->GetBufferPointer(), DxBlob->GetBufferSize(), nullptr, &DxShader));
     // } else
     // {
-        D3DCall(ctx->m_Device->CreateInputLayout(DxInputElementDesc.data(), DxInputElementDesc.size(),
-                                                 m_Function, m_FunctionSize,
-                                                 DxInputLayout.GetAddressOf()));
+        // D3DCall(ctx->m_Device->CreateInputLayout(DxInputElementDesc.data(), DxInputElementDesc.size(),
+        //                                          m_Function, m_FunctionSize,
+        //                                          DxInputLayout.GetAddressOf()));
         D3DCall(ctx->m_Device->CreateVertexShader(m_Function, m_FunctionSize, nullptr, &DxShader));
     // }
     return SUCCEEDED(hr);
 }
 
 void CKDX11VertexShaderDesc::Bind(CKDX11RasterizerContext *ctx) {
-    ctx->m_DeviceContext->IASetInputLayout(DxInputLayout.Get());
+    // ctx->m_DeviceContext->IASetInputLayout(DxInputLayout.Get());
     ctx->m_DeviceContext->VSSetShader(DxShader.Get(), nullptr, 0);
 }

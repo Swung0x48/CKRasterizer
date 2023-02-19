@@ -261,17 +261,7 @@ public:
     virtual void *LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount,
                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);
-
-    //---------------------------------------------------------------------
-    //---- New methods to lock video memory (DX only)
-    //virtual CKBOOL LockTextureVideoMemory(CKDWORD Texture, VxImageDescEx &Desc, int MipLevel = 0,
-    //                                      VX_LOCKFLAGS Flags = VX_LOCK_DEFAULT);
-    //virtual CKBOOL UnlockTextureVideoMemory(CKDWORD Texture, int MipLevel = 0);
-
-    //---- To Enable more direct creation of system objects	without
-    //---- CK2_3D holding a copy of the texture
-//    virtual CKBOOL CreateTextureFromFile(CKDWORD Texture, const char *Filename, TexFromFile *param);
-
+    
 protected:
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
@@ -331,6 +321,8 @@ public:
     CKDX11ConstantBufferDesc m_PSConstantBuffer;
     CKBOOL m_PSConstantBufferUpToDate;
     std::unordered_map<CKDWORD, CKDWORD> m_VertexShaderMap;
+    std::unordered_map<CKDWORD, std::vector<D3D11_INPUT_ELEMENT_DESC>> m_InputElementMap;
+    std::unordered_map<CKDWORD, ComPtr<ID3D11InputLayout>> m_InputLayoutMap;
     
     VxDirectXData m_DirectXData;
     //    //----------------------------------------------------

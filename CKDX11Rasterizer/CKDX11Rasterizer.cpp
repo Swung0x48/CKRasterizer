@@ -45,6 +45,7 @@ bool D3DLogCall(HRESULT hr, const char* function, const char* file, int line)
 //            function + " " + file + ":" + std::to_string(line);
         MessageBoxA(NULL, str.c_str(), "DirectX Error", NULL);
         LocalFree(error_text);
+        assert(false);
         return false;
     }
 
