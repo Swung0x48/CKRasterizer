@@ -415,8 +415,11 @@ CKBOOL CKDX11RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
     if (Light >= MAX_ACTIVE_LIGHTS)
         return FALSE;
+    m_PSConstantBufferUpToDate = FALSE;
     m_CurrentLightData[Light] = *data;
+    bool enabled = (m_PSCBuffer.Lights[Light].type & LFLG_LIGHTEN);
     m_PSCBuffer.Lights[Light] = *data;
+    flag_toggle(&m_PSCBuffer.Lights[Light].type, LFLG_LIGHTEN, enabled);
     // ConvertAttenuationModelFromDX5(m_PSCBuffer.Lights[Light].a0, m_PSCBuffer.Lights[Light].a1,
     //                                m_PSCBuffer.Lights[Light].a2,
     //                                data->Range);
@@ -426,6 +429,7 @@ CKBOOL CKDX11RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 {
     if (Light >= MAX_ACTIVE_LIGHTS)
         return FALSE;
+    m_PSConstantBufferUpToDate = FALSE;
     flag_toggle(&m_PSCBuffer.Lights[Light].type, LFLG_LIGHTEN, Enable);
     return TRUE;
 }

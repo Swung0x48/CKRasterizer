@@ -7,9 +7,10 @@ static const dword LSW_SPECULAREN = 1U << 0;
 static const dword LSW_LIGHTINGEN = 1U << 0;
 static const dword LSW_VRTCOLOREN = 1U << 0;
 
-static const dword LFLG_LIGHTPOINT = 1UL;
-static const dword LFLG_LIGHTSPOT = 2UL;
-static const dword LFLG_LIGHTDIREC = 3UL;  // unused
+static const dword LFLG_LIGHTPOINT = 1U;
+static const dword LFLG_LIGHTSPOT = 2U; // unused
+static const dword LFLG_LIGHTDIREC = 3U;
+static const dword LFLG_LIGHTTYPEMASK = 7U;
 static const dword LFLG_LIGHTEN = 1U << 31;
 static const int MAX_ACTIVE_LIGHTS = 16;
 
@@ -155,14 +156,14 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         for (uint i = 0U; i < 16U; ++i)
         {
-            switch (lights[i].type)
+            switch (lights[i].type & LFLG_LIGHTTYPEMASK)
             {
-                case 1U:
+                case LFLG_LIGHTPOINT:
                     lighting_colors = component_add(
                         lighting_colors,
                         light_point(lights[i], norm, input.position, vdir, (global_light_switches & LSW_SPECULAREN) != 0U));
                     break;
-                case 3U:
+                case LFLG_LIGHTDIREC:
                     lighting_colors = component_add(
                         lighting_colors,
                         light_directional(lights[i], norm, vdir, (global_light_switches & LSW_SPECULAREN) != 0U));
@@ -187,9 +188,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
 
     float4 samp_color = texture2d.Sample(sampler_st, float2(input.texcoord.x, input.texcoord.y));
-    color = 
-        (max(lighting_colors_e[0] + lighting_colors_e[1] + lighting_colors_e[3], float4(1., 1., 1., 1.))
-            + lighting_colors_e[2]) * samp_color;
+    color *= samp_color;
 
     if ((alpha_flags & AFLG_ALPHATESTEN) && !alpha_test(color.a))
     {
