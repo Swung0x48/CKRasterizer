@@ -3,9 +3,9 @@
 static const dword AFLG_ALPHATESTEN = 0x10u;
 static const dword AFLG_ALPHAFUNCMASK = 0xFu;
 
-static const dword LSW_SPECULAREN = 1U << 0;
 static const dword LSW_LIGHTINGEN = 1U << 0;
-static const dword LSW_VRTCOLOREN = 1U << 0;
+static const dword LSW_SPECULAREN = 1U << 1;
+static const dword LSW_VRTCOLOREN = 1U << 2;
 
 static const dword LFLG_LIGHTPOINT = 1U;
 static const dword LFLG_LIGHTSPOT = 2U; // unused
@@ -138,15 +138,15 @@ float3x4 component_add(float3x4 a, float3x4 b)
 }
 
 float4 clamp_color(float4 c) { return clamp(c, float4(0, 0, 0, 0), float4(1, 1, 1, 1)); }
-float4 accum_light(float3x4 c) { return c[0] + c[1] + c[2]; }
+float4 accum_light(float3x4 c) { return c[0]; }
 float4 accum_light_e(float4x4 c) { return c[0] + c[1] + c[2] + c[3]; }
 
-Texture2D texture2d;
-SamplerState sampler_st;
+Texture2D texture0;
+SamplerState sampler0;
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
     float3 norm = normalize(input.normal);
-    float3 vdir = normalize(view_position - input.position);
+    float3 vdir = normalize(view_position - input.position.xyz);
     float4 color = float4(1., 1., 1., 1.);
     float3x4 lighting_colors = float3x4(zero4f, zero4f, zero4f);
     float4x4 lighting_colors_e = float4x4(zero4f, zero4f, zero4f, zero4f);
@@ -156,14 +156,14 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         for (uint i = 0U; i < 16U; ++i)
         {
-            switch (lights[i].type & LFLG_LIGHTTYPEMASK)
+            switch (lights[i].type)
             {
-                case LFLG_LIGHTPOINT:
+                case (LFLG_LIGHTPOINT | LFLG_LIGHTEN):
                     lighting_colors = component_add(
                         lighting_colors,
-                        light_point(lights[i], norm, input.position, vdir, (global_light_switches & LSW_SPECULAREN) != 0U));
+                        light_point(lights[i], norm, input.position.xyz, vdir, (global_light_switches & LSW_SPECULAREN) != 0U));
                     break;
-                case LFLG_LIGHTDIREC:
+                case (LFLG_LIGHTDIREC | LFLG_LIGHTEN):
                     lighting_colors = component_add(
                         lighting_colors,
                         light_directional(lights[i], norm, vdir, (global_light_switches & LSW_SPECULAREN) != 0U));
@@ -187,7 +187,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         }
     }
 
-    float4 samp_color = texture2d.Sample(sampler_st, float2(input.texcoord.x, input.texcoord.y));
+    float4 samp_color = texture0.Sample(sampler0, float2(input.texcoord.x, input.texcoord.y));
     color *= samp_color;
 
     if ((alpha_flags & AFLG_ALPHATESTEN) && !alpha_test(color.a))

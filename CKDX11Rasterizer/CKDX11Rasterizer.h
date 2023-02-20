@@ -157,9 +157,9 @@ typedef struct VSConstantBufferStruct
 
 static constexpr uint32_t LFLG_LIGHTEN = 1U << 31;
 
-static constexpr uint32_t LSW_SPECULAREN = 1U << 0;
 static constexpr uint32_t LSW_LIGHTINGEN = 1U << 0;
-static constexpr uint32_t LSW_VRTCOLOREN = 1U << 0;
+static constexpr uint32_t LSW_SPECULAREN = 1U << 1;
+static constexpr uint32_t LSW_VRTCOLOREN = 1U << 2;
 
 typedef struct PSConstantBufferStruct
 {
