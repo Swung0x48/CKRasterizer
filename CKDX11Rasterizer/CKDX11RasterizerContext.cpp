@@ -42,13 +42,13 @@ void InverseMatrix(VxMatrix& result, const VxMatrix &m)
 {
     using namespace DirectX;
 
-    XMFLOAT4X4 src((const float*) &m);
-    XMMATRIX srcmat = XMLoadFloat4x4(&src);
+    // XMFLOAT4X4 src((const float*) &m);
+    XMMATRIX srcmat = XMLoadFloat4x4((XMFLOAT4X4*)&m);
 
     XMMATRIX invmat = XMMatrixInverse(nullptr, srcmat);
 
-    XMFLOAT4X4 dest((const float*) &result);
-    XMStoreFloat4x4(&dest, invmat);
+    XMFLOAT4X4 *dest = (XMFLOAT4X4 *)&result;
+    XMStoreFloat4x4(dest, invmat);
 }
 
 CKDX11RasterizerContext::CKDX11RasterizerContext() { CKRasterizerContext::CKRasterizerContext(); }
@@ -1797,6 +1797,9 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 #if LOGGING && (LOG_ALPHAFLAG)
         fprintf(stderr, "IA: Alpha flag, thr: 0x%x, %.2f\n", m_PSCBuffer.AlphaFlags, m_PSCBuffer.AlphaThreshold);
 #endif
+        VxMatrix mat;
+        Vx3DInverseMatrix(mat, m_ViewMatrix);
+        m_PSCBuffer.ViewPosition = VxVector(mat[3][0], mat[3][1], mat[3][2]);
         D3D11_MAPPED_SUBRESOURCE ms;
         D3DCall(m_DeviceContext->Map(m_PSConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
         memcpy(ms.pData, &m_PSCBuffer, sizeof(PSConstantBufferStruct));
