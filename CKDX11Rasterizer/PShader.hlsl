@@ -206,9 +206,9 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     else
         color = input.specular;
 
-    float4 samp_color0 = texture0.Sample(sampler0, input.texcoord0.xy);
+    float4 samp_color0 = texture0.Sample(sampler0, input.texcoord0);
     if (fvf & VF_TEX2)
-        float4 samp_color1 = texture1.Sample(sampler1, input.texcoord1.xy);
+        float4 samp_color1 = texture1.Sample(sampler1, input.texcoord1);
     color *= samp_color0;
 
     if ((alpha_flags & AFLG_ALPHATESTEN) && !alpha_test(color.a))
