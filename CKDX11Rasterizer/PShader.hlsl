@@ -47,7 +47,7 @@ cbuffer PSCBuf : register(b0)
     float alpha_thresh;
     dword global_light_switches;
     float3 view_position;
-    dword _padding;
+    dword fvf;
     light_t lights[MAX_ACTIVE_LIGHTS];
 };
 
@@ -152,8 +152,11 @@ float4 clamp_color(float4 c) { return clamp(c, float4(0, 0, 0, 0), float4(1, 1, 
 float4 accum_light(float3x4 c) { return c[0]; }
 float4 accum_light_e(float4x4 c) { return c[0] + c[1] + c[2] + c[3]; }
 
-Texture2D texture0;
-SamplerState sampler0;
+Texture2D texture0 : register(t0);
+SamplerState sampler0 : register(s0);
+Texture2D texture1 : register(t1);
+SamplerState sampler1 : register(s1);
+
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
     float3 norm = normalize(input.normal);
@@ -203,8 +206,10 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     else
         color = input.specular;
 
-    float4 samp_color = texture0.Sample(sampler0, float2(input.texcoord.x, input.texcoord.y));
-    color *= samp_color;
+    float4 samp_color0 = texture0.Sample(sampler0, input.texcoord0.xy);
+    if (fvf & VF_TEX2)
+        float4 samp_color1 = texture1.Sample(sampler1, input.texcoord1.xy);
+    color *= samp_color0;
 
     if ((alpha_flags & AFLG_ALPHATESTEN) && !alpha_test(color.a))
     {

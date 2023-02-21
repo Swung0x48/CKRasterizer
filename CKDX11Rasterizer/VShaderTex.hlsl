@@ -13,6 +13,7 @@ VS_OUTPUT main(VS_INPUT input)
     output.color = color_default;
     output.specular = spec_default;
     output.normal = float3(0., 0., 0.);
-    output.texcoord = input.texcoord;
+    output.texcoord0 = input.texcoord;
+    output.texcoord1 = tex_default;
     return output;
 }

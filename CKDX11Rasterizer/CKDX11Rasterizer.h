@@ -168,7 +168,7 @@ typedef struct PSConstantBufferStruct
     float AlphaThreshold = 0.0f;
     uint32_t GlobalLightSwitches = 0;
     VxVector ViewPosition;
-    uint32_t _padding;
+    uint32_t FVF = 0;
     CKDX11LightConstant Lights[MAX_ACTIVE_LIGHTS];
 } PSConstantBufferStruct;
 

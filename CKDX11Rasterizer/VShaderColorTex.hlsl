@@ -16,6 +16,10 @@ VS_OUTPUT main(VS_INPUT input)
     output.color = input.diffuse;
     output.specular = input.specular;
     output.normal = float3(0., 0., 0.);
-    output.texcoord = input.texcoord0;
+    output.texcoord0 = input.texcoord0;
+    if (vs_fvf & VF_TEX2)
+        output.texcoord1 = input.texcoord1;
+    else
+        output.texcoord1 = tex_default;
     return output;
 }

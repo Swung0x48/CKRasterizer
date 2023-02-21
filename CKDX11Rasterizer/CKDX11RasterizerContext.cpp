@@ -1761,6 +1761,8 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
     {
         m_VSConstantBufferUpToDate = FALSE;
         m_VSCBuffer.FVF = vbo->m_VertexFormat;
+        m_PSConstantBufferUpToDate = FALSE;
+        m_PSCBuffer.FVF = vbo->m_VertexFormat;
         if (m_InputLayoutMap.find(vbo->m_VertexFormat) == m_InputLayoutMap.end())
         {
             if (!FVF::CreateInputLayoutFromFVF(vbo->m_VertexFormat, m_InputElementMap[vbo->m_VertexFormat]))
