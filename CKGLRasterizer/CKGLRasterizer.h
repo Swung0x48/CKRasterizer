@@ -86,41 +86,6 @@ struct CKGLIndexBuffer;
 class CKGLProgram;
 class CKGLPostProcessingPipeline;
 
-typedef struct CKGLVertexShaderDesc : public CKVertexShaderDesc
-{
-public:
-    GLuint GLShader;
-    CKGLRasterizerContext *Owner;
-    XArray<BYTE> m_FunctionData;
-
-public:
-    bool operator==(const CKVertexShaderDesc &) const;
-    CKDWORD Create(CKGLRasterizerContext *Ctx, CKVertexShaderDesc *Format);
-    virtual ~CKGLVertexShaderDesc();
-    CKGLVertexShaderDesc()
-    {
-        GLShader = 0;
-        Owner = NULL;
-    }
-} CKGLVertexShaderDesc;
-
-typedef struct CKGLPixelShaderDesc : public CKPixelShaderDesc
-{
-public:
-    GLuint GLShader;
-    CKGLRasterizerContext *Owner;
-    XArray<BYTE> m_FunctionData;
-public:
-    bool operator==(const CKPixelShaderDesc &) const;
-    CKDWORD Create(CKGLRasterizerContext *Ctx, CKPixelShaderDesc *Format);
-    virtual ~CKGLPixelShaderDesc();
-    CKGLPixelShaderDesc()
-    {
-        GLShader = 0;
-        Owner = NULL;
-    }
-} CKGLPixelShaderDesc;
-
 struct CKGLMaterialUniform
 {
     VxColor ambi;

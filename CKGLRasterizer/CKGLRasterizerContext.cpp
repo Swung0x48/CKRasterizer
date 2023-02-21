@@ -1754,35 +1754,13 @@ CKBOOL CKGLRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Desi
 CKBOOL CKGLRasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat)
 {
     ZoneScopedN(__FUNCTION__);
-    if (VShader >= m_VertexShaders.Size() || !DesiredFormat)
-        return 0;
-    delete m_VertexShaders[VShader];
-    CKGLVertexShaderDesc* desc = new CKGLVertexShaderDesc;
-    desc->m_Function = DesiredFormat->m_Function;
-    desc->m_FunctionSize  = DesiredFormat->m_FunctionSize;
-    if (desc->Create(this, DesiredFormat))
-    {
-        m_VertexShaders[VShader] = desc;
-        return 1;
-    }
-    return 0;
+    return FALSE;
 }
 
 CKBOOL CKGLRasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat)
 {
     ZoneScopedN(__FUNCTION__);
-    if (PShader >= m_PixelShaders.Size() || !DesiredFormat)
-        return 0;
-    delete m_PixelShaders[PShader];
-    CKGLPixelShaderDesc* desc = new CKGLPixelShaderDesc;
-    desc->m_Function = DesiredFormat->m_Function;
-    desc->m_FunctionSize  = DesiredFormat->m_FunctionSize;
-    if (desc->Create(this, DesiredFormat))
-    {
-        m_PixelShaders[PShader] = desc;
-        return 1;
-    }
-    return 0;
+    return FALSE;
 }
 
 CKBOOL CKGLRasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat)
