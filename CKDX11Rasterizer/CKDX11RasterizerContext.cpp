@@ -11,13 +11,15 @@
 
 #include <algorithm>
 
-#define LOGGING 0
-#define LOG_IA 0
-#define LOG_RENDERSTATE 0
-#define LOG_ALPHAFLAG 1
-#define UNHANDLED_TEXSTATE 0
-#define STATUS 1
-#define VB_STRICT 0
+#if defined(DEBUG) || defined(_DEBUG)
+    #define LOGGING 0
+    #define LOG_IA 0
+    #define LOG_RENDERSTATE 0
+    #define LOG_ALPHAFLAG 1
+    #define UNHANDLED_TEXSTATE 0
+    #define STATUS 1
+    #define VB_STRICT 0
+#endif
 
 #if LOG_IA
 #include <conio.h>

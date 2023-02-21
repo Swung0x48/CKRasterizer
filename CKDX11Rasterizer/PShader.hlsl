@@ -53,8 +53,9 @@ cbuffer PSCBuf : register(b0)
 
 static const float4 zero4f = float4(0., 0., 0., 0.);
 
-float3x4 light_point(light_t l, float3 normal, float3 fpos, float3 vdir, bool spec_enabled)
+float3x4 light_point(light_t l, float3 normal, float3 fpos, float3 vdir, float4 frag_diffuse, float4 frag_specular, bool spec_enabled)
 {
+    bool use_vert_color = (global_light_switches & LSW_VRTCOLOREN);
     float3 ldir = normalize(l.position.xyz - fpos);
     float dist = length(l.position.xyz - fpos);
     if (dist > l.range)
@@ -67,6 +68,8 @@ float3x4 light_point(light_t l, float3 normal, float3 fpos, float3 vdir, bool sp
     float diff = max(dot(normal, ldir), 0.);
     float4 ambient = l.ambient * material.ambient;
     float4 diffuse = diff * l.diffuse * material.diffuse;
+    if (use_vert_color)
+        diffuse = diff * l.diffuse * frag_diffuse;
     float4 specular = float4(0., 0., 0., 0.);
     if (spec_enabled
 #ifdef DEBUG
@@ -77,6 +80,8 @@ float3x4 light_point(light_t l, float3 normal, float3 fpos, float3 vdir, bool sp
         float3 refldir = reflect(-ldir, normal);
         float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.specular_power);
         specular = l.specular * material.specular * specl;
+        if (use_vert_color)
+            specular = l.specular * frag_specular * specl;
 #ifdef DEBUG
         if ((global_light_switches & LSW_SPCL_OVERR_ONLY) != 0U)
             return float3x4(zero4f, zero4f, spc * atnf);
@@ -85,12 +90,16 @@ float3x4 light_point(light_t l, float3 normal, float3 fpos, float3 vdir, bool sp
     return float3x4(ambient * atnf, diffuse * atnf, specular * atnf);
 }
 
-float3x4 light_directional(light_t l, float3 normal, float3 vdir, bool spec_enabled)
+float3x4 light_directional(light_t l, float3 normal, float3 vdir, float4 frag_diffuse, float4 frag_specular,
+                           bool spec_enabled)
 {
+    bool use_vert_color = (global_light_switches & LSW_VRTCOLOREN);
     float3 ldir = normalize(-l.direction.xyz);
     float diff = max(dot(normal, ldir), 0.);
-    float4 amb = l.ambient * material.ambient;
-    float4 dif = diff * l.diffuse * material.diffuse;
+    float4 ambient = l.ambient * material.ambient;
+    float4 diffuse = diff * l.diffuse * material.diffuse;
+    if (use_vert_color)
+        diffuse = diff * l.diffuse * frag_diffuse;
     float4 spc = zero4f;
     if (spec_enabled
 #ifdef DEBUG
@@ -104,12 +113,14 @@ float3x4 light_directional(light_t l, float3 normal, float3 vdir, bool spec_enab
         // float3 hv = normalize(normalize(vpos - fpos) + ldir);
         // specl = pow(dot(normal, hv), material.spcl_strength);
         spc = l.specular * material.specular * specl;
+        if (use_vert_color)
+            spc = l.specular * frag_specular * specl;
 #ifdef DEBUG
         if ((global_light_switches & LSW_SPCL_OVERR_ONLY) != 0U)
             return float3x4(zero4f, zero4f, spc);
 #endif
     }
-    return float3x4(amb, dif, spc);
+    return float3x4(ambient, diffuse, spc);
 }
 
 bool alpha_test(float in_alpha)
@@ -159,14 +170,16 @@ float4 main(VS_OUTPUT input) : SV_TARGET
             switch (lights[i].type)
             {
                 case (LFLG_LIGHTPOINT | LFLG_LIGHTEN):
-                    lighting_colors = component_add(
-                        lighting_colors,
-                        light_point(lights[i], norm, input.position.xyz, vdir, (global_light_switches & LSW_SPECULAREN) != 0U));
+                    lighting_colors =
+                        component_add(lighting_colors,
+                                      light_point(lights[i], norm, input.position.xyz, vdir, input.color,
+                                                  input.specular, (global_light_switches & LSW_SPECULAREN) != 0U));
                     break;
                 case (LFLG_LIGHTDIREC | LFLG_LIGHTEN):
-                    lighting_colors = component_add(
-                        lighting_colors,
-                        light_directional(lights[i], norm, vdir, (global_light_switches & LSW_SPECULAREN) != 0U));
+                    lighting_colors =
+                        component_add(lighting_colors,
+                                      light_directional(lights[i], norm, vdir, input.color, input.specular,
+                                                        (global_light_switches & LSW_SPECULAREN) != 0U));
                     break;
             }
         }
@@ -182,10 +195,13 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         {
             lighting_colors_e[3] = material.emissive;
             color = accum_light_e(lighting_colors_e);
+            color.a = clamp(color.a, 0, 1);
             if (material.diffuse.a < 1)
                 color.a = material.diffuse.a;
         }
     }
+    else
+        color = input.specular;
 
     float4 samp_color = texture0.Sample(sampler0, float2(input.texcoord.x, input.texcoord.y));
     color *= samp_color;

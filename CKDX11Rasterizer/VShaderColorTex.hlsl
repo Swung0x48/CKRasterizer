@@ -14,6 +14,7 @@ VS_OUTPUT main(VS_INPUT input)
     VS_OUTPUT output;
     output.position = transform_pos(input.position);
     output.color = input.diffuse;
+    output.specular = input.specular;
     output.normal = float3(0., 0., 0.);
     output.texcoord = input.texcoord0;
     return output;
