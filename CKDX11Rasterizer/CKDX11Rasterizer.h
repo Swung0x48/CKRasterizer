@@ -149,8 +149,8 @@ typedef struct VSConstantBufferStruct
     VxMatrix ProjectionMatrix;
     VxMatrix TotalMatrix;
     VxMatrix ViewportMatrix;
-    VxMatrix InvWorldMatrix;
-    VxMatrix InvWorldViewMatrix;
+    VxMatrix TransposedInvWorldMatrix;
+    VxMatrix TransposedInvWorldViewMatrix;
     uint32_t FVF = 0;
     uint32_t _padding[3];
 } VSConstantBufferStruct;

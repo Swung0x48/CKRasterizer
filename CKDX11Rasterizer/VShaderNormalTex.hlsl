@@ -12,7 +12,7 @@ VS_OUTPUT main(VS_INPUT input)
 {
     VS_OUTPUT output;
     output.position = transform_pos(input.position);
-    output.normal = mul(input.normal, invworld_mat);
+    output.normal = mul(input.normal, transposedinvworld_mat);
     output.color = color_default;
     output.specular = spec_default;
     output.texcoord = input.texcoord0;

@@ -14,8 +14,8 @@ cbuffer VSCBuf: register(b0)
     matrix proj_mat;
     matrix total_mat;
     matrix viewport_mat;
-    matrix invworld_mat;
-    matrix invworldview_mat;
+    matrix transposedinvworld_mat;
+    matrix transposedinvworldview_mat;
     dword fvf;
 };
 
