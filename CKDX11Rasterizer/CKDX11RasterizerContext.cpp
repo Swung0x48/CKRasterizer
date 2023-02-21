@@ -1780,9 +1780,9 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         Vx3DTransposeMatrix(m_VSCBuffer.ViewMatrix, m_ViewMatrix);
         Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
         Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
-        InverseMatrix(m_VSCBuffer.InvWorldMatrix, m_VSCBuffer.WorldMatrix);
+        InverseMatrix(m_VSCBuffer.InvWorldMatrix, m_WorldMatrix);
         VxMatrix mat;
-        Vx3DTransposeMatrix(mat, m_ModelViewMatrix);
+        // Vx3DTransposeMatrix(mat, m_ModelViewMatrix);
         InverseMatrix(m_VSCBuffer.InvWorldViewMatrix, mat);
         // Vx3DTransposeMatrix(m_VSCBuffer.ViewportMatrix, m_VSCBuffer.ViewportMatrix);
         D3D11_MAPPED_SUBRESOURCE ms;
