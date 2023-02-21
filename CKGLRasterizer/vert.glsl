@@ -17,6 +17,7 @@ layout (location=4) in vec2 texcoord[8];
 out vec3 fpos;
 out vec3 fnormal;
 out vec4 fragcol;
+out vec4 fragscol;
 flat out uint fntex;
 out vec2 ftexcoord[8];
 uniform uint vertex_properties;
@@ -49,8 +50,15 @@ void main()
     fnormal = mat3(tiworld) * normal;
     vec3 ffnormal = mat3(tiworldview) * normal;
     if (has_color)
+    {
         fragcol.rgba = color.bgra; //convert from D3D color BGRA (ARGB as little endian) -> RGBA
-    else fragcol = vec4(1., 1., 1., 1.);
+        fragscol.rgba = spec_color.bgra;
+    }
+    else
+    {
+        fragcol = vec4(1.);
+        fragscol = vec4(0.);
+    }
     for (uint i = 0u; i < ntex; ++i)
     {
         vec4 tcout = vec4(0.);

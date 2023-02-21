@@ -41,6 +41,7 @@ struct texcomb_t
 in vec3 fpos;
 in vec3 fnormal;
 in vec4 fragcol;
+in vec4 fragscol;
 flat in uint fntex;
 in vec2 ftexcoord[8];
 uniform float alpha_thresh;
@@ -69,6 +70,7 @@ uniform sampler2D tex[8];
 
 vec4[3] light_point(light_t l, vec3 normal, vec3 fpos, vec3 vdir, bool spec_enabled)
 {
+    bool use_vert_color = (lighting_switches & LSW_VRTCOLOR_ENABLED) != 0U;
     float range = l.psparam1.x;
     float a0 = l.psparam2.x;
     float a1 = l.psparam2.y;
@@ -82,6 +84,8 @@ vec4[3] light_point(light_t l, vec3 normal, vec3 fpos, vec3 vdir, bool spec_enab
     float diff = max(dot(normal, ldir), 0.);
     vec4 amb = l.ambi * material.ambi;
     vec4 dif = diff * l.diff * material.diff;
+    if (use_vert_color)
+        dif = diff * l.diff * fragcol;
     vec4 spc = vec4(0.);
     if (spec_enabled
 #ifdef DEBUG
@@ -92,6 +96,8 @@ vec4[3] light_point(light_t l, vec3 normal, vec3 fpos, vec3 vdir, bool spec_enab
         vec3 refldir = reflect(-ldir, normal);
         float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.spcl_strength);
         spc = l.spcl * material.spcl * specl;
+        if (use_vert_color)
+            spc = l.spcl * fragscol * specl;
 #ifdef DEBUG
         if ((lighting_switches & LSW_SPCL_OVERR_ONLY) != 0U)
             return vec4[3](vec4(0.), vec4(0.), spc * atnf);
@@ -101,10 +107,13 @@ vec4[3] light_point(light_t l, vec3 normal, vec3 fpos, vec3 vdir, bool spec_enab
 }
 vec4[3] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
 {
+    bool use_vert_color = (lighting_switches & LSW_VRTCOLOR_ENABLED) != 0U;
     vec3 ldir = normalize(-l.dir.xyz);
     float diff = max(dot(normal, ldir), 0.);
     vec4 amb = l.ambi * material.ambi;
     vec4 dif = diff * l.diff * material.diff;
+    if (use_vert_color)
+        dif = diff * l.diff * fragcol;
     vec4 spc = vec4(0.);
     if (spec_enabled
 #ifdef DEBUG
@@ -118,6 +127,8 @@ vec4[3] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
         //vec3 hv = normalize(normalize(vpos - fpos) + ldir);
         //specl = pow(dot(normal, hv), material.spcl_strength);
         spc = l.spcl * material.spcl * specl;
+        if (use_vert_color)
+            spc = l.spcl * fragscol * specl;
 #ifdef DEBUG
         if ((lighting_switches & LSW_SPCL_OVERR_ONLY) != 0U)
             return vec4[3](vec4(0), vec4(0), spc);
@@ -234,8 +245,6 @@ void main()
     color = vec4(1., 1., 1., 1.);
     vec4[3] lighting_colors = vec4[3](vec4(0.), vec4(0.), vec4(0.));
     vec4[4] lighting_colors_e = vec4[4](vec4(0.), vec4(0.), vec4(0.), vec4(0.));
-    if ((lighting_switches & LSW_VRTCOLOR_ENABLED) != 0U)
-        color = fragcol;
     if ((lighting_switches & LSW_LIGHTING_ENABLED) != 0U)
     {
         for (uint i = 0U; i < 16U; ++i)
@@ -264,10 +273,11 @@ void main()
         {
             lighting_colors_e[3] = material.emis;
             color = accum_light_e(lighting_colors_e);
+            color.a = clamp(color.a, 0, 1);
             if (material.diff.a < 1)
                 color.a = material.diff.a;
         }
-    }
+    } else color = fragcol;
     if (fntex > 1U)
     {
         vec4 accum = vec4(0.);

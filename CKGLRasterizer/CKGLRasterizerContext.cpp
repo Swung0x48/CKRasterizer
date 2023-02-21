@@ -255,7 +255,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     for (int i = 0; i < CKRST_MAX_STAGES; ++i)
         m_prgm->stage_uniform("tex[" + std::to_string(i) + "]", CKGLUniformValue::make_i32(i));
 
-    m_lighting_flags = LSW_LIGHTING_ENABLED | LSW_VRTCOLOR_ENABLED;
+    m_lighting_flags = LSW_LIGHTING_ENABLED;
     m_prgm->stage_uniform("lighting_switches", CKGLUniformValue::make_u32v(1, &m_lighting_flags));
     m_alpha_test_flags = 8; //alpha test off, alpha function always
     m_prgm->stage_uniform("alphatest_flags", CKGLUniformValue::make_u32v(1, &m_alpha_test_flags));
@@ -321,6 +321,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
 
     m_renderst[VXRENDERSTATE_SRCBLEND] = VXBLEND_ONE;
     m_renderst[VXRENDERSTATE_DESTBLEND] = VXBLEND_ZERO;
+    m_renderst[VXRENDERSTATE_COLORVERTEX] = FALSE;
 
     for (m_max_ppsh_id = 1; m_max_ppsh_id < 256 && get_resource_size("CKGLRPP_DESC", (char*)m_max_ppsh_id) != 0; ++m_max_ppsh_id);
     if (m_max_ppsh_id > 255) m_max_ppsh_id = 1;
