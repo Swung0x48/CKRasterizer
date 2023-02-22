@@ -13,6 +13,16 @@ static const dword LFLG_LIGHTDIREC = 3U;
 static const dword LFLG_LIGHTTYPEMASK = 7U;
 static const dword LFLG_LIGHTEN = 1U << 31;
 static const int MAX_ACTIVE_LIGHTS = 16;
+static const int MAX_TEX_STAGES = 2;
+static const int MAX_TEX_STAGES_PAD_TO_ALIGN = 4;
+
+static const dword TVP_TC_CSNORM = 0x01000000; // use camera space normal as input tex-coords
+static const dword TVP_TC_CSVECP = 0x02000000; // use camera space position ......
+static const dword TVP_TC_CSREFV = 0x04000000; // use camera space reflect vector ......
+static const dword TVP_TC_TRANSF = 0x08000000; // tex-coords should be transformed by its matrix
+static const dword TVP_TC_PROJECTED = 0x10000000; // tex-coords should be projected
+
+static const dword NULL_TEXTURE_MASK = (1 << (MAX_TEX_STAGES + 1)) - 1;
 
 struct light_t
 {
@@ -40,6 +50,15 @@ struct material_t
     float specular_power;
 };
 
+struct texcomb_t
+{
+    dword op; //@0, bit 0-3: color op, bit 4-7: alpha op, bit 31: dest
+    dword cargs; //@4, bit 0-7: arg1, bit 8-15: arg2, bit 16-23: arg3
+    dword aargs; //@8, ditto but for alpha
+    dword constant; //@12
+    // stride per element: 16
+};
+
 cbuffer PSCBuf : register(b0)
 {
     material_t material;
@@ -49,6 +68,8 @@ cbuffer PSCBuf : register(b0)
     float3 view_position;
     dword fvf;
     light_t lights[MAX_ACTIVE_LIGHTS];
+    texcomb_t tex_combinator[MAX_TEX_STAGES];
+    dword tex_transform_flags[MAX_TEX_STAGES_PAD_TO_ALIGN];
 };
 
 static const float4 zero4f = float4(0., 0., 0., 0.);
@@ -110,7 +131,7 @@ float3x4 light_directional(light_t l, float3 normal, float3 vdir, float4 frag_di
         float3 refldir = reflect(-ldir, normal);
         float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.specular_power);
         // direct3d9 specular strength formula
-        // float3 hv = normalize(normalize(vpos - fpos) + ldir);
+        // float3 hv = normalize(vdir + ldir);
         // specl = pow(dot(normal, hv), material.spcl_strength);
         spc = l.specular * material.specular * specl;
         if (use_vert_color)
@@ -151,6 +172,80 @@ float3x4 component_add(float3x4 a, float3x4 b)
 float4 clamp_color(float4 c) { return clamp(c, float4(0, 0, 0, 0), float4(1, 1, 1, 1)); }
 float4 accum_light(float3x4 c) { return c[0]; }
 float4 accum_light_e(float4x4 c) { return c[0] + c[1] + c[2] + c[3]; }
+
+float4 combine_value(uint mode, float4 a, float4 b, float factor)
+{
+    switch (mode)
+    {
+        case 2U:
+            return a;
+        case 3U:
+            return b;
+        case 4U:
+            return a * b;
+        case 5U:
+            return 2 * (a * b);
+        case 6U:
+            return 4 * (a * b);
+        case 7U:
+            return a + b;
+        case 8U:
+            return a + b - float4(.5, .5, .5, .5);
+        case 9U:
+            return 2 * (a + b - float4(.5, .5, .5, .5));
+        case 10U:
+            return a - b;
+        case 11U:
+            return a + b - a * b;
+        case 13U:
+            return lerp(b, a, factor);
+        default:
+            return zero4f;
+    }
+}
+
+float4 dw2color(uint c)
+{
+    return float4(float((c >> 16U) & 0xFFU) / 255., float((c >> 8U) & 0xFFU) / 255., float((c >> 0U) & 0xFFU) / 255.,
+                float((c >> 24U) & 0xFFU) / 255.);
+}
+
+float4 select_argument(uint stage, uint source, float4 tex, float4 cum, float4 tmp, float4x4 lights)
+{
+    float4 ret = zero4f;
+    switch (source) // D3DTA_*
+    {
+        case 0U:
+            ret = lights[1] + lights[3];
+            break; // DIFFUSE
+        case 1U:
+            if (stage == 0U) // CURRENT
+                ret = lights[1] + lights[3]; // CURRENT at stage 0 behaves as DIFFUSE
+            else
+                ret = cum;
+            break;
+        case 2U:
+            ret = tex;
+            break; // TEXTURE
+        case 3U:
+            ret = zero4f;
+            break; // TFACTOR, unsupported
+        case 4U:
+            ret = lights[2];
+            break; // SPECULAR
+        case 5U:
+            ret = tmp;
+            break; // TEMP
+        case 6U:
+            ret = dw2color(tex_combinator[stage].constant);
+            break; // CONSTANT
+    }
+    if ((source & 0x10U) != 0U)
+        ret = float4(1., 1., 1., 1.) - ret;
+    if ((source & 0x20U) != 0U)
+        ret = float4(ret.a, ret.a, ret.a, ret.a);
+    return ret;
+}
 
 Texture2D texture0 : register(t0);
 SamplerState sampler0 : register(s0);
@@ -208,8 +303,52 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     float4 samp_color0 = texture0.Sample(sampler0, input.texcoord0);
     if (fvf & VF_TEX2)
+    {
         float4 samp_color1 = texture1.Sample(sampler1, input.texcoord1);
-    color *= samp_color0;
+    
+        float4 accumulator = zero4f;
+        float2x4 temp = float2x4(zero4f, zero4f);
+    
+        uint cop_0 = tex_combinator[0].op & 0xfU;
+        uint aop_0 = (tex_combinator[0].op & 0xf0U) >> 4;
+        uint dst_0 = tex_combinator[0].op >> 31; // 1: temp, 0: accumulator
+        uint ca1_0 = tex_combinator[0].cargs & 0xffU;
+        uint ca2_0 = (tex_combinator[0].cargs & 0xff00U) >> 8;
+        uint aa1_0 = tex_combinator[0].aargs & 0xffU;
+        uint aa2_0 = (tex_combinator[0].aargs & 0xff00U) >> 8;
+        float4 cv1_0 = select_argument(0, ca1_0, samp_color0, accumulator, temp[0], lighting_colors_e);
+        float4 cv2_0 = select_argument(0, ca2_0, samp_color0, accumulator, temp[0], lighting_colors_e);
+        float4 av1_0 = select_argument(0, aa1_0, samp_color0, accumulator, temp[0], lighting_colors_e);
+        float4 av2_0 = select_argument(0, aa2_0, samp_color0, accumulator, temp[0], lighting_colors_e);
+        float4 rc_0 = combine_value(cop_0, cv1_0, cv2_0, samp_color0.a);
+        float4 ra_0 = combine_value(aop_0, av1_0, av2_0, samp_color0.a);
+        if (dst_0 == 1U)
+            temp[0] = float4(rc_0.rgb, ra_0.a);
+        else
+            accumulator = float4(rc_0.rgb, ra_0.a);
+    
+        uint cop_1 = tex_combinator[1].op & 0xfU;
+        uint aop_1 = (tex_combinator[1].op & 0xf0U) >> 4;
+        uint dst_1 = tex_combinator[1].op >> 31; // 1: temp, 0: accumulator
+        uint ca1_1 = tex_combinator[1].cargs & 0xffU;
+        uint ca2_1 = (tex_combinator[1].cargs & 0xff00U) >> 8;
+        uint aa1_1 = tex_combinator[1].aargs & 0xffU;
+        uint aa2_1 = (tex_combinator[1].aargs & 0xff00U) >> 8;
+        float4 cv1_1 = select_argument(1, ca1_1, samp_color1, accumulator, temp[1], lighting_colors_e);
+        float4 cv2_1 = select_argument(1, ca2_1, samp_color1, accumulator, temp[1], lighting_colors_e);
+        float4 av1_1 = select_argument(1, aa1_1, samp_color1, accumulator, temp[1], lighting_colors_e);
+        float4 av2_1 = select_argument(1, aa2_1, samp_color1, accumulator, temp[1], lighting_colors_e);
+        float4 rc_1 = combine_value(cop_1, cv1_1, cv2_1, samp_color1.a);
+        float4 ra_1 = combine_value(aop_1, av1_1, av2_1, samp_color1.a);
+        if (dst_1 == 1U)
+            temp[1] = float4(rc_1.rgb, ra_1.a);
+        else
+            accumulator = float4(rc_1.rgb, ra_1.a);
+    
+        color = accumulator;
+    }
+    else
+        color *= samp_color0;
 
     if ((alpha_flags & AFLG_ALPHATESTEN) && !alpha_test(color.a))
     {

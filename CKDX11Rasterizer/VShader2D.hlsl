@@ -17,5 +17,6 @@ VS_OUTPUT main(VS_INPUT input)
     output.color = input.diffuse;
     output.specular = input.specular;
     output.texcoord0 = input.texcoord0;
+    output.texcoord1 = tex_default;
     return output;
 }

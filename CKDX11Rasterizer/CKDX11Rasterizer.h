@@ -27,6 +27,8 @@
 using Microsoft::WRL::ComPtr;
 
 static constexpr int MAX_ACTIVE_LIGHTS = 16;
+static constexpr int MAX_TEX_STAGES = 2;
+static constexpr int MAX_TEX_STAGES_PAD_TO_ALIGN = MAX_TEX_STAGES / 4 * 4 + ((MAX_TEX_STAGES % 4 == 0) ? 0 : 4);
 
 class CKDX11Rasterizer : public CKRasterizer
 {
@@ -141,6 +143,87 @@ struct CKDX11LightConstant
     }
 };
 
+enum TexOp // for CKDX11TexCombinatorConstant::op
+{
+    disable = 0x1,
+    select1 = 0x2,
+    select2 = 0x3,
+    modulate = 0x4,
+    modulate2 = 0x5,
+    modulate4 = 0x6,
+    add = 0x7,
+    addbip = 0x8,
+    addbip2 = 0x9,
+    subtract = 0xa,
+    addsmooth = 0xb,
+    mixtexalp = 0xd,
+    top_max = ~0UL
+};
+
+enum TexArg // for CKDX11TexCombinatorConstant::cargs / aargs
+{
+    diffuse = 0x0,
+    current = 0x1,
+    texture = 0x2,
+    tfactor = 0x3,
+    specular = 0x4,
+    temp = 0x5,
+    constant = 0x6,
+    flag_cpl = 0x10,
+    flag_alp = 0x20,
+    tar_max = ~0UL
+};
+
+struct CKDX11TexCombinatorConstant
+{
+    CKDWORD op; // bit 0-3: color op, bit 4-7: alpha op, bit 31: dest
+    CKDWORD cargs; // bit 0-7: arg1, bit 8-15: arg2, bit 16-23: arg3
+    CKDWORD aargs; // ditto
+    CKDWORD constant;
+
+    void set_color_op(TexOp o)
+    {
+        op &= ~0x0fU;
+        op |= o;
+    }
+    void set_alpha_op(TexOp o)
+    {
+        op &= ~0xf0U;
+        op |= (o << 4);
+    }
+    void set_color_arg1(TexArg a)
+    {
+        cargs &= ~0x00ffU;
+        cargs |= a;
+    }
+    void set_color_arg2(TexArg a)
+    {
+        cargs &= ~0xff00U;
+        cargs |= (a << 8);
+    }
+    void set_alpha_arg1(TexArg a)
+    {
+        aargs &= ~0x00ffU;
+        aargs |= a;
+    }
+    void set_alpha_arg2(TexArg a)
+    {
+        aargs &= ~0xff00U;
+        aargs |= (a << 8);
+    }
+
+    TexArg dest() { return op & (1UL << 31) ? TexArg::temp : TexArg::current; }
+
+    static CKDX11TexCombinatorConstant make(TexOp cop, TexArg ca1, TexArg ca2, TexArg ca3, TexOp aop, TexArg aa1,
+                                         TexArg aa2, TexArg aa3, TexArg dest, CKDWORD constant)
+    {
+        CKDWORD op = cop | (aop << 4) | ((dest == TexArg::temp) << 31);
+        CKDWORD cargs = ca1 | (ca2 << 8) | (ca3 << 16);
+        CKDWORD aargs = aa1 | (aa2 << 8) | (aa3 << 16);
+        return CKDX11TexCombinatorConstant{op, cargs, aargs, constant};
+    }
+};
+
 static constexpr uint32_t AFLG_ALPHATESTEN = 0x10U;
 typedef struct VSConstantBufferStruct
 {
@@ -161,6 +244,13 @@ static constexpr uint32_t LSW_LIGHTINGEN = 1U << 0;
 static constexpr uint32_t LSW_SPECULAREN = 1U << 1;
 static constexpr uint32_t LSW_VRTCOLOREN = 1U << 2;
 
+// per-texture vertex properties
+static constexpr uint32_t TVP_TC_CSNORM = 0x01000000; // use camera space normal as input tex-coords
+static constexpr uint32_t TVP_TC_CSVECP = 0x02000000; // use camera space position ......
+static constexpr uint32_t TVP_TC_CSREFV = 0x04000000; // use camera space reflect vector ......
+static constexpr uint32_t TVP_TC_TRANSF = 0x08000000; // tex-coords should be transformed by its matrix
+static constexpr uint32_t TVP_TC_PROJECTED = 0x10000000; // tex-coords should be projected
+
 typedef struct PSConstantBufferStruct
 {
     CKMaterialData Material;
@@ -170,6 +260,8 @@ typedef struct PSConstantBufferStruct
     VxVector ViewPosition;
     uint32_t FVF = 0;
     CKDX11LightConstant Lights[MAX_ACTIVE_LIGHTS];
+    CKDX11TexCombinatorConstant TexCombinator[MAX_TEX_STAGES];
+    uint32_t TextureTransformFlags[MAX_TEX_STAGES_PAD_TO_ALIGN];
 } PSConstantBufferStruct;
 
 typedef struct CKDX11ConstantBufferDesc
