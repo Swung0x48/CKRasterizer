@@ -124,7 +124,7 @@ vec4[3] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
         vec3 refldir = reflect(-ldir, normal);
         float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.spcl_strength);
         //direct3d9 specular strength formula
-        //vec3 hv = normalize(normalize(vpos - fpos) + ldir);
+        //vec3 hv = normalize(vdir + ldir);
         //specl = pow(dot(normal, hv), material.spcl_strength);
         spc = l.spcl * material.spcl * specl;
         if (use_vert_color)
@@ -207,10 +207,10 @@ vec4 select_argument(uint stage, uint source, vec4 tex, vec4 cum, vec4 tmp, vec4
     vec4 ret = vec4(0.);
     switch(source) //D3DTA_*
     {
-        case 0U: ret = lights[1]; break; //DIFFUSE
+        case 0U: ret = lights[1] + lights[3]; break; //DIFFUSE
         case 1U: if (stage == 0U)        //CURRENT
-                    ret = accum_light_e(lights);
-                else ret = cum; break;
+                    ret = lights[1] + lights[3]; //CURRENT at stage 0 behaves as DIFFUSE
+                 else ret = cum; break;
         case 2U: ret = tex; break;       //TEXTURE
         case 3U: ret = vec4(0.); break;  //TFACTOR, unsupported
         case 4U: ret = lights[2]; break; //SPECULAR
@@ -278,6 +278,9 @@ void main()
                 color.a = material.diff.a;
         }
     } else color = fragcol;
+    //d3d adds the specular light without modulating it with the texture...
+    //No idea how d3d exactly behaves for multi-textured draws, current
+    //implementation is guesswork
     if (fntex > 1U)
     {
         vec4 accum = vec4(0.);
@@ -315,14 +318,16 @@ void main()
             else
                 accum = vec4(rc.rgb, ra.a);
         }
-        color = accum;
+        color = accum + lighting_colors[2];
     }
     else
     {
-        if ((texcomb[0].op & 0xfU) == 13U) //This doesn't make ANY sense
-            color = (max(lighting_colors_e[0] + lighting_colors_e[1] + lighting_colors_e[3], vec4(1.)) + lighting_colors_e[2]) * texture(tex[0],ftexcoord[0]);
+        vec4 texc = texture(tex[0], ftexcoord[0]);
+        if ((texcomb[0].op & 0xfU) == 13U)
+            color = texc;
         else
-            color *= texture(tex[0], ftexcoord[0]);
+            color = (color - lighting_colors[2]) * texture(tex[0], ftexcoord[0]);
+        color += lighting_colors[2];
     }
     if ((alphatest_flags & 0x80U) != 0U && !alpha_test(color.a))
         discard;
