@@ -51,6 +51,7 @@ uniform vec4 fog_color;
 uniform vec3 fog_parameters; //start, end, density
 uniform vec3 vpos; //camera position
 uniform vec2 depth_range; //near-far plane distances for fog calculation
+uniform uint null_texture_mask;
 layout(location = 0) out vec4 color;
 layout(location = 1) out vec4 norpth;
 layout (std140) uniform MatUniformBlock
@@ -288,17 +289,20 @@ void main()
                                vec4(0.), vec4(0.), vec4(0.), vec4(0.));
         for (uint i = 0U; i < fntex; ++i)
         {
-            vec4 txc = vec4(0.);
-            switch (i)
+            vec4 txc = vec4(1.);
+            if ((null_texture_mask & (1U << i)) == 0U)
             {
-                case 0U: txc = texture(tex[0], ftexcoord[i]); break;
-                case 1U: txc = texture(tex[1], ftexcoord[i]); break;
-                case 2U: txc = texture(tex[2], ftexcoord[i]); break;
-                case 3U: txc = texture(tex[3], ftexcoord[i]); break;
-                case 4U: txc = texture(tex[4], ftexcoord[i]); break;
-                case 5U: txc = texture(tex[5], ftexcoord[i]); break;
-                case 6U: txc = texture(tex[6], ftexcoord[i]); break;
-                case 7U: txc = texture(tex[7], ftexcoord[i]); break;
+                switch (i)
+                {
+                    case 0U: txc = texture(tex[0], ftexcoord[i]); break;
+                    case 1U: txc = texture(tex[1], ftexcoord[i]); break;
+                    case 2U: txc = texture(tex[2], ftexcoord[i]); break;
+                    case 3U: txc = texture(tex[3], ftexcoord[i]); break;
+                    case 4U: txc = texture(tex[4], ftexcoord[i]); break;
+                    case 5U: txc = texture(tex[5], ftexcoord[i]); break;
+                    case 6U: txc = texture(tex[6], ftexcoord[i]); break;
+                    case 7U: txc = texture(tex[7], ftexcoord[i]); break;
+                }
             }
             uint cop = texcomb[i].op & 0xfU;
             uint aop = (texcomb[i].op & 0xf0U) >> 4;
@@ -322,12 +326,15 @@ void main()
     }
     else
     {
-        vec4 texc = texture(tex[0], ftexcoord[0]);
-        if ((texcomb[0].op & 0xfU) == 13U)
-            color = texc;
-        else
-            color = (color - lighting_colors[2]) * texture(tex[0], ftexcoord[0]);
-        color += lighting_colors[2];
+        if ((null_texture_mask & 1U) == 0U)
+        {
+            vec4 texc = texture(tex[0], ftexcoord[0]);
+            if ((texcomb[0].op & 0xfU) == 13U)
+                color = texc;
+            else
+                color = (color - lighting_colors[2]) * texture(tex[0], ftexcoord[0]);
+            color += lighting_colors[2];
+        }
     }
     if ((alphatest_flags & 0x80U) != 0U && !alpha_test(color.a))
         discard;

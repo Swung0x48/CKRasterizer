@@ -267,17 +267,10 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     m_prgm->stage_uniform("fog_flags", CKGLUniformValue::make_u32v(1, &m_fog_flags));
     m_prgm->stage_uniform("fog_color", CKGLUniformValue::make_f32v4v(1, (float*)&init_fog_color.col, true));
     m_prgm->stage_uniform("fog_parameters", CKGLUniformValue::make_f32v3v(1, (float*)&m_fog_parameters));
-    //setup blank texture
-    {
-        CKTextureDesc blank;
-        blank.Format.Width = 1;
-        blank.Format.Height = 1;
-        CKDWORD white = ~0U;
-        CreateTexture(0, &blank);
-        CKGLTexture* blanktex = static_cast<CKGLTexture*>(m_Textures[0]);
-        blanktex->Bind();
-        blanktex->Load(&white);
-    }
+    m_null_texture_mask = (1 << (CKRST_MAX_STAGES + 1)) - 1;
+    m_prgm->stage_uniform("null_texture_mask", CKGLUniformValue::make_u32v(1, &m_null_texture_mask));
+    m_Textures[0] = new CKGLTexture(); //still need this because I'm too lazy to handle them in SetTextureStageState...
+
     //setup material uniform block
     m_prgm->define_uniform_block("MatUniformBlock", 16, sizeof(CKGLMaterialUniform), nullptr);
     //setup lights uniform block
@@ -1016,6 +1009,12 @@ CKBOOL CKGLRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
     ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
+    if ((Texture == 0) ^ ((m_null_texture_mask >> Stage) & 1))
+    {
+        m_null_texture_mask &= ~(1 << Stage);
+        m_null_texture_mask |= ((Texture == 0) << Stage);
+        m_prgm->stage_uniform("null_texture_mask", CKGLUniformValue::make_u32v(1, &m_null_texture_mask));
+    }
     if (Stage != m_cur_ts)
     {
         glActiveTexture(GL_TEXTURE0 + Stage);
@@ -1024,11 +1023,9 @@ CKBOOL CKGLRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
     m_ts_texture[Stage] = Texture;
     CKGLTexture *desc = static_cast<CKGLTexture *>(m_Textures[Texture]);
     if (!desc)
-    {
         glBindTexture(GL_TEXTURE_2D, 0);
-        return TRUE;
-    }
-    desc->Bind();
+    else
+        desc->Bind();
     return TRUE;
 }
 

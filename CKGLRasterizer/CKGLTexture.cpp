@@ -12,6 +12,7 @@ CKGLTexture::CKGLTexture(CKTextureDesc *texdesc) : CKTextureDesc(*texdesc)
 
 void CKGLTexture::set_parameter(GLenum p, int pv)
 {
+    if (!tex) return;
     if (params.find(p) == params.end() || params[p] != pv)
     {
         glTextureParameteri(tex, p, pv);
@@ -21,6 +22,7 @@ void CKGLTexture::set_parameter(GLenum p, int pv)
 
 void CKGLTexture::set_border_color(int color)
 {
+    if (!tex) return;
     if (params.find(GL_TEXTURE_BORDER_COLOR) == params.end() || params[GL_TEXTURE_BORDER_COLOR] != color)
     {
         VxColor c((CKDWORD)color);

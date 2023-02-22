@@ -340,6 +340,7 @@ private:
     CKDWORD m_ts_texture[CKRST_MAX_STAGES] = {~0U};
     CKGLTexCombinatorUniform m_texcombo[CKRST_MAX_STAGES];
     CKDWORD m_tex_vp[CKRST_MAX_STAGES] = {0};
+    uint32_t m_null_texture_mask;
     bool m_use_post_processing = false;
     bool m_use_pp_switch_pending = false;
     CKGLPostProcessingPipeline *m_3dpp = nullptr;
