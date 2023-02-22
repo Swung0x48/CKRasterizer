@@ -51,6 +51,7 @@ uniform vec4 fog_color;
 uniform vec3 fog_parameters; //start, end, density
 uniform vec3 vpos; //camera position
 uniform vec2 depth_range; //near-far plane distances for fog calculation
+uniform uint null_texture_mask;
 layout(location = 0) out vec4 color;
 layout(location = 1) out vec4 norpth;
 layout (std140) uniform MatUniformBlock
@@ -124,7 +125,7 @@ vec4[3] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
         vec3 refldir = reflect(-ldir, normal);
         float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.spcl_strength);
         //direct3d9 specular strength formula
-        //vec3 hv = normalize(normalize(vpos - fpos) + ldir);
+        //vec3 hv = normalize(vdir + ldir);
         //specl = pow(dot(normal, hv), material.spcl_strength);
         spc = l.spcl * material.spcl * specl;
         if (use_vert_color)
@@ -207,10 +208,10 @@ vec4 select_argument(uint stage, uint source, vec4 tex, vec4 cum, vec4 tmp, vec4
     vec4 ret = vec4(0.);
     switch(source) //D3DTA_*
     {
-        case 0U: ret = lights[1]; break; //DIFFUSE
+        case 0U: ret = lights[1] + lights[3]; break; //DIFFUSE
         case 1U: if (stage == 0U)        //CURRENT
-                    ret = accum_light_e(lights);
-                else ret = cum; break;
+                    ret = lights[1] + lights[3]; //CURRENT at stage 0 behaves as DIFFUSE
+                 else ret = cum; break;
         case 2U: ret = tex; break;       //TEXTURE
         case 3U: ret = vec4(0.); break;  //TFACTOR, unsupported
         case 4U: ret = lights[2]; break; //SPECULAR
@@ -278,6 +279,9 @@ void main()
                 color.a = material.diff.a;
         }
     } else color = fragcol;
+    //d3d adds the specular light without modulating it with the texture...
+    //No idea how d3d exactly behaves for multi-textured draws, current
+    //implementation is guesswork
     if (fntex > 1U)
     {
         vec4 accum = vec4(0.);
@@ -285,17 +289,20 @@ void main()
                                vec4(0.), vec4(0.), vec4(0.), vec4(0.));
         for (uint i = 0U; i < fntex; ++i)
         {
-            vec4 txc = vec4(0.);
-            switch (i)
+            vec4 txc = vec4(1.);
+            if ((null_texture_mask & (1U << i)) == 0U)
             {
-                case 0U: txc = texture(tex[0], ftexcoord[i]); break;
-                case 1U: txc = texture(tex[1], ftexcoord[i]); break;
-                case 2U: txc = texture(tex[2], ftexcoord[i]); break;
-                case 3U: txc = texture(tex[3], ftexcoord[i]); break;
-                case 4U: txc = texture(tex[4], ftexcoord[i]); break;
-                case 5U: txc = texture(tex[5], ftexcoord[i]); break;
-                case 6U: txc = texture(tex[6], ftexcoord[i]); break;
-                case 7U: txc = texture(tex[7], ftexcoord[i]); break;
+                switch (i)
+                {
+                    case 0U: txc = texture(tex[0], ftexcoord[i]); break;
+                    case 1U: txc = texture(tex[1], ftexcoord[i]); break;
+                    case 2U: txc = texture(tex[2], ftexcoord[i]); break;
+                    case 3U: txc = texture(tex[3], ftexcoord[i]); break;
+                    case 4U: txc = texture(tex[4], ftexcoord[i]); break;
+                    case 5U: txc = texture(tex[5], ftexcoord[i]); break;
+                    case 6U: txc = texture(tex[6], ftexcoord[i]); break;
+                    case 7U: txc = texture(tex[7], ftexcoord[i]); break;
+                }
             }
             uint cop = texcomb[i].op & 0xfU;
             uint aop = (texcomb[i].op & 0xf0U) >> 4;
@@ -315,14 +322,19 @@ void main()
             else
                 accum = vec4(rc.rgb, ra.a);
         }
-        color = accum;
+        color = accum + lighting_colors[2];
     }
     else
     {
-        if ((texcomb[0].op & 0xfU) == 13U) //This doesn't make ANY sense
-            color = (max(lighting_colors_e[0] + lighting_colors_e[1] + lighting_colors_e[3], vec4(1.)) + lighting_colors_e[2]) * texture(tex[0],ftexcoord[0]);
-        else
-            color *= texture(tex[0], ftexcoord[0]);
+        if ((null_texture_mask & 1U) == 0U)
+        {
+            vec4 texc = texture(tex[0], ftexcoord[0]);
+            if ((texcomb[0].op & 0xfU) == 13U)
+                color = texc;
+            else
+                color = (color - lighting_colors[2]) * texture(tex[0], ftexcoord[0]);
+            color += lighting_colors[2];
+        }
     }
     if ((alphatest_flags & 0x80U) != 0U && !alpha_test(color.a))
         discard;

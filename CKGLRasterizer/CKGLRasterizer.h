@@ -255,6 +255,7 @@ public:
                                     CKRST_CUBEFACE Face = CKRST_CUBEFACE_XPOS, CKBOOL GenerateMipMap = FALSE);
 
     //--- Sprites
+    virtual CKBOOL LoadSprite(CKDWORD Sprite, const VxImageDescEx &SurfDesc);
     virtual CKBOOL DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *dst);
 
     //--- Utils
@@ -297,6 +298,7 @@ protected:
     CKBOOL CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat);
     CKBOOL CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat);
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
+    CKBOOL CreateSpriteNPOT(CKDWORD Sprite, CKSpriteDesc *DesiredFormat);
 
     //---- Cleanup
     void FlushCaches();
@@ -338,6 +340,7 @@ private:
     CKDWORD m_ts_texture[CKRST_MAX_STAGES] = {~0U};
     CKGLTexCombinatorUniform m_texcombo[CKRST_MAX_STAGES];
     CKDWORD m_tex_vp[CKRST_MAX_STAGES] = {0};
+    uint32_t m_null_texture_mask;
     bool m_use_post_processing = false;
     bool m_use_pp_switch_pending = false;
     CKGLPostProcessingPipeline *m_3dpp = nullptr;
