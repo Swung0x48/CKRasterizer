@@ -1509,18 +1509,8 @@ CKBOOL CKGLRasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Ty
             result = CreateTexture(ObjIndex, static_cast<CKTextureDesc *>(DesiredFormat));
             break;
         case CKRST_OBJ_SPRITE:
-        {
-            return 0;
-            result = CreateSprite(ObjIndex, static_cast<CKSpriteDesc *>(DesiredFormat));
-            CKSpriteDesc* desc = m_Sprites[ObjIndex];
-            fprintf(stderr, "idx: %d\n", ObjIndex);
-            for (auto it = desc->Textures.Begin(); it != desc->Textures.End(); ++it)
-            {
-                fprintf(stderr, "(%d,%d) WxH: %dx%d, SWxSH: %dx%d\n", it->x, it->y, it->w, it->h, it->sw, it->sh);
-            }
-            fprintf(stderr, "---\n");
+            result = CreateSpriteNPOT(ObjIndex, static_cast<CKSpriteDesc *>(DesiredFormat));
             break;
-        }
         case CKRST_OBJ_VERTEXBUFFER:
             result = CreateVertexBuffer(ObjIndex, static_cast<CKVertexBufferDesc *>(DesiredFormat));
             break;
@@ -1600,9 +1590,55 @@ CKBOOL CKGLRasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width,
     return CKRasterizerContext::SetTargetTexture(TextureObject, Width, Height, Face, GenerateMipMap);
 }
 
+CKBOOL CKGLRasterizerContext::LoadSprite(CKDWORD Sprite, const VxImageDescEx &SurfDesc)
+{
+    if (Sprite >= (CKDWORD)m_Sprites.Size())
+        return FALSE;
+    CKSpriteDesc *spr = m_Sprites[Sprite];
+    LoadTexture(spr->Textures.Front().IndexTexture, SurfDesc);
+    return TRUE;
+}
+
 CKBOOL CKGLRasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *dst)
 {
-    return CKRasterizerContext::DrawSprite(Sprite, src, dst);
+    if (Sprite >= (CKDWORD)m_Sprites.Size())
+        return FALSE;
+    CKSpriteDesc *spr = m_Sprites[Sprite];
+    VxDrawPrimitiveData pd{};
+    pd.VertexCount = 4;
+    pd.Flags = CKRST_DP_VCT;
+    VxVector4 p[4] = {
+        VxVector4(dst->left , dst->top   , 0, 1.),
+        VxVector4(dst->right, dst->top   , 0, 1.),
+        VxVector4(dst->right, dst->bottom, 0, 1.),
+        VxVector4(dst->left , dst->bottom, 0, 1.)
+    };
+    CKDWORD c[4] = {~0U, ~0U, ~0U, ~0U};
+    Vx2DVector t[4] = {
+        Vx2DVector(src->left , src->top),
+        Vx2DVector(src->right, src->top),
+        Vx2DVector(src->right, src->bottom),
+        Vx2DVector(src->left , src->bottom)
+    };
+    for (int i = 0; i < 4; ++i)
+    {
+        t[i].x /= spr->Format.Width;
+        t[i].y /= spr->Format.Height;
+    }
+    pd.PositionStride = sizeof(VxVector4);
+    pd.ColorStride = sizeof(CKDWORD);
+    pd.TexCoordStride = sizeof(Vx2DVector);
+    pd.PositionPtr = p;
+    pd.ColorPtr = c;
+    pd.TexCoordPtr = t;
+    CKWORD idx[6] = {0, 1, 2, 0, 2, 3};
+    SetTexture(spr->Textures.Front().IndexTexture);
+    _SetRenderState(VXRENDERSTATE_CULLMODE, VXCULL_NONE);
+    _SetRenderState(VXRENDERSTATE_LIGHTING, FALSE);
+    DrawPrimitive(VX_TRIANGLELIST, idx, 6, &pd);
+    _SetRenderState(VXRENDERSTATE_CULLMODE, m_renderst[VXRENDERSTATE_CULLMODE]);
+    _SetRenderState(VXRENDERSTATE_LIGHTING, m_renderst[VXRENDERSTATE_LIGHTING]);
+    return TRUE;
 }
 
 int CKGLRasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc)
@@ -1794,6 +1830,25 @@ CKBOOL CKGLRasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *D
     desc->Create();
     m_IndexBuffers[IB] = desc;
     return 1;
+}
+
+CKBOOL CKGLRasterizerContext::CreateSpriteNPOT(CKDWORD Sprite, CKSpriteDesc *DesiredFormat)
+{
+    if (Sprite >= (CKDWORD)m_Sprites.Size() || !DesiredFormat)
+        return FALSE;
+    if (m_Sprites[Sprite])
+        delete m_Sprites[Sprite];
+    m_Sprites[Sprite] = new CKSpriteDesc();
+    CKSpriteDesc *spr = m_Sprites[Sprite];
+    spr->Flags = DesiredFormat->Flags;
+    spr->Format = DesiredFormat->Format;
+    spr->MipMapCount = DesiredFormat->MipMapCount;
+    spr->Owner = m_Driver->m_Owner;
+    CKSPRTextInfo ti;
+    ti.IndexTexture = m_Driver->m_Owner->CreateObjectIndex(CKRST_OBJ_TEXTURE);
+    CreateObject(ti.IndexTexture, CKRST_OBJ_TEXTURE, DesiredFormat);
+    spr->Textures.PushBack(ti);
+    return TRUE;
 }
 
 void CKGLRasterizerContext::FlushCaches()
