@@ -34,9 +34,8 @@ void CKGLTexture::set_border_color(int color)
 void CKGLTexture::Create()
 {
     glCreateTextures(GL_TEXTURE_2D, 1, &tex);
-    glTextureStorage2D(tex, 1, GL_RGBA8, Format.Width, Format.Height);
-    set_parameter(GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    set_parameter(GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureStorage2D(tex, MipMapCount + 1, GL_RGBA8, Format.Width, Format.Height);
+    set_parameter(GL_TEXTURE_MAX_LEVEL, MipMapCount);
 }
 
 void CKGLTexture::Bind()
@@ -47,4 +46,6 @@ void CKGLTexture::Bind()
 void CKGLTexture::Load(void *data)
 {
     glTextureSubImage2D(tex, 0, 0, 0, Format.Width, Format.Height, glfmt, gltyp, data);
+    if (MipMapCount > 0)
+        glGenerateTextureMipmap(tex);
 }

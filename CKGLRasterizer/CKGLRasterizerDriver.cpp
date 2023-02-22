@@ -53,12 +53,24 @@ CKBOOL CKGLRasterizerDriver::InitializeCaps()
     m_Desc << glGetString(GL_RENDERER);
     m_Desc << " (OpenGL)";
 
+    CKTextureDesc td{};
+    td.Format.Width = 1024;
+    td.Format.Height = 1024;
+    td.Format.BitsPerPixel = 32;
+    td.Format.AlphaMask = 0xFF000000;
+    td.Format.RedMask   = 0x00FF0000;
+    td.Format.GreenMask = 0x0000FF00;
+    td.Format.BlueMask  = 0x000000FF;
+    td.MipMapCount = 1000;
+    m_TextureFormats.PushBack(td);
+
     ZeroMemory(&m_3DCaps, sizeof(m_3DCaps));
     ZeroMemory(&m_2DCaps, sizeof(m_2DCaps));
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_CANDOVERTEXBUFFER;
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_CANDOINDEXBUFFER;
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_GLATTENUATIONMODEL;
     m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_HARDWARETL;
+    m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_AUTGENMIPMAP;
     m_3DCaps.MaxNumberTextureStage = 8; //?
     m_3DCaps.MaxNumberBlendStage = 8;   //fake it until we make it
     m_3DCaps.MaxActiveLights = MAX_ACTIVE_LIGHTS;
@@ -70,6 +82,7 @@ CKBOOL CKGLRasterizerDriver::InitializeCaps()
     m_3DCaps.VertexCaps |= CKRST_VTXCAPS_TEXGEN;
     m_3DCaps.AlphaCmpCaps = 0xff;       //we have TECHNOLOGY
     m_3DCaps.ZCmpCaps = 0xff;           //who wouldn't be 0xff here?
+    m_3DCaps.TextureFilterCaps = 0x3f;  //no anisotropic yet
     m_3DCaps.TextureAddressCaps = 0x1f; //everything
     m_3DCaps.TextureCaps |= CKRST_TEXTURECAPS_PERSPECTIVE; //not only do we support it, it's ALWAYS on
     m_3DCaps.MiscCaps |= CKRST_MISCCAPS_MASKZ;      //glDepthMask

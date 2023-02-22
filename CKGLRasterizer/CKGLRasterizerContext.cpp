@@ -1051,10 +1051,10 @@ CKBOOL CKGLRasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGE
             case VXTEXTUREFILTER_NEAREST: return GL_NEAREST;
             case VXTEXTUREFILTER_LINEAR: return GL_LINEAR;
             //we don't generate mipmap yet
-            case VXTEXTUREFILTER_MIPNEAREST: return GL_LINEAR;
-            case VXTEXTUREFILTER_MIPLINEAR: return GL_LINEAR;
-            case VXTEXTUREFILTER_LINEARMIPNEAREST: return GL_LINEAR;
-            case VXTEXTUREFILTER_LINEARMIPLINEAR: return GL_LINEAR;
+            case VXTEXTUREFILTER_MIPNEAREST: return GL_NEAREST_MIPMAP_NEAREST;
+            case VXTEXTUREFILTER_MIPLINEAR: return GL_NEAREST_MIPMAP_LINEAR;
+            case VXTEXTUREFILTER_LINEARMIPNEAREST: return GL_LINEAR_MIPMAP_NEAREST;
+            case VXTEXTUREFILTER_LINEARMIPLINEAR: return GL_LINEAR_MIPMAP_LINEAR;
             //needs ARB_texture_filter_anisotropic or EXT_texture_filter_anisotropic...
             case VXTEXTUREFILTER_ANISOTROPIC: return GL_LINEAR;
             default: return GL_INVALID_ENUM;
