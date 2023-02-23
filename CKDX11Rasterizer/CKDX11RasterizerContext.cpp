@@ -326,7 +326,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     vs_color.DxFVF = CKRST_VF_POSITION | CKRST_VF_DIFFUSE;
     CreateObject(vs_color_idx, CKRST_OBJ_VERTEXSHADER, &vs_color);
 
-    for (int i = 0; i < VS_MAX; ++i)
+    for (int i = 0; i <= VS_MAX; ++i)
     {
         if (m_VertexShaders[i])
             m_VertexShaderMap[static_cast<CKDX11VertexShaderDesc *>(m_VertexShaders[i])->DxFVF] = i;
