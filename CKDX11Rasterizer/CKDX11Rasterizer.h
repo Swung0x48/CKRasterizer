@@ -261,7 +261,9 @@ typedef struct PSConstantBufferStruct
     uint32_t FVF = 0;
     CKDX11LightConstant Lights[MAX_ACTIVE_LIGHTS];
     CKDX11TexCombinatorConstant TexCombinator[MAX_TEX_STAGES];
-    uint32_t TextureTransformFlags[MAX_TEX_STAGES_PAD_TO_ALIGN];
+    uint32_t TextureTransformFlags[MAX_TEX_STAGES];
+    uint32_t _padding1;
+    uint32_t _padding2;
 } PSConstantBufferStruct;
 
 typedef struct CKDX11ConstantBufferDesc

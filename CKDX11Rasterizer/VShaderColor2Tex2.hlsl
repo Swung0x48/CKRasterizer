@@ -3,10 +3,10 @@
 struct VS_INPUT
 {
     float3 position : SV_POSITION;
-    float4 diffuse : COLOR;
-    float4 specular : COLOR;
-    float2 texcoord0 : TEXCOORD;
-    float2 texcoord1 : TEXCOORD;
+    float4 diffuse : COLOR0;
+    float4 specular : COLOR1;
+    float2 texcoord0 : TEXCOORD0;
+    float2 texcoord1 : TEXCOORD1;
 };
 
 VS_OUTPUT main(VS_INPUT input)
@@ -17,9 +17,6 @@ VS_OUTPUT main(VS_INPUT input)
     output.specular = input.specular;
     output.normal = float3(0., 0., 0.);
     output.texcoord0 = input.texcoord0;
-    if (vs_fvf & VF_TEX2)
-        output.texcoord1 = input.texcoord1;
-    else
-        output.texcoord1 = tex_default;
+    output.texcoord1 = input.texcoord1;
     return output;
 }
