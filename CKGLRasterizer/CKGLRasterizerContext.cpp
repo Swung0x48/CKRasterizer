@@ -65,6 +65,8 @@ CKGLRasterizerContext::~CKGLRasterizerContext()
     if (m_prgm)
         delete m_prgm;
 
+    FlushObjects(CKRST_OBJ_ALL);
+
     m_DirtyRects.Clear();
     m_PixelShaders.Clear();
     m_VertexShaders.Clear();
@@ -1846,31 +1848,6 @@ CKBOOL CKGLRasterizerContext::CreateSpriteNPOT(CKDWORD Sprite, CKSpriteDesc *Des
     CreateObject(ti.IndexTexture, CKRST_OBJ_TEXTURE, DesiredFormat);
     spr->Textures.PushBack(ti);
     return TRUE;
-}
-
-void CKGLRasterizerContext::FlushCaches()
-{
-}
-
-void CKGLRasterizerContext::FlushNonManagedObjects()
-{
-}
-
-void CKGLRasterizerContext::ReleaseStateBlocks()
-{
-}
-
-void CKGLRasterizerContext::ReleaseBuffers()
-{
-    
-}
-
-void CKGLRasterizerContext::ClearStreamCache()
-{
-}
-
-void CKGLRasterizerContext::ReleaseScreenBackup()
-{
 }
 
 VxMatrix inv(const VxMatrix &_m)

@@ -300,21 +300,13 @@ protected:
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
     CKBOOL CreateSpriteNPOT(CKDWORD Sprite, CKSpriteDesc *DesiredFormat);
 
-    //---- Cleanup
-    void FlushCaches();
-    void FlushNonManagedObjects();
-    void ReleaseStateBlocks();
-    void ReleaseBuffers();
-    void ClearStreamCache();
-    void ReleaseScreenBackup();
-
 public:
     CKGLRasterizer *m_Owner;
 private:
     HDC m_DC = NULL;
     CKBOOL m_Vsync = FALSE;
     constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
-    CKGLProgram *m_prgm;
+    CKGLProgram *m_prgm = nullptr;
     CKDWORD m_CurrentIndexBuffer = INVALID_VALUE;
     std::vector<std::pair<CKDWORD, CKLightData>> m_lights;
     CKGLLightUniform m_lights_data[MAX_ACTIVE_LIGHTS];
