@@ -65,6 +65,8 @@ CKGLRasterizerContext::~CKGLRasterizerContext()
     if (m_prgm)
         delete m_prgm;
 
+    FlushObjects(CKRST_OBJ_ALL);
+
     m_DirtyRects.Clear();
     m_PixelShaders.Clear();
     m_VertexShaders.Clear();
@@ -141,8 +143,8 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         WGL_ALPHA_BITS_ARB, 8,
         WGL_DEPTH_BITS_ARB, 24,
         WGL_STENCIL_BITS_ARB, 8,
-        WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
-        WGL_SAMPLES_ARB, 4,
+        WGL_SAMPLE_BUFFERS_ARB, m_Antialias ? GL_TRUE : GL_FALSE,
+        WGL_SAMPLES_ARB, m_Antialias,
         0
     };
     HDC DC = GetDC((HWND)Window);
@@ -1846,31 +1848,6 @@ CKBOOL CKGLRasterizerContext::CreateSpriteNPOT(CKDWORD Sprite, CKSpriteDesc *Des
     CreateObject(ti.IndexTexture, CKRST_OBJ_TEXTURE, DesiredFormat);
     spr->Textures.PushBack(ti);
     return TRUE;
-}
-
-void CKGLRasterizerContext::FlushCaches()
-{
-}
-
-void CKGLRasterizerContext::FlushNonManagedObjects()
-{
-}
-
-void CKGLRasterizerContext::ReleaseStateBlocks()
-{
-}
-
-void CKGLRasterizerContext::ReleaseBuffers()
-{
-    
-}
-
-void CKGLRasterizerContext::ClearStreamCache()
-{
-}
-
-void CKGLRasterizerContext::ReleaseScreenBackup()
-{
 }
 
 VxMatrix inv(const VxMatrix &_m)
