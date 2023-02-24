@@ -2,7 +2,8 @@
 #include "CKDX11RasterizerCommon.h"
 #include "EnumMaps.h"
 
-#include "VShader2D.h"
+#include "VShader2DColor1.h"
+#include "VShader2DColor2.h"
 #include "VShaderColor.h"
 #include "VShaderColor1Tex1.h"
 #include "VShaderColor1Tex2.h"
@@ -261,17 +262,23 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     if (m_Fullscreen)
         m_Driver->m_Owner->m_FullscreenContext = this;
 
-    CKDWORD vs_2d_idx = 0;
+    CKDWORD vs_2d_idx = 0, vs_2d_color2_idx = 9;
     CKDWORD vs_normal_tex1_idx = 1, vs_normal_tex2_idx = 2;
     CKDWORD vs_color1_tex1_idx = 3, vs_color1_tex2_idx = 4, vs_color2_tex1_idx = 5, vs_color2_tex2_idx = 6;
     CKDWORD vs_tex_idx = 7, vs_color_idx = 8;
-    CKDWORD VS_MAX = 8;
+    CKDWORD VS_MAX = 9;
     CKDWORD ps_idx = 0;
     CKDX11VertexShaderDesc vs_2d_desc;
-    vs_2d_desc.m_Function = (CKDWORD*)g_VShader2D;
-    vs_2d_desc.m_FunctionSize = sizeof(g_VShader2D);
+    vs_2d_desc.m_Function = (CKDWORD *)g_VShader2DColor1;
+    vs_2d_desc.m_FunctionSize = sizeof(g_VShader2DColor1);
     vs_2d_desc.DxFVF = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
     CreateObject(vs_2d_idx, CKRST_OBJ_VERTEXSHADER, &vs_2d_desc);
+
+    CKDX11VertexShaderDesc vs_2d_color2_desc;
+    vs_2d_color2_desc.m_Function = (CKDWORD *)g_VShader2DColor2;
+    vs_2d_color2_desc.m_FunctionSize = sizeof(g_VShader2DColor2);
+    vs_2d_color2_desc.DxFVF = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1;
+    CreateObject(vs_2d_color2_idx, CKRST_OBJ_VERTEXSHADER, &vs_2d_color2_desc);
 
     CKDX11PixelShaderDesc ps_desc;
     ps_desc.m_Function = (CKDWORD *)g_PShader;
@@ -389,6 +396,9 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, 1);
     SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
     SetRenderState(VXRENDERSTATE_COLORVERTEX, 0);
+
+    SetTitleStatus("D3D11 | DXGI %s | AllowTearing: %s",
+                   m_Owner->m_DXGIVersionString.c_str(), m_AllowTearing ? "true" : "false");
     
     m_InCreateDestroy = FALSE;
 

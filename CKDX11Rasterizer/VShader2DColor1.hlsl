@@ -4,7 +4,6 @@ struct VS_INPUT
 {
     float4 position : SV_POSITION;
     float4 diffuse : COLOR;
-    float4 specular : COLOR;
     float2 texcoord0 : TEXCOORD;
 };
 
@@ -15,7 +14,7 @@ VS_OUTPUT main(VS_INPUT input)
     output.position = mul(viewport_mat, output.position);
     output.normal = float3(0., 0., 0.);
     output.color = input.diffuse;
-    output.specular = input.specular;
+    output.specular = spec_default;
     output.texcoord0 = input.texcoord0;
     output.texcoord1 = tex_default;
     return output;
