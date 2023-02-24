@@ -301,7 +301,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         }
     }
     else
-        color = input.specular;
+        color = input.color;
 
     int ntex = (fvf & VF_TEX2) ? 2 : 1;
     if (ntex > 1)
@@ -346,52 +346,6 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         }
         color = accumulator;
     }
-    // float4 samp_color0 = texture0.Sample(sampler0, input.texcoord0);
-    // if (fvf & VF_TEX2)
-    // {
-    //     float4 samp_color1 = texture1.Sample(sampler1, input.texcoord1);
-    //
-    //     float4 accumulator = zero4f;
-    //     float2x4 temp = float2x4(zero4f, zero4f);
-    //
-    //     uint cop_0 = tex_combinator[0].op & 0xfU;
-    //     uint aop_0 = (tex_combinator[0].op & 0xf0U) >> 4;
-    //     uint dst_0 = tex_combinator[0].op >> 31; // 1: temp, 0: accumulator
-    //     uint ca1_0 = tex_combinator[0].cargs & 0xffU;
-    //     uint ca2_0 = (tex_combinator[0].cargs & 0xff00U) >> 8;
-    //     uint aa1_0 = tex_combinator[0].aargs & 0xffU;
-    //     uint aa2_0 = (tex_combinator[0].aargs & 0xff00U) >> 8;
-    //     float4 cv1_0 = select_argument(0, ca1_0, samp_color0, accumulator, temp[0], lighting_colors_e);
-    //     float4 cv2_0 = select_argument(0, ca2_0, samp_color0, accumulator, temp[0], lighting_colors_e);
-    //     float4 av1_0 = select_argument(0, aa1_0, samp_color0, accumulator, temp[0], lighting_colors_e);
-    //     float4 av2_0 = select_argument(0, aa2_0, samp_color0, accumulator, temp[0], lighting_colors_e);
-    //     float4 rc_0 = combine_value(cop_0, cv1_0, cv2_0, samp_color0.a);
-    //     float4 ra_0 = combine_value(aop_0, av1_0, av2_0, samp_color0.a);
-    //     if (dst_0 == 1U)
-    //         temp[0] = float4(rc_0.rgb, ra_0.a);
-    //     else
-    //         accumulator = float4(rc_0.rgb, ra_0.a);
-    //
-    //     // uint cop_1 = tex_combinator[1].op & 0xfU;
-    //     // uint aop_1 = (tex_combinator[1].op & 0xf0U) >> 4;
-    //     // uint dst_1 = tex_combinator[1].op >> 31; // 1: temp, 0: accumulator
-    //     // uint ca1_1 = tex_combinator[1].cargs & 0xffU;
-    //     // uint ca2_1 = (tex_combinator[1].cargs & 0xff00U) >> 8;
-    //     // uint aa1_1 = tex_combinator[1].aargs & 0xffU;
-    //     // uint aa2_1 = (tex_combinator[1].aargs & 0xff00U) >> 8;
-    //     // float4 cv1_1 = select_argument(1, ca1_1, samp_color1, accumulator, temp[1], lighting_colors_e);
-    //     // float4 cv2_1 = select_argument(1, ca2_1, samp_color1, accumulator, temp[1], lighting_colors_e);
-    //     // float4 av1_1 = select_argument(1, aa1_1, samp_color1, accumulator, temp[1], lighting_colors_e);
-    //     // float4 av2_1 = select_argument(1, aa2_1, samp_color1, accumulator, temp[1], lighting_colors_e);
-    //     // float4 rc_1 = combine_value(cop_1, cv1_1, cv2_1, samp_color1.a);
-    //     // float4 ra_1 = combine_value(aop_1, av1_1, av2_1, samp_color1.a);
-    //     // if (dst_1 == 1U)
-    //     //     temp[1] = float4(rc_1.rgb, ra_1.a);
-    //     // else
-    //     //     accumulator = float4(rc_1.rgb, ra_1.a);
-    //
-    //     // color = accumulator;
-    // }
     else
     {
         color = (color - lighting_colors[2]) * texture0.Sample(sampler0, input.texcoord0);

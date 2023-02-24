@@ -21,7 +21,7 @@ cbuffer VSCBuf: register(b0)
 };
 
 static const float4 color_default = float4(1., 1., 1., 1.);
-static const float4 spec_default = float4(0., 0., 0., 0.);
+static const float4 spec_default = float4(1., 1., 1., 1.);
 static const float2 tex_default = float2(0., 0.);
 static const dword VF_TEX2 = 0x0200;
 
