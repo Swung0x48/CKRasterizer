@@ -93,7 +93,18 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     HRESULT hr;
 
     m_InCreateDestroy = TRUE;
-    SetWindowLongA((HWND)Window, GWL_STYLE, WS_OVERLAPPED | WS_SYSMENU | (Fullscreen ? 0 : WS_CHILDWINDOW));
+
+    CKRECT Rect;
+    if (Window)
+    {
+        VxGetWindowRect(Window, &Rect);
+        WIN_HANDLE Parent = VxGetParent(Window);
+        VxScreenToClient(Parent, reinterpret_cast<CKPOINT *>(&Rect));
+        VxScreenToClient(Parent, reinterpret_cast<CKPOINT *>(&Rect.right));
+    }
+    LONG PrevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
+    // SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle & ~WS_CHILDWINDOW);
+    SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle | WS_CAPTION | (Fullscreen ? 0 : WS_CHILDWINDOW));
     SetClassLongPtr((HWND)Window, GCLP_HBRBACKGROUND, (LONG)GetStockObject(NULL_BRUSH));
 
     DXGI_SWAP_CHAIN_DESC scd;
@@ -244,6 +255,16 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(m_Device->CreateRasterizerState(&m_RasterizerDesc, m_RasterizerState.GetAddressOf()));
     m_DeviceContext->RSSetState(m_RasterizerState.Get());
     m_RasterizerStateUpToDate = TRUE;
+
+    if (Fullscreen)
+    {
+        LONG PrevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
+        SetWindowLongA((HWND)Window, GCLP_HMODULE, PrevStyle | WS_CHILDWINDOW);
+    }
+    else if (Window && !Fullscreen)
+    {
+        VxMoveWindow(Window, Rect.left, Rect.top, Rect.right - Rect.left, Rect.bottom - Rect.top, FALSE);
+    }
 
     m_Window = (HWND)Window;
 
@@ -406,7 +427,15 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
 }
 CKBOOL CKDX11RasterizerContext::Resize(int PosX, int PosY, int Width, int Height, CKDWORD Flags)
 {
-    return CKRasterizerContext::Resize(PosX, PosY, Width, Height, Flags);
+    CKRECT Rect;
+    if (m_Window)
+    {
+        VxGetWindowRect(m_Window, &Rect);
+        WIN_HANDLE Parent = VxGetParent(m_Window);
+        VxScreenToClient(Parent, reinterpret_cast<CKPOINT *>(&Rect));
+        VxScreenToClient(Parent, reinterpret_cast<CKPOINT *>(&Rect.right));
+    }
+    return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD Stencil, int RectCount,
                                       CKRECT *rects)
