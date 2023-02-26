@@ -193,7 +193,7 @@ BOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int W
     if (Fullscreen)
     {
         LONG PrevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
-        SetWindowLongA((HWND)Window, -16, PrevStyle | WS_CHILDWINDOW);
+        SetWindowLongA((HWND)Window, GCLP_HMODULE, PrevStyle | WS_CHILDWINDOW);
     }
     else if (Window && !Fullscreen)
     {
