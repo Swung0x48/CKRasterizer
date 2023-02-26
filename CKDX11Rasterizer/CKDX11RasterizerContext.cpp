@@ -107,10 +107,13 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle | WS_CAPTION | (Fullscreen ? 0 : WS_CHILDWINDOW));
     SetClassLongPtr((HWND)Window, GCLP_HBRBACKGROUND, (LONG)GetStockObject(NULL_BRUSH));
 
+    
+    m_AllowTearing = static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
+    m_FlipPresent = static_cast<CKDX11Rasterizer *>(m_Owner)->m_FlipPresent;
+
     DXGI_SWAP_CHAIN_DESC scd;
     ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
 
-    m_AllowTearing = static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
     scd.BufferCount = 2;
     scd.BufferDesc.Width = Width;
     scd.BufferDesc.Height = Height;
@@ -119,7 +122,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     scd.OutputWindow = (HWND)Window;
     scd.SampleDesc.Count = 1; // TODO: multisample support
     scd.Windowed = !Fullscreen;
-    scd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    scd.SwapEffect = m_FlipPresent ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT_DISCARD;
     scd.Flags = m_AllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
     UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,

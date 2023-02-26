@@ -77,14 +77,23 @@ XBOOL CKDX11Rasterizer::Start(WIN_HANDLE AppWnd)
 	    return FALSE;
 	}
 
-    ComPtr<IDXGIFactory5> factory5;
-    hr = m_Factory.As(&factory5);
     BOOL allowTearing = FALSE;
+    ComPtr<IDXGIFactory2> factory2;
+    hr = m_Factory.As(&factory2);
     if (SUCCEEDED(hr))
     {
-        m_DXGIVersionString = "1.5+";
-        hr = factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
+        m_FlipPresent = TRUE;
+        m_DXGIVersionString = "1.2";
+
+        ComPtr<IDXGIFactory5> factory5;
+        hr = m_Factory.As(&factory5);
+        if (SUCCEEDED(hr))
+        {
+            m_DXGIVersionString = "1.5+";
+            hr = factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
+        }
     }
+    
     m_TearingSupport = SUCCEEDED(hr) && allowTearing;
 
 	ComPtr<IDXGIAdapter1> adapter = nullptr;

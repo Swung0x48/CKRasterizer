@@ -42,6 +42,7 @@ public:
 public:
     ComPtr<IDXGIFactory1> m_Factory;
     CKBOOL m_TearingSupport = FALSE;
+    CKBOOL m_FlipPresent = FALSE;
     std::string m_DXGIVersionString = "1.1";
 };
 
@@ -419,6 +420,7 @@ public:
     D3D_FEATURE_LEVEL m_FeatureLevel;
     D3D11_VIEWPORT m_Viewport;
     CKBOOL m_AllowTearing;
+    CKBOOL m_FlipPresent;
     CKDWORD m_CurrentVShader = -1;
     CKDWORD m_CurrentPShader = -1;
     // CKDWORD m_FVF = 0;
