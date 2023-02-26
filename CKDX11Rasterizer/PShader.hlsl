@@ -15,12 +15,6 @@ static const dword LFLG_LIGHTEN = 1U << 31;
 static const int MAX_ACTIVE_LIGHTS = 16;
 static const int MAX_TEX_STAGES = 2;
 
-static const dword TVP_TC_CSNORM = 0x01000000; // use camera space normal as input tex-coords
-static const dword TVP_TC_CSVECP = 0x02000000; // use camera space position ......
-static const dword TVP_TC_CSREFV = 0x04000000; // use camera space reflect vector ......
-static const dword TVP_TC_TRANSF = 0x08000000; // tex-coords should be transformed by its matrix
-static const dword TVP_TC_PROJECTED = 0x10000000; // tex-coords should be projected
-
 static const dword NULL_TEXTURE_MASK = (1 << (MAX_TEX_STAGES + 1)) - 1;
 
 struct light_t
@@ -68,7 +62,6 @@ cbuffer PSCBuf : register(b0)
     dword fvf;
     light_t lights[MAX_ACTIVE_LIGHTS];
     texcomb_t tex_combinator[MAX_TEX_STAGES];
-    dword tex_transform_flags[MAX_TEX_STAGES];
 };
 
 static const float4 zero4f = float4(0., 0., 0., 0.);
@@ -114,6 +107,7 @@ float3x4 light_directional(light_t l, float3 normal, float3 vdir, float4 frag_di
                            bool spec_enabled)
 {
     bool use_vert_color = (global_light_switches & LSW_VRTCOLOREN);
+    l.direction.xz = -l.direction.xz;
     float3 ldir = normalize(-l.direction.xyz);
     float diff = max(dot(normal, ldir), 0.);
     float4 ambient = l.ambient * material.ambient;
@@ -127,11 +121,11 @@ float3x4 light_directional(light_t l, float3 normal, float3 vdir, float4 frag_di
 #endif
     )
     {
-        float3 refldir = reflect(-ldir, normal);
+        float3 refldir = reflect(ldir, normal);
         float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.specular_power);
         // direct3d9 specular strength formula
         // float3 hv = normalize(vdir + ldir);
-        // specl = pow(dot(normal, hv), material.spcl_strength);
+        // specl = pow(dot(normal, hv), material.specular);
         spc = l.specular * material.specular * specl;
         if (use_vert_color)
             spc = l.specular * frag_specular * specl;
@@ -344,14 +338,13 @@ float4 main(VS_OUTPUT input) : SV_TARGET
             else
                 accumulator = float4(rc.rgb, ra.a);
         }
-        color = accumulator;
+        color = accumulator + lighting_colors[2];
     }
     else
     {
         color = (color - lighting_colors[2]) * texture0.Sample(sampler0, input.texcoord0);
+        color += lighting_colors[2];
     }
-
-    color += lighting_colors[2];
 
     if ((alpha_flags & AFLG_ALPHATESTEN) && !alpha_test(color.a))
     {

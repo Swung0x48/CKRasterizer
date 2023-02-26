@@ -1268,7 +1268,7 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
             }
         case CKRST_TSS_TEXTURETRANSFORMFLAGS:
             {
-            CKDWORD tvp = m_PSCBuffer.TextureTransformFlags[Stage];
+            CKDWORD tvp = m_VSCBuffer.TextureTransformFlags[Stage];
             if (!Value)
                     tvp &= ~0U ^ TVP_TC_TRANSF;
             else
@@ -1277,9 +1277,9 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
                     tvp |= TVP_TC_PROJECTED;
             else
                     tvp &= ~0U ^ TVP_TC_PROJECTED;
-            if (tvp != m_PSCBuffer.TextureTransformFlags[Stage])
+            if (tvp != m_VSCBuffer.TextureTransformFlags[Stage])
             {
-                    m_PSCBuffer.TextureTransformFlags[Stage] = tvp;
+                    m_VSCBuffer.TextureTransformFlags[Stage] = tvp;
                     m_PSConstantBufferUpToDate = FALSE;
             }
             return TRUE;
@@ -1289,7 +1289,7 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
             // we currently ignore the texture coords index encoded in Value...
             // because we simply don't have that in our frag shader...
             // we only care about automatic texture coords generation for now.
-            CKDWORD tvp = m_PSCBuffer.TextureTransformFlags[Stage] & (~0U ^ 0x07000000U);
+            CKDWORD tvp = m_VSCBuffer.TextureTransformFlags[Stage] & (~0U ^ 0x07000000U);
             switch (Value >> 16)
             {
                     case 0:
@@ -1306,9 +1306,9 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
                     default:
                         return FALSE;
             }
-            if (tvp != m_PSCBuffer.TextureTransformFlags[Stage])
+            if (tvp != m_VSCBuffer.TextureTransformFlags[Stage])
             {
-                    m_PSCBuffer.TextureTransformFlags[Stage] = tvp;
+                    m_VSCBuffer.TextureTransformFlags[Stage] = tvp;
                     m_PSConstantBufferUpToDate = FALSE;
             }
             return TRUE;
@@ -1398,7 +1398,7 @@ CKDX11IndexBufferDesc* CKDX11RasterizerContext::GenerateIB(void *indices, int in
         ibo->m_CurrentICount = indexCount;
     }
     if (pdata)
-        memcpy(pdata, indices, sizeof(CKWORD) * indexCount);
+        std::memcpy(pdata, indices, sizeof(CKWORD) * indexCount);
     ibo->Unlock(this);
     return ibo;
 }
@@ -1977,7 +1977,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         // Vx3DTransposeMatrix(m_VSCBuffer.ViewportMatrix, m_VSCBuffer.ViewportMatrix);
         D3D11_MAPPED_SUBRESOURCE ms;
         D3DCall(m_DeviceContext->Map(m_VSConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
-        memcpy(ms.pData, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
+        std::memcpy(ms.pData, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         m_DeviceContext->Unmap(m_VSConstantBuffer.DxBuffer.Get(), NULL);
 
         m_DeviceContext->VSSetConstantBuffers(0, 1, m_VSConstantBuffer.DxBuffer.GetAddressOf());
@@ -1994,7 +1994,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         m_PSCBuffer.ViewPosition = VxVector(mat[3][0], mat[3][1], mat[3][2]);
         D3D11_MAPPED_SUBRESOURCE ms;
         D3DCall(m_DeviceContext->Map(m_PSConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
-        memcpy(ms.pData, &m_PSCBuffer, sizeof(PSConstantBufferStruct));
+        std::memcpy(ms.pData, &m_PSCBuffer, sizeof(PSConstantBufferStruct));
         m_DeviceContext->Unmap(m_PSConstantBuffer.DxBuffer.Get(), NULL);
         m_DeviceContext->PSSetConstantBuffers(0, 1, m_PSConstantBuffer.DxBuffer.GetAddressOf());
         m_PSConstantBufferUpToDate = TRUE;

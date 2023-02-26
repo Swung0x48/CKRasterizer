@@ -236,7 +236,8 @@ typedef struct VSConstantBufferStruct
     VxMatrix TransposedInvWorldMatrix;
     VxMatrix TransposedInvWorldViewMatrix;
     uint32_t FVF = 0;
-    uint32_t _padding[3];
+    uint32_t TextureTransformFlags[MAX_TEX_STAGES];
+    uint32_t _padding1;
 } VSConstantBufferStruct;
 
 static constexpr uint32_t LFLG_LIGHTEN = 1U << 31;
@@ -262,9 +263,6 @@ typedef struct PSConstantBufferStruct
     uint32_t FVF = 0;
     CKDX11LightConstant Lights[MAX_ACTIVE_LIGHTS];
     CKDX11TexCombinatorConstant TexCombinator[MAX_TEX_STAGES];
-    uint32_t TextureTransformFlags[MAX_TEX_STAGES];
-    uint32_t _padding1;
-    uint32_t _padding2;
 } PSConstantBufferStruct;
 
 typedef struct CKDX11ConstantBufferDesc
