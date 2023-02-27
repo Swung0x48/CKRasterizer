@@ -69,47 +69,39 @@ layout (std140) uniform TexCombinatorUniformBlock
 };
 uniform sampler2D tex[8];
 
-vec4[3] light_point(light_t l, vec3 normal, vec3 fpos, vec3 vdir, bool spec_enabled)
+vec4[3] light_unified(light_t l, vec3 normal, vec3 fpos, vec3 vdir, bool spec_enabled)
 {
     bool use_vert_color = (lighting_switches & LSW_VRTCOLOR_ENABLED) != 0U;
-    float range = l.psparam1.x;
-    float a0 = l.psparam2.x;
-    float a1 = l.psparam2.y;
-    float a2 = l.psparam2.z;
+    float atnf = 1.;
     vec3 ldir = normalize(l.pos.xyz - fpos);
-    float dist = length(l.pos.xyz - fpos);
-    if (dist > range) return vec4[3](vec4(0.), vec4(0.), vec4(0.));
-    //CK2_3D always gives us DX5 light parameters... thus the DX5 light formula here.
-    dist = 1. - dist / range;
-    float atnf = a0 + (a1 * dist + a2 * dist * dist);
-    float diff = max(dot(normal, ldir), 0.);
-    vec4 amb = l.ambi * material.ambi;
-    vec4 dif = diff * l.diff * material.diff;
-    if (use_vert_color)
-        dif = diff * l.diff * fragcol;
-    vec4 spc = vec4(0.);
-    if (spec_enabled
-#ifdef DEBUG
-    && (lighting_switches & LSW_SPCL_OVERR_FORCE) == 0U
-#endif
-    )
+    if (l.type == 1U || l.type == 2U)
     {
-        vec3 refldir = reflect(-ldir, normal);
-        float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.spcl_strength);
-        spc = l.spcl * material.spcl * specl;
-        if (use_vert_color)
-            spc = l.spcl * fragscol * specl;
-#ifdef DEBUG
-        if ((lighting_switches & LSW_SPCL_OVERR_ONLY) != 0U)
-            return vec4[3](vec4(0.), vec4(0.), spc * atnf);
-#endif
+        float dist = length(l.pos.xyz - fpos);
+        float range = l.psparam1.x;
+        float a0 = l.psparam2.x;
+        float a1 = l.psparam2.y;
+        float a2 = l.psparam2.z;
+        if (dist > range) return vec4[3](vec4(0.), vec4(0.), vec4(0.));
+        dist = 1. - dist / range;
+        atnf = a0 + (a1 * dist + a2 * dist * dist);
+        if (l.type == 2U) //spotlight factor...
+        {
+            float rho = dot(normalize(-l.dir.xyz) , ldir);
+            float falloff = l.psparam1.y;
+            float theta = l.psparam1.z;
+            float phi = l.psparam1.w;
+            if (rho <= cos(phi / 2))
+                return vec4[3](vec4(0.), vec4(0.), vec4(0.));
+            if (rho <= cos(theta / 2))
+            {
+                float spf = pow((rho - cos(phi / 2)) / (cos(theta / 2) - cos(phi / 2)), falloff);
+                atnf *= spf;
+            }
+        }
     }
-    return vec4[3](amb * atnf, dif * atnf, spc * atnf);
-}
-vec4[3] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
-{
-    bool use_vert_color = (lighting_switches & LSW_VRTCOLOR_ENABLED) != 0U;
-    vec3 ldir = normalize(-l.dir.xyz);
+    else
+        ldir = normalize(-l.dir.xyz);
+    //CK2_3D always gives us DX5 light parameters... thus the DX5 light formula here.
     float diff = max(dot(normal, ldir), 0.);
     vec4 amb = l.ambi * material.ambi;
     vec4 dif = diff * l.diff * material.diff;
@@ -132,10 +124,10 @@ vec4[3] light_directional(light_t l, vec3 normal, vec3 vdir, bool spec_enabled)
             spc = l.spcl * fragscol * specl;
 #ifdef DEBUG
         if ((lighting_switches & LSW_SPCL_OVERR_ONLY) != 0U)
-            return vec4[3](vec4(0), vec4(0), spc);
+            return vec4[3](vec4(0.), vec4(0.), spc * atnf);
 #endif
     }
-    return vec4[3](amb, dif, spc);
+    return vec4[3](amb * atnf, dif * atnf, spc * atnf);
 }
 bool alpha_test(float in_alpha)
 {
@@ -250,17 +242,10 @@ void main()
     {
         for (uint i = 0U; i < 16U; ++i)
         {
-            switch (lights[i].type)
-            {
-                case 1U: lighting_colors = component_add(
+            if (lights[i].type != 0U)
+                lighting_colors = component_add(
                     lighting_colors,
-                    light_point(lights[i], norm, fpos, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U));
-                    break;
-                case 3U: lighting_colors = component_add(
-                    lighting_colors,
-                    light_directional(lights[i], norm, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U));
-                    break;
-            }
+                    light_unified(lights[i], norm, fpos, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U));
         }
         lighting_colors[0] = clamp_color(lighting_colors[0]);
         lighting_colors[1] = clamp_color(lighting_colors[1]);
