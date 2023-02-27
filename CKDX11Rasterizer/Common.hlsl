@@ -17,10 +17,12 @@ cbuffer VSCBuf: register(b0)
     matrix viewport_mat;
     matrix transposedinvworld_mat;
     matrix transposedinvworldview_mat;
-    matrix texture_transform_mat[2];
+    // matrix texture_transform_mat[2];
+    uint4 texture_transform_flags;
     dword vs_fvf;
-    dword texture_transform_flags[2];
     dword _padding1;
+    dword _padding2;
+    dword _padding3;
 };
 
 static const float4 color_default = float4(1., 1., 1., 1.);
@@ -52,8 +54,8 @@ float2 texgen(float2 texcoord, float3 position, int stage)
     else
         tc = float4(texcoord, 0., 0.);
     
-    if (texp & TVP_TC_TRANSF)
-        tc = mul(tc, texture_transform_mat[stage]);
+    // if (texp & TVP_TC_TRANSF)
+    //     tc = mul(tc, texture_transform_mat[stage]);
     if (texp & TVP_TC_PROJECTED)
         tc /= tc.w;
     
@@ -77,8 +79,8 @@ float2 texgen_normal(float2 texcoord, float3 position, float3 normal, int stage)
     else
         tc = float4(texcoord, 0., 0.);
     
-    if ((texp & TVP_TC_TRANSF) != 0U)
-        tc = mul(tc, texture_transform_mat[stage]);
+    // if ((texp & TVP_TC_TRANSF) != 0U)
+    //     tc = mul(tc, texture_transform_mat[stage]);
     if ((texp & TVP_TC_PROJECTED) != 0U)
         tc /= tc.w;
     return tc.xy;
