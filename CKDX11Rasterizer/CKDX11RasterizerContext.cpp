@@ -563,7 +563,8 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
         {
             UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
             CKDWORD tex = Type - VXMATRIX_TEXTURE0;
-            // TODO
+            m_VSCBuffer.TexTransformMatrix[tex] = Mat;
+            m_VSConstantBufferUpToDate = FALSE;
             break;
         }
          default:

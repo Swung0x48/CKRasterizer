@@ -14,7 +14,7 @@ VS_OUTPUT main(VS_INPUT input)
     output.color = input.diffuse;
     output.specular = spec_default;
     output.normal = float3(0., 0., 0.);
-    output.texcoord0 = input.texcoord0;
+    output.texcoord0 = texgen(input.texcoord0, input.position, 0);
     output.texcoord1 = tex_default;
     return output;
 }
