@@ -235,12 +235,12 @@ typedef struct VSConstantBufferStruct
     VxMatrix ViewportMatrix;
     VxMatrix TransposedInvWorldMatrix;
     VxMatrix TransposedInvWorldViewMatrix;
-    // VxMatrix TexTransformMatrix[MAX_TEX_STAGES];
     uint32_t TextureTransformFlags[4];
     uint32_t FVF = 0;
     uint32_t _padding1 = 1234;
     uint32_t _padding2 = 1234;
     uint32_t _padding3 = 1234;
+    VxMatrix TexTransformMatrix[MAX_TEX_STAGES];
 } VSConstantBufferStruct;
 
 static constexpr uint32_t LFLG_LIGHTEN = 1U << 31;

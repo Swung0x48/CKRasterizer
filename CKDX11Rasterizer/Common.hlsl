@@ -17,12 +17,12 @@ cbuffer VSCBuf: register(b0)
     matrix viewport_mat;
     matrix transposedinvworld_mat;
     matrix transposedinvworldview_mat;
-    // matrix texture_transform_mat[2];
     uint4 texture_transform_flags;
     dword vs_fvf;
     dword _padding1;
     dword _padding2;
     dword _padding3;
+    matrix texture_transform_mat[2];
 };
 
 static const float4 color_default = float4(1., 1., 1., 1.);
@@ -54,8 +54,8 @@ float2 texgen(float2 texcoord, float3 position, int stage)
     else
         tc = float4(texcoord, 0., 0.);
     
-    // if (texp & TVP_TC_TRANSF)
-    //     tc = mul(tc, texture_transform_mat[stage]);
+    if (texp & TVP_TC_TRANSF)
+        tc = mul(tc, texture_transform_mat[stage]);
     if (texp & TVP_TC_PROJECTED)
         tc /= tc.w;
     
@@ -66,7 +66,11 @@ float2 texgen_normal(float2 texcoord, float3 position, float3 normal, int stage)
 {
     // return texcoord;
     float4 tc = float4(0, 0, 0, 0);
-    float3 ffnormal = mul(normal, transposedinvworldview_mat);
+    float3x3 tiwv;
+    tiwv[0] = transposedinvworldview_mat[0].xyz;
+    tiwv[1] = transposedinvworldview_mat[1].xyz;
+    tiwv[2] = transposedinvworldview_mat[2].xyz;
+    float3 ffnormal = mul(normal, tiwv);
     dword texp = texture_transform_flags[stage];
     if ((texp & TVP_TC_CSNORM) != 0U)
         tc = float4(ffnormal, 1.);
@@ -74,13 +78,17 @@ float2 texgen_normal(float2 texcoord, float3 position, float3 normal, int stage)
         tc = float4(position, 1.0);
     else if ((texp & TVP_TC_CSREFV) != 0U)
     {
-        tc = float4(reflect(normalize(mul(mul(position, world_mat), view_mat).xyz), ffnormal), 1.);
+        float4 fpos = float4(position, 1.);
+        float4 view_pos = mul(fpos, world_mat);
+        float4 proj_pos = mul(view_pos, view_mat);
+
+        tc = float4(reflect(normalize(proj_pos.xyz), ffnormal), 1.);
     }
     else
         tc = float4(texcoord, 0., 0.);
     
-    // if ((texp & TVP_TC_TRANSF) != 0U)
-    //     tc = mul(tc, texture_transform_mat[stage]);
+    if ((texp & TVP_TC_TRANSF) != 0U)
+        tc = mul(tc, texture_transform_mat[stage]);
     if ((texp & TVP_TC_PROJECTED) != 0U)
         tc /= tc.w;
     return tc.xy;
