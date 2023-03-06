@@ -463,6 +463,7 @@ CKBOOL CKDX11RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
 CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
     if (!m_SceneBegined)
         EndScene();
+    HRESULT hr;
 #if STATUS
     // fprintf(stderr, "swap\n");
     SetTitleStatus("D3D11 | DXGI %s | AllowTearing: %s | batch stats: direct %d, vb %d, vbib %d", 
@@ -472,8 +473,6 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
     vbbat = 0;
     vbibbat = 0;
 #endif
-    HRESULT hr;
-    
     D3DCall(m_Swapchain->Present(vsync ? 1 : 0, 
         (m_AllowTearing && !m_Fullscreen && !vsync) ? DXGI_PRESENT_ALLOW_TEARING : 0));
     return SUCCEEDED(hr);
@@ -563,7 +562,8 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
         {
             UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
             CKDWORD tex = Type - VXMATRIX_TEXTURE0;
-            m_VSCBuffer.TexTransformMatrix[tex] = Mat;
+            Vx3DTransposeMatrix(m_VSCBuffer.TexTransformMatrix[tex], Mat);
+            // m_VSCBuffer.TexTransformMatrix[tex] = Mat;
             m_VSConstantBufferUpToDate = FALSE;
             break;
         }
@@ -1194,6 +1194,14 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
         case CKRST_TSS_MAGFILTER:
             m_SamplerStateUpToDate[Stage] = FALSE;
             return m_Filter[Stage].SetFilterMode(Tss, static_cast<VXTEXTURE_FILTERMODE>(Value));
+        case CKRST_TSS_MIPMAPLODBIAS:
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            m_SamplerDesc[Stage].MipLODBias = Value;
+            return TRUE;
+        case CKRST_TSS_MAXANISOTROPY:
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            m_SamplerDesc[Stage].MaxAnisotropy = Value;
+            return TRUE;
         case CKRST_TSS_STAGEBLEND:
             {
             CKDX11TexCombinatorConstant tc = m_PSCBuffer.TexCombinator[Stage];
@@ -1973,6 +1981,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
         Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
+        // VxMatrix mat;
         // Vx3DTransposeMatrix(mat, m_ModelViewMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
         // Vx3DTransposeMatrix(m_VSCBuffer.ViewportMatrix, m_VSCBuffer.ViewportMatrix);
