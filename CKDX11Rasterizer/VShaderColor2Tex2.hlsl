@@ -13,6 +13,7 @@ VS_OUTPUT main(VS_INPUT input)
 {
     VS_OUTPUT output;
     output.position = transform_pos(input.position);
+    output.worldpos = (float3)mul(float4(input.position, 1.), world_mat);
     output.color = input.diffuse;
     output.specular = input.specular;
     output.normal = float3(0., 0., 0.);

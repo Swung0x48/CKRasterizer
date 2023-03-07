@@ -66,83 +66,12 @@ cbuffer PSCBuf : register(b0)
 
 static const float4 zero4f = float4(0., 0., 0., 0.);
 
-float3x4 light_point(light_t l, float3 normal, float3 fpos, float3 vdir, float4 frag_diffuse, float4 frag_specular, bool spec_enabled)
-{
-    bool use_vert_color = (global_light_switches & LSW_VRTCOLOREN);
-    float3 ldir = normalize(l.position.xyz - fpos);
-    float dist = length(l.position.xyz - fpos);
-    if (dist > l.range)
-    {
-        return float3x4(zero4f, zero4f, zero4f);
-    }
-    // CK2_3D always gives us DX5 light parameters... thus the DX5 light formula here.
-    dist = 1. - dist / l.range;
-    float atnf = l.a0 + (l.a1 * dist + l.a2 * dist * dist);
-    float diff = max(dot(normal, ldir), 0.);
-    float4 ambient = l.ambient * material.ambient;
-    float4 diffuse = diff * l.diffuse * material.diffuse;
-    if (use_vert_color)
-        diffuse = diff * l.diffuse * frag_diffuse;
-    float4 specular = float4(0., 0., 0., 0.);
-    if (spec_enabled
-#ifdef DEBUG
-        && (global_light_switches & LSW_SPCL_OVERR_FORCE) == 0U
-#endif
-    )
-    {
-        float3 refldir = reflect(-ldir, normal);
-        float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.specular_power);
-        specular = l.specular * material.specular * specl;
-        if (use_vert_color)
-            specular = l.specular * frag_specular * specl;
-#ifdef DEBUG
-        if ((global_light_switches & LSW_SPCL_OVERR_ONLY) != 0U)
-            return float3x4(zero4f, zero4f, spc * atnf);
-#endif
-    }
-    return float3x4(ambient * atnf, diffuse * atnf, specular * atnf);
-}
-
-float3x4 light_directional(light_t l, float3 normal, float3 vdir, float4 frag_diffuse, float4 frag_specular,
-                           bool spec_enabled)
-{
-    bool use_vert_color = (global_light_switches & LSW_VRTCOLOREN);
-    l.direction.xz = -l.direction.xz;
-    float3 ldir = normalize(-l.direction.xyz);
-    float diff = max(dot(normal, ldir), 0.);
-    float4 ambient = l.ambient * material.ambient;
-    float4 diffuse = diff * l.diffuse * material.diffuse;
-    if (use_vert_color)
-        diffuse = diff * l.diffuse * frag_diffuse;
-    float4 spc = zero4f;
-    if (spec_enabled
-#ifdef DEBUG
-        && (global_light_switches & LSW_SPCL_OVERR_FORCE) == 0U
-#endif
-    )
-    {
-        float3 refldir = reflect(ldir, normal);
-        float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.specular_power);
-        // direct3d9 specular strength formula
-        // float3 hv = normalize(vdir + ldir);
-        // specl = pow(dot(normal, hv), material.specular);
-        spc = l.specular * material.specular * specl;
-        if (use_vert_color)
-            spc = l.specular * frag_specular * specl;
-#ifdef DEBUG
-        if ((global_light_switches & LSW_SPCL_OVERR_ONLY) != 0U)
-            return float3x4(zero4f, zero4f, spc);
-#endif
-    }
-    return float3x4(ambient, diffuse, spc);
-}
-
 float3x4 light_unified(light_t l, float3 normal, float4 frag_diffuse, float3 fpos, float3 vdir, bool spec_enabled)
 {
     bool use_vert_color = (global_light_switches & LSW_VRTCOLOREN) != 0U;
     float atnf = 1.;
-    float3 ldir = -normalize(l.position.xyz - fpos);
-    if (l.type == 1U || l.type == 2U)
+    float3 ldir = normalize(l.position.xyz - fpos);
+    if ((l.type & 0xFU) == 1U || (l.type & 0xFU) == 2U)
     {
         float dist = length(l.position.xyz - fpos);
         if (dist > l.range)
@@ -162,7 +91,7 @@ float3x4 light_unified(light_t l, float3 normal, float4 frag_diffuse, float3 fpo
         }
     }
     else
-        ldir = -normalize(-l.direction.xyz);
+        ldir = normalize(-l.direction.xyz);
     // CK2_3D always gives us DX5 light parameters... thus the DX5 light formula here.
     float diff = max(dot(normal, ldir), 0.);
     float4 amb = l.ambient * material.ambient;
@@ -303,7 +232,7 @@ SamplerState sampler1 : register(s1);
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
     float3 norm = normalize(input.normal);
-    float3 vdir = normalize(view_position - input.position.xyz);
+    float3 vdir = normalize(view_position - input.worldpos);
     float4 color = float4(1., 1., 1., 1.);
     float3x4 lighting_colors = float3x4(zero4f, zero4f, zero4f);
     float4x4 lighting_colors_e = float4x4(zero4f, zero4f, zero4f, zero4f);
@@ -313,24 +242,10 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         for (uint i = 0U; i < 16U; ++i)
         {
-            lighting_colors = component_add(lighting_colors,
-                                            light_unified(lights[i], norm, input.color, input.position.xyz, vdir,
-                                                          (global_light_switches & LSW_SPECULAREN) != 0U));
-            // switch (lights[i].type)
-            // {
-            //     case (LFLG_LIGHTPOINT | LFLG_LIGHTEN):
-            //         lighting_colors =
-            //             component_add(lighting_colors,
-            //                           light_point(lights[i], norm, input.position.xyz, vdir, input.color,
-            //                                       input.specular, (global_light_switches & LSW_SPECULAREN) != 0U));
-            //         break;
-            //     case (LFLG_LIGHTDIREC | LFLG_LIGHTEN):
-            //         lighting_colors =
-            //             component_add(lighting_colors,
-            //                           light_directional(lights[i], norm, vdir, input.color, input.specular,
-            //                                             (global_light_switches & LSW_SPECULAREN) != 0U));
-            //         break;
-            // }
+            if ((lights[i].type & 0x80000000U) != 0)
+                lighting_colors = component_add(lighting_colors,
+                                                light_unified(lights[i], norm, input.color, input.worldpos, vdir,
+                                                              (global_light_switches & LSW_SPECULAREN) != 0U));
         }
         lighting_colors[0] = clamp_color(lighting_colors[0]);
         lighting_colors[1] = clamp_color(lighting_colors[1]);

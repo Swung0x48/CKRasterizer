@@ -1,6 +1,7 @@
 struct VS_OUTPUT
 {
     float4 position : SV_POSITION;
+    float3 worldpos : POSITION0;
     float3 normal : NORMAL;
     float4 color : COLOR0;
     float4 specular : COLOR1;
