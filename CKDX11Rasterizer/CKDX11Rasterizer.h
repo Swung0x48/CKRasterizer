@@ -264,9 +264,17 @@ typedef struct PSConstantBufferStruct
     uint32_t GlobalLightSwitches = 0;
     VxVector ViewPosition;
     uint32_t FVF = 0;
-    CKDX11LightConstant Lights[MAX_ACTIVE_LIGHTS];
-    CKDX11TexCombinatorConstant TexCombinator[MAX_TEX_STAGES];
+    
 } PSConstantBufferStruct;
+
+typedef struct PSLightConstantBufferStruct {
+    CKDX11LightConstant Lights[MAX_ACTIVE_LIGHTS];
+} PSLightConstantBufferStruct;
+
+typedef struct PSTexCombinatorConstantBufferStruct
+{
+    CKDX11TexCombinatorConstant TexCombinator[MAX_TEX_STAGES];
+} PSTexCombinatorConstantBufferStruct;
 
 typedef struct CKDX11ConstantBufferDesc
 {
@@ -430,6 +438,10 @@ public:
     CKBOOL m_VSConstantBufferUpToDate;
     CKDX11ConstantBufferDesc m_PSConstantBuffer;
     CKBOOL m_PSConstantBufferUpToDate;
+    CKDX11ConstantBufferDesc m_PSLightConstantBuffer;
+    CKBOOL m_PSLightConstantBufferUpToDate;
+    CKDX11ConstantBufferDesc m_PSTexCombinatorConstantBuffer;
+    CKBOOL m_PSTexCombinatorConstantBufferUpToDate;
     std::unordered_map<CKDWORD, CKDWORD> m_VertexShaderMap;
     std::unordered_map<CKDWORD, std::vector<D3D11_INPUT_ELEMENT_DESC>> m_InputElementMap;
     std::unordered_map<CKDWORD, ComPtr<ID3D11InputLayout>> m_InputLayoutMap;
@@ -445,6 +457,8 @@ public:
     CKDX11IndexBufferDesc *m_DynamicIndexBuffer[DYNAMIC_IBO_COUNT] = {nullptr};
     VSConstantBufferStruct m_VSCBuffer;
     PSConstantBufferStruct m_PSCBuffer;
+    PSLightConstantBufferStruct m_PSLightCBuffer;
+    PSTexCombinatorConstantBufferStruct m_PSTexCombinatorCBuffer;
 
     volatile CKBOOL m_InCreateDestroy;
     std::string m_OriginalTitle;

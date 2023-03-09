@@ -60,9 +60,17 @@ cbuffer PSCBuf : register(b0)
     dword global_light_switches;
     float3 view_position;
     dword fvf;
-    light_t lights[MAX_ACTIVE_LIGHTS];
-    texcomb_t tex_combinator[MAX_TEX_STAGES];
 };
+
+cbuffer PSLightCBuffer : register(b1)
+{
+    light_t lights[MAX_ACTIVE_LIGHTS];
+}
+
+cbuffer PSTexCombinatorCBuffer : register(b2)
+{
+    texcomb_t tex_combinator[MAX_TEX_STAGES];
+}
 
 static const float4 zero4f = float4(0., 0., 0., 0.);
 

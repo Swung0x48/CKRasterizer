@@ -389,8 +389,12 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
 
     m_VSConstantBuffer.Create(this, sizeof(VSConstantBufferStruct));
     m_PSConstantBuffer.Create(this, sizeof(PSConstantBufferStruct));
+    m_PSLightConstantBuffer.Create(this, sizeof(PSLightConstantBufferStruct));
+    m_PSTexCombinatorConstantBuffer.Create(this, sizeof(PSTexCombinatorConstantBufferStruct));
     ZeroMemory(&m_VSCBuffer, sizeof(VSConstantBufferStruct));
     ZeroMemory(&m_PSCBuffer, sizeof(PSConstantBufferStruct));
+    ZeroMemory(&m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
+    ZeroMemory(&m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));
 
     CKTextureDesc blank;
     blank.Format.Width = 1;
@@ -480,6 +484,7 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
 
 CKBOOL CKDX11RasterizerContext::BeginScene()
 {
+    FrameMark;
     if (m_SceneBegined)
         return FALSE;
     m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), m_DepthStencilView.Get());
@@ -499,11 +504,11 @@ CKBOOL CKDX11RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
     if (Light >= MAX_ACTIVE_LIGHTS)
         return FALSE;
-    m_PSConstantBufferUpToDate = FALSE;
+    m_PSLightConstantBufferUpToDate = FALSE;
     m_CurrentLightData[Light] = *data;
-    bool enabled = (m_PSCBuffer.Lights[Light].type & LFLG_LIGHTEN);
-    m_PSCBuffer.Lights[Light] = *data;
-    flag_toggle(&m_PSCBuffer.Lights[Light].type, LFLG_LIGHTEN, enabled);
+    bool enabled = (m_PSLightCBuffer.Lights[Light].type & LFLG_LIGHTEN);
+    m_PSLightCBuffer.Lights[Light] = *data;
+    flag_toggle(&m_PSLightCBuffer.Lights[Light].type, LFLG_LIGHTEN, enabled);
     // ConvertAttenuationModelFromDX5(m_PSCBuffer.Lights[Light].a0, m_PSCBuffer.Lights[Light].a1,
     //                                m_PSCBuffer.Lights[Light].a2,
     //                                data->Range);
@@ -513,8 +518,8 @@ CKBOOL CKDX11RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 {
     if (Light >= MAX_ACTIVE_LIGHTS)
         return FALSE;
-    m_PSConstantBufferUpToDate = FALSE;
-    flag_toggle(&m_PSCBuffer.Lights[Light].type, LFLG_LIGHTEN, Enable);
+    m_PSLightConstantBufferUpToDate = FALSE;
+    flag_toggle(&m_PSLightCBuffer.Lights[Light].type, LFLG_LIGHTEN, Enable);
     return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::SetMaterial(CKMaterialData *mat)
@@ -1204,7 +1209,7 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
             return TRUE;
         case CKRST_TSS_STAGEBLEND:
             {
-            CKDX11TexCombinatorConstant tc = m_PSCBuffer.TexCombinator[Stage];
+            CKDX11TexCombinatorConstant tc = m_PSTexCombinatorCBuffer.TexCombinator[Stage];
             bool valid = true;
             switch (Value)
             {
@@ -1224,14 +1229,14 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
             }
             if (valid)
             {
-                    m_PSCBuffer.TexCombinator[Stage] = tc;
-                    m_PSConstantBufferUpToDate = FALSE;
+                    m_PSTexCombinatorCBuffer.TexCombinator[Stage] = tc;
+                    m_PSTexCombinatorConstantBufferUpToDate = FALSE;
             }
             return valid;
             }
         case CKRST_TSS_TEXTUREMAPBLEND:
             {
-            CKDX11TexCombinatorConstant tc = m_PSCBuffer.TexCombinator[Stage];
+            CKDX11TexCombinatorConstant tc = m_PSTexCombinatorCBuffer.TexCombinator[Stage];
             bool valid = true;
             switch (Value)
             {
@@ -1270,8 +1275,8 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
             }
             if (valid)
             {
-                    m_PSCBuffer.TexCombinator[Stage] = tc;
-                    m_PSConstantBufferUpToDate = FALSE;
+                    m_PSTexCombinatorCBuffer.TexCombinator[Stage] = tc;
+                    m_PSTexCombinatorConstantBufferUpToDate = FALSE;
             }
             return valid;
             }
@@ -1415,7 +1420,9 @@ CKDX11IndexBufferDesc* CKDX11RasterizerContext::GenerateIB(void *indices, int in
 CKDX11IndexBufferDesc *CKDX11RasterizerContext::TriangleFanToList(CKWORD VOffset, CKDWORD VCount, int *startIndex, int* newIndexCount)
 {
     ZoneScopedN(__FUNCTION__);
-    std::vector<CKWORD> strip_index;
+    static std::vector<CKWORD> strip_index;
+    strip_index.clear();
+    strip_index.reserve(VCount * 3);
     // Center at VOffset
     for (CKWORD i = 2; i < VCount; ++i)
     {
@@ -1905,6 +1912,7 @@ CKBOOL CKDX11RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc 
 CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX11IndexBufferDesc *ibo,
                                               VXPRIMITIVETYPE pType)
 {
+    ZoneScopedN(__FUNCTION__);
     if (!vbo)
         return FALSE;
 
@@ -1974,6 +1982,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 
     if (!m_VSConstantBufferUpToDate)
     {
+        ZoneScopedN("VSConstantBuffer Update");
         UpdateMatrices(WORLD_TRANSFORM);
         // this->UpdateMatrices(VIEW_TRANSFORM);
         Vx3DTransposeMatrix(m_VSCBuffer.WorldMatrix, m_WorldMatrix);
@@ -1999,6 +2008,7 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
 #if LOGGING && (LOG_ALPHAFLAG)
         fprintf(stderr, "IA: Alpha flag, thr: 0x%x, %.2f\n", m_PSCBuffer.AlphaFlags, m_PSCBuffer.AlphaThreshold);
 #endif
+        ZoneScopedN("PSConstantBuffer Update");
         VxMatrix mat;
         Vx3DInverseMatrix(mat, m_ViewMatrix);
         m_PSCBuffer.ViewPosition = VxVector(mat[3][0], mat[3][1], mat[3][2]);
@@ -2008,6 +2018,28 @@ CKBOOL CKDX11RasterizerContext::AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX1
         m_DeviceContext->Unmap(m_PSConstantBuffer.DxBuffer.Get(), NULL);
         m_DeviceContext->PSSetConstantBuffers(0, 1, m_PSConstantBuffer.DxBuffer.GetAddressOf());
         m_PSConstantBufferUpToDate = TRUE;
+    }
+
+    if (!m_PSLightConstantBufferUpToDate)
+    {
+        ZoneScopedN("PSLightConstantBuffer Update");
+        D3D11_MAPPED_SUBRESOURCE ms;
+        D3DCall(m_DeviceContext->Map(m_PSLightConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
+        std::memcpy(ms.pData, &m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
+        m_DeviceContext->Unmap(m_PSLightConstantBuffer.DxBuffer.Get(), NULL);
+        m_DeviceContext->PSSetConstantBuffers(1, 1, m_PSLightConstantBuffer.DxBuffer.GetAddressOf());
+        m_PSLightConstantBufferUpToDate = TRUE;
+    }
+
+    if (!m_PSTexCombinatorConstantBufferUpToDate)
+    {
+        ZoneScopedN("PSTexCombinatorConstantBuffer Update");
+        D3D11_MAPPED_SUBRESOURCE ms;
+        D3DCall(m_DeviceContext->Map(m_PSTexCombinatorConstantBuffer.DxBuffer.Get(), NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms));
+        std::memcpy(ms.pData, &m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));
+        m_DeviceContext->Unmap(m_PSTexCombinatorConstantBuffer.DxBuffer.Get(), NULL);
+        m_DeviceContext->PSSetConstantBuffers(2, 1, m_PSTexCombinatorConstantBuffer.DxBuffer.GetAddressOf());
+        m_PSTexCombinatorConstantBufferUpToDate = TRUE;
     }
 #if LOGGING && LOG_IA
     fprintf(stderr, "IA: vs %s\n", vs->DxEntryPoint);
