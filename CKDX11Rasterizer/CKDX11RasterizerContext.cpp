@@ -59,7 +59,8 @@ void InverseMatrix(VxMatrix& result, const VxMatrix &m)
 }
 
 CKDX11RasterizerContext::CKDX11RasterizerContext() { CKRasterizerContext::CKRasterizerContext(); }
-CKDX11RasterizerContext::~CKDX11RasterizerContext() {}
+CKDX11RasterizerContext::~CKDX11RasterizerContext()
+{ TracyD3D11Destroy(g_D3d11Ctx); }
 
 void CKDX11RasterizerContext::SetTitleStatus(const char *fmt, ...)
 {
@@ -146,6 +147,9 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     {
         D3DCall(hr);
     }
+#if TRACY_ENABLE
+    g_D3d11Ctx = TracyD3D11Context(m_Device.Get(), m_DeviceContext.Get());
+#endif
 
     ID3D11Texture2D *pBuffer = nullptr;
     D3DCall(m_Swapchain->GetBuffer(0, IID_PPV_ARGS(&pBuffer)));
@@ -465,6 +469,8 @@ CKBOOL CKDX11RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
     return TRUE;
 }
 CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
+    FrameMark;
+
     if (!m_SceneBegined)
         EndScene();
     HRESULT hr;
@@ -479,12 +485,12 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
 #endif
     D3DCall(m_Swapchain->Present(vsync ? 1 : 0, 
         (m_AllowTearing && !m_Fullscreen && !vsync) ? DXGI_PRESENT_ALLOW_TEARING : 0));
+    TracyD3D11Collect(g_D3d11Ctx);
     return SUCCEEDED(hr);
 }
 
 CKBOOL CKDX11RasterizerContext::BeginScene()
 {
-    FrameMark;
     if (m_SceneBegined)
         return FALSE;
     m_DeviceContext->OMSetRenderTargets(1, m_BackBuffer.GetAddressOf(), m_DepthStencilView.Get());
@@ -1463,6 +1469,7 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     ++directbat;
 #endif
     ZoneScopedN(__FUNCTION__);
+    TracyD3D11Zone(g_D3d11Ctx, __FUNCTION__);
     if (!m_SceneBegined)
         BeginScene();
     CKBOOL clip = 0;
@@ -1536,6 +1543,7 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
     ++vbbat;
 #endif
     ZoneScopedN(__FUNCTION__);
+    TracyD3D11Zone(g_D3d11Ctx, __FUNCTION__);
     if (VB >= m_VertexBuffers.Size())
         return FALSE;
     CKVertexBufferDesc *vbo = m_VertexBuffers[VB];
@@ -1590,8 +1598,9 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
 #endif
 
     // assert(pType != VX_TRIANGLEFAN);
-
     ZoneScopedN(__FUNCTION__);
+    TracyD3D11Zone(g_D3d11Ctx, __FUNCTION__);
+
     if (VB >= m_VertexBuffers.Size())
         return FALSE;
 

@@ -405,6 +405,7 @@ public:
     ComPtr<IDXGISwapChain> m_Swapchain;
     ComPtr<ID3D11Device> m_Device;
     ComPtr<ID3D11DeviceContext> m_DeviceContext;
+
     ComPtr<ID3D11RenderTargetView> m_BackBuffer;
     ComPtr<ID3D11DepthStencilView> m_DepthStencilView;
 
