@@ -62,12 +62,12 @@ cbuffer PSCBuf : register(b0)
     dword fvf;
 };
 
-cbuffer PSLightCBuffer : register(b1)
+cbuffer PSLightCBuf : register(b1)
 {
     light_t lights[MAX_ACTIVE_LIGHTS];
 }
 
-cbuffer PSTexCombinatorCBuffer : register(b2)
+cbuffer PSTexCombinatorCBuf : register(b2)
 {
     texcomb_t tex_combinator[MAX_TEX_STAGES];
 }
@@ -323,7 +323,11 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
     else
     {
-        color = (color - lighting_colors[2]) * texture0.Sample(sampler0, input.texcoord0);
+        float4 sampled_color = texture0.Sample(sampler0, input.texcoord0);
+        if ((tex_combinator[0].op & 0xfU) == 13U)
+            color = sampled_color;
+        else
+            color = (color - lighting_colors[2]) * sampled_color;
         color += lighting_colors[2];
     }
 
