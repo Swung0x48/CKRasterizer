@@ -126,8 +126,11 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     scd.SwapEffect = m_FlipPresent ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT_DISCARD;
     scd.Flags = m_AllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
     UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-    D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
-                                         D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1};
+    D3D_FEATURE_LEVEL featureLevels[] = {
+        D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0,
+        D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1
+    };
 #if defined(DEBUG) || defined(_DEBUG)
     creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
@@ -1300,7 +1303,7 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
             if (tvp != m_VSCBuffer.TextureTransformFlags[Stage])
             {
                     m_VSCBuffer.TextureTransformFlags[Stage] = tvp;
-                    m_PSConstantBufferUpToDate = FALSE;
+                    m_VSConstantBufferUpToDate = FALSE;
             }
             return TRUE;
             }
@@ -1329,7 +1332,7 @@ CKBOOL CKDX11RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
             if (tvp != m_VSCBuffer.TextureTransformFlags[Stage])
             {
                     m_VSCBuffer.TextureTransformFlags[Stage] = tvp;
-                    m_PSConstantBufferUpToDate = FALSE;
+                    m_VSConstantBufferUpToDate = FALSE;
             }
             return TRUE;
             }
