@@ -362,7 +362,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         float4 sampled_color = texture0.Sample(sampler0, input.texcoord0);
         if ((tex_combinator[0].op & 0xfU) == 13U)
-            color = sampled_color + lighting_colors[2];
+            color = sampled_color;
         else
             color = (color - lighting_colors[2]) * sampled_color;
         color += lighting_colors[2];
