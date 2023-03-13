@@ -117,7 +117,7 @@ float3x4 light_unified(light_t l, float3 normal, float4 frag_diffuse, float3 fpo
         float specl = pow(clamp(dot(vdir, refldir), 0., 1.), material.specular_power);
         // direct3d9 specular strength formula
         float3 hv = normalize(vdir + ldir);
-        specl = pow(dot(normal, hv), material.specular_power);
+        specl = pow(abs(dot(normal, hv)), material.specular_power);
         spc = l.specular * material.specular * specl;
         if (use_vert_color)
             spc = l.specular * frag_diffuse * specl;
