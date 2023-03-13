@@ -106,7 +106,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     LONG PrevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
     // SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle & ~WS_CHILDWINDOW);
     SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle | WS_CAPTION | (Fullscreen ? 0 : WS_CHILDWINDOW));
-    SetClassLongPtr((HWND)Window, GCLP_HBRBACKGROUND, (LONG)GetStockObject(NULL_BRUSH));
+    // SetClassLongPtr((HWND)Window, GCLP_HBRBACKGROUND, (LONG)GetStockObject(NULL_BRUSH));
 
     
     m_AllowTearing = static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
@@ -124,8 +124,10 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     scd.SampleDesc.Count = 1; // TODO: multisample support
     scd.Windowed = !Fullscreen;
     scd.SwapEffect = m_FlipPresent ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT_DISCARD;
-    scd.Flags = m_AllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
-    UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    scd.Flags = 
+        // DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT |
+        (m_AllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
+    UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_SINGLETHREADED;
     D3D_FEATURE_LEVEL featureLevels[] = {
         D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0,
         D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0,
@@ -153,6 +155,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
 #if TRACY_ENABLE
     g_D3d11Ctx = TracyD3D11Context(m_Device.Get(), m_DeviceContext.Get());
 #endif
+    
 
     ID3D11Texture2D *pBuffer = nullptr;
     D3DCall(m_Swapchain->GetBuffer(0, IID_PPV_ARGS(&pBuffer)));
@@ -1487,7 +1490,7 @@ CKBOOL CKDX11RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     {
         SetRenderState(VXRENDERSTATE_CLIPPING, 0);
     }
-
+    
     CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
     auto *vbo = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (vbo && (vbo->m_MaxVertexCount < data->VertexCount || vertexSize != vbo->m_VertexSize))
