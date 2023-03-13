@@ -12,6 +12,9 @@ static const dword LFLG_LIGHTSPOT = 2U; // unused
 static const dword LFLG_LIGHTDIREC = 3U;
 static const dword LFLG_LIGHTTYPEMASK = 7U;
 static const dword LFLG_LIGHTEN = 1U << 31;
+
+static const dword FFLG_FOGEN = 1U << 31;
+
 static const int MAX_ACTIVE_LIGHTS = 16;
 static const int MAX_TEX_STAGES = 2;
 
@@ -57,9 +60,15 @@ cbuffer PSCBuf : register(b0)
     material_t material;
     dword alpha_flags;
     float alpha_thresh;
-    dword global_light_switches;
+    dword global_light_switches; // a
     float3 view_position;
-    dword fvf;
+    dword fvf; // a
+    dword fog_flags;
+    float fog_start;
+    float fog_end;
+    float fog_density; // a
+    float4 fog_color;
+    float2 depth_range;
 };
 
 cbuffer PSLightCBuf : register(b1)
@@ -189,6 +198,21 @@ float4 combine_value(uint mode, float4 a, float4 b, float factor)
     }
 }
 
+float fog_factor(float dist, float rdist, uint mode)
+{
+    switch (mode)
+    {
+        case 1U:
+            return 1. / exp(dist * fog_density);
+        case 2U:
+            return 1. / exp(pow(dist * fog_density, 2));
+        case 3U:
+            return (fog_end - rdist) / (fog_end - fog_start);
+        default:
+            return 1.;
+    }
+}
+
 float4 dw2color(uint c)
 {
     return float4(float((c >> 16U) & 0xFFU) / 255., float((c >> 8U) & 0xFFU) / 255., float((c >> 0U) & 0xFFU) / 255.,
@@ -242,6 +266,19 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float3 norm = normalize(input.normal);
     float3 vdir = normalize(view_position - input.worldpos);
     float4 color = float4(1., 1., 1., 1.);
+
+    float ffactor = 1.;
+    if (fog_flags & FFLG_FOGEN)
+    {
+        float fvdepth = clamp(length(view_position - input.worldpos) / (depth_range.y - depth_range.x), 0, 1);
+        float rdepth = length(view_position - input.worldpos);
+        ffactor = fog_factor(fvdepth, rdepth, fog_flags & 0x0fU);
+        if (ffactor < 1. / 512)
+        {
+            return fog_color;
+        }
+    }
+
     float3x4 lighting_colors = float3x4(zero4f, zero4f, zero4f);
     float4x4 lighting_colors_e = float4x4(zero4f, zero4f, zero4f, zero4f);
     if ((global_light_switches & LSW_VRTCOLOREN) != 0U)
@@ -325,7 +362,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         float4 sampled_color = texture0.Sample(sampler0, input.texcoord0);
         if ((tex_combinator[0].op & 0xfU) == 13U)
-            color = sampled_color;
+            color = sampled_color + lighting_colors[2];
         else
             color = (color - lighting_colors[2]) * sampled_color;
         color += lighting_colors[2];
@@ -335,5 +372,8 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         discard;
     }
-    return color;
+
+    if ((tex_combinator[0].op & 0xfU) == 13U)
+        return color;
+    return lerp(fog_color, clamp_color(color), ffactor);
 }

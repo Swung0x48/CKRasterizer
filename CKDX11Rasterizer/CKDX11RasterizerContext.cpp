@@ -568,6 +568,16 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
     CKDWORD UnityMatrixMask = 0;
      switch (Type)
      {
+         case VXMATRIX_PROJECTION:
+         {
+             float(*m)[4] = (float(*)[4]) & Mat;
+             float A = m[2][2];
+             float B = m[3][2];
+             m_PSCBuffer.DepthRange[0] = -B / A;
+             m_PSCBuffer.DepthRange[1] = B / (1 - A); // for eye-distance fog calculation
+             m_PSConstantBufferUpToDate = FALSE;
+             break;
+         }
          case VXMATRIX_TEXTURE0:
          case VXMATRIX_TEXTURE1:
          case VXMATRIX_TEXTURE2:
@@ -847,17 +857,36 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
             m_BlendStateDesc.RenderTarget[0].BlendEnable = Value;
             return TRUE;
         case VXRENDERSTATE_FOGENABLE:
-            break;
+            // if ((bool)Value == (bool)(m_PSCBuffer.FogFlags & FFLG_FOGEN))
+            //     return TRUE;
+            m_PSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_PSCBuffer.FogFlags, FFLG_FOGEN, Value);
+            return TRUE;
         case VXRENDERSTATE_FOGCOLOR:
-            break;
+        {
+            m_PSConstantBufferUpToDate = FALSE;
+            VxColor col(Value);
+            m_PSCBuffer.FogColor = col;
+            return TRUE;
+        }
         case VXRENDERSTATE_FOGPIXELMODE:
-            break;
+            if ((m_PSCBuffer.FogFlags & ~FFLG_FOGEN) == Value)
+                return TRUE;
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.FogFlags = (m_PSCBuffer.FogFlags & FFLG_FOGEN) | Value;
+            return TRUE;
         case VXRENDERSTATE_FOGSTART:
-            break;
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.FogStart = reinterpret_cast<float&>(Value);
+            return TRUE;
         case VXRENDERSTATE_FOGEND:
-            break;
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.FogEnd = reinterpret_cast<float&>(Value);
+            return TRUE;
         case VXRENDERSTATE_FOGDENSITY:
-            break;
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.FogDensity = reinterpret_cast<float&>(Value);
+            return TRUE;
         case VXRENDERSTATE_EDGEANTIALIAS:
             break;
         case VXRENDERSTATE_ZBIAS:

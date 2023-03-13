@@ -256,15 +256,23 @@ static constexpr uint32_t TVP_TC_CSREFV = 0x04000000; // use camera space reflec
 static constexpr uint32_t TVP_TC_TRANSF = 0x08000000; // tex-coords should be transformed by its matrix
 static constexpr uint32_t TVP_TC_PROJECTED = 0x10000000; // tex-coords should be projected
 
+static constexpr uint32_t FFLG_FOGEN = 1U << 31;
 typedef struct PSConstantBufferStruct
 {
     CKMaterialData Material;
     uint32_t AlphaFlags = 0;
     float AlphaThreshold = 0.0f;
-    uint32_t GlobalLightSwitches = 0;
+    uint32_t GlobalLightSwitches = 0; // a
     VxVector ViewPosition;
-    uint32_t FVF = 0;
-    
+    uint32_t FVF = 0; // a
+    uint32_t FogFlags = 0;
+    float FogStart;
+    float FogEnd;
+    float FogDensity;
+    VxColor FogColor;
+    float DepthRange[2];
+    float _padding1;
+    float _padding2;
 } PSConstantBufferStruct;
 
 typedef struct PSLightConstantBufferStruct {
