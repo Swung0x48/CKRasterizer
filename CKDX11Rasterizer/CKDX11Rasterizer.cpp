@@ -118,9 +118,9 @@ XBOOL CKDX11Rasterizer::Start(WIN_HANDLE AppWnd)
 
 void CKDX11Rasterizer::Close(void)
 {
-    while (!m_Drivers.IsEmpty())
-    {
-        auto *driver = m_Drivers.PopBack();
-        delete driver;
-	}
+ //    while (!m_Drivers.IsEmpty())
+ //    {
+ //        auto *driver = m_Drivers.PopBack();
+ //        delete driver;
+	// }
 }

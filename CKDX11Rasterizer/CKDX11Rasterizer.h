@@ -469,7 +469,7 @@ public:
     PSLightConstantBufferStruct m_PSLightCBuffer;
     PSTexCombinatorConstantBufferStruct m_PSTexCombinatorCBuffer;
 
-    volatile CKBOOL m_InCreateDestroy;
+    CKBOOL m_InCreateDestroy;
     std::string m_OriginalTitle;
     //-------------------------------------------------
     //--- to avoid redoundant calls to SetVertexShader & SetStreamSource :
