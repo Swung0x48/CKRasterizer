@@ -373,6 +373,7 @@ public:
 
     //--- Sprites
     virtual CKBOOL DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *dst);
+    virtual CKBOOL LoadSprite(CKDWORD Sprite, const VxImageDescEx &SurfDesc);
 
     //--- Utils
     virtual int CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc);
@@ -394,6 +395,7 @@ protected:
     CKBOOL CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat);
     CKBOOL CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat);
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
+    CKBOOL CreateSpriteNPOT(CKDWORD Sprite, CKSpriteDesc *DesiredFormat);
     CKBOOL AssemblyInput(CKDX11VertexBufferDesc *vbo, CKDX11IndexBufferDesc *ibo, VXPRIMITIVETYPE pType);
     CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKDX11VertexBufferDesc *vbo,
                                                           CKDWORD StartVertex, CKDWORD VertexCount, CKWORD *indices,
