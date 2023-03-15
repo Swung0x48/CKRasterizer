@@ -69,6 +69,7 @@ cbuffer PSCBuf : register(b0)
     float fog_density; // a
     float4 fog_color;
     float2 depth_range;
+    dword null_texture_mask;
 };
 
 cbuffer PSLightCBuf : register(b1)
@@ -318,21 +319,24 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     int ntex = (fvf & VF_TEX2) ? 2 : 1;
     if (ntex > 1)
     {
-        float4 accumulator = float4(.5, 0, 0, 1);
+        float4 accumulator = float4(1., 1., 1., 1.);
         float2x4 color_at_stage = float2x4(zero4f, zero4f);
         for (int i = 0; i < ntex; ++i)
         {
             float4 sampled_color = float4(1, 1, 1, 1);
-            switch (i)
+            if ((null_texture_mask & (1 << i)) == 0)
             {
-                case 0U:
-                    sampled_color = texture0.Sample(sampler0, input.texcoord0);
+                switch (i)
+                {
+                    case 0U:
+                        sampled_color = texture0.Sample(sampler0, input.texcoord0);
                     break;
-                case 1U:
-                    sampled_color = texture1.Sample(sampler1, input.texcoord1);
+                    case 1U:
+                        sampled_color = texture1.Sample(sampler1, input.texcoord1);
                     break;
-                default:
-                    break;
+                    default:
+                        break;
+                }
             }
             uint op = tex_combinator[i].op;
             uint cargs = tex_combinator[i].cargs;
@@ -360,12 +364,15 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
     else
     {
-        float4 sampled_color = texture0.Sample(sampler0, input.texcoord0);
-        if ((tex_combinator[0].op & 0xfU) == 13U)
-            color = sampled_color;
-        else
-            color = (color - lighting_colors[2]) * sampled_color;
-        color += lighting_colors[2];
+        if ((null_texture_mask & 1) == 0)
+        {
+            float4 sampled_color = texture0.Sample(sampler0, input.texcoord0);
+            if ((tex_combinator[0].op & 0xfU) == 13U)
+                color = sampled_color;
+            else
+                color = (color - lighting_colors[2]) * sampled_color;
+            color += lighting_colors[2];
+        }
     }
 
     if ((alpha_flags & AFLG_ALPHATESTEN) && !alpha_test(color.a))

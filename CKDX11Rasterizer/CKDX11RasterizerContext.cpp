@@ -406,30 +406,21 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     ZeroMemory(&m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
     ZeroMemory(&m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));
 
-    CKTextureDesc blank;
-    blank.Format.Width = 1;
-    blank.Format.Height = 1;
-    blank.Format.AlphaMask = 0xFF000000;
-    blank.Format.RedMask = 0x0000FF;
-    blank.Format.GreenMask = 0x00FF00;
-    blank.Format.BlueMask = 0xFF0000;
-    blank.MipMapCount = 0;
-    CreateTexture(0, &blank);
-    CKDWORD white = ~0U;
-    // VxImageDescEx image;
-    // image.Height = 1;
-    // image.Width = 1;
-    // image.BitsPerPixel = 32;
-    // image.BytesPerLine = 4 * image.Width;
-    // image.AlphaMask = 0xFF000000;
-    // image.RedMask = 0x0000FF;
-    // image.GreenMask = 0x00FF00;
-    // image.BlueMask = 0xFF0000;
-    // image.Image = (XBYTE*)&white;
-    auto dx11tex = static_cast<CKDX11TextureDesc *>(m_Textures[0]);
-    if (!dx11tex->Create(this, &white))
-        return FALSE;
-    // dx11tex->Bind(this, 0);
+    // CKTextureDesc blank;
+    // blank.Format.Width = 1;
+    // blank.Format.Height = 1;
+    // blank.Format.AlphaMask = 0xFF000000;
+    // blank.Format.RedMask = 0x0000FF;
+    // blank.Format.GreenMask = 0x00FF00;
+    // blank.Format.BlueMask = 0xFF0000;
+    // blank.MipMapCount = 0;
+    // CreateTexture(0, &blank);
+    // CKDWORD white = ~0U;
+    // auto dx11tex = static_cast<CKDX11TextureDesc *>(m_Textures[0]);
+    // if (!dx11tex->Create(this, &white))
+    //     return FALSE;
+    m_PSCBuffer.NullTextureMask = ~0U;
+    m_PSConstantBufferUpToDate = FALSE;
 
     SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, 1);
     SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
@@ -1183,11 +1174,16 @@ CKBOOL CKDX11RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
     CKDX11TextureDesc *desc = static_cast<CKDX11TextureDesc *>(m_Textures[Texture]);
     if (!desc)
     {
-        desc = static_cast<CKDX11TextureDesc *>(m_Textures[0]);
+        // desc = static_cast<CKDX11TextureDesc *>(m_Textures[0]);
+        m_PSCBuffer.NullTextureMask |= (1 << Stage);
+        m_PSConstantBufferUpToDate = FALSE;
+        return TRUE;
         // ID3D11ShaderResourceView *srv_ptr = nullptr;
         // m_DeviceContext->PSSetShaderResources(0, 1, &srv_ptr);
         // return TRUE;
     }
+    m_PSCBuffer.NullTextureMask &= ~(1 << Stage);
+    m_PSConstantBufferUpToDate = FALSE;
     desc->Bind(this, Stage);
     return TRUE;
 }

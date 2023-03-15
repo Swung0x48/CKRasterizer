@@ -271,7 +271,7 @@ typedef struct PSConstantBufferStruct
     float FogDensity;
     VxColor FogColor;
     float DepthRange[2];
-    float _padding1;
+    uint32_t NullTextureMask;
     float _padding2;
 } PSConstantBufferStruct;
 
