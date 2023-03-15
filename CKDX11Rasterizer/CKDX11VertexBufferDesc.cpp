@@ -16,7 +16,7 @@ CKBOOL CKDX11VertexBufferDesc::Create(CKDX11RasterizerContext* ctx)
     DxDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     DxDesc.CPUAccessFlags = flag;
 
-    D3DCall(ctx->m_Device->CreateBuffer(&DxDesc, nullptr, DxBuffer.GetAddressOf()));
+    D3DCall(ctx->m_Device->CreateBuffer(&DxDesc, nullptr, DxBuffer.ReleaseAndGetAddressOf()));
     return SUCCEEDED(hr);
 }
 

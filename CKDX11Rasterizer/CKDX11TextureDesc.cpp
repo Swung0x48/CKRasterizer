@@ -24,12 +24,12 @@ CKBOOL CKDX11TextureDesc::Create(CKDX11RasterizerContext *ctx, void* data)
         resData.pSysMem = data;
         resData.SysMemPitch = Format.Width * 32 / 8; // assuming 32-bit texture...
         resData.SysMemSlicePitch = 0;
-        D3DCall(ctx->m_Device->CreateTexture2D(&DxDesc, &resData, DxTexture.GetAddressOf()));
+        D3DCall(ctx->m_Device->CreateTexture2D(&DxDesc, &resData, DxTexture.ReleaseAndGetAddressOf()));
     } else
     {
-        D3DCall(ctx->m_Device->CreateTexture2D(&DxDesc, nullptr, DxTexture.GetAddressOf()));
+        D3DCall(ctx->m_Device->CreateTexture2D(&DxDesc, nullptr, DxTexture.ReleaseAndGetAddressOf()));
     }
-    D3DCall(ctx->m_Device->CreateShaderResourceView(DxTexture.Get(), nullptr, DxSRV.GetAddressOf()));
+    D3DCall(ctx->m_Device->CreateShaderResourceView(DxTexture.Get(), nullptr, DxSRV.ReleaseAndGetAddressOf()));
     return SUCCEEDED(hr);
 }
 

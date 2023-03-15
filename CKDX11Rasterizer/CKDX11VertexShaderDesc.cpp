@@ -36,7 +36,7 @@ CKBOOL CKDX11VertexShaderDesc::Create(CKDX11RasterizerContext* ctx)
         // D3DCall(ctx->m_Device->CreateInputLayout(DxInputElementDesc.data(), DxInputElementDesc.size(),
         //                                          m_Function, m_FunctionSize,
         //                                          DxInputLayout.GetAddressOf()));
-        D3DCall(ctx->m_Device->CreateVertexShader(m_Function, m_FunctionSize, nullptr, &DxShader));
+        D3DCall(ctx->m_Device->CreateVertexShader(m_Function, m_FunctionSize, nullptr, DxShader.ReleaseAndGetAddressOf()));
     // }
     return SUCCEEDED(hr);
 }

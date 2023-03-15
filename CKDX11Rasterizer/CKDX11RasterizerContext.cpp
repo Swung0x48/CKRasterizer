@@ -488,7 +488,12 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
     directbat = 0;
     vbbat = 0;
     vbibbat = 0;
+
+    ComPtr<ID3D11Debug> debug;
+    D3DCall(m_Device->QueryInterface(IID_PPV_ARGS(debug.GetAddressOf())));
+    D3DCall(debug->ReportLiveDeviceObjects(D3D11_RLDO_SUMMARY));
 #endif
+
     D3DCall(m_Swapchain->Present(vsync ? 1 : 0, 
         (m_AllowTearing && !m_Fullscreen && !vsync) ? DXGI_PRESENT_ALLOW_TEARING : 0));
     TracyD3D11Collect(g_D3d11Ctx);

@@ -71,7 +71,7 @@ XBOOL CKDX11Rasterizer::Start(WIN_HANDLE AppWnd)
 {
 	using Microsoft::WRL::ComPtr;
 	m_MainWindow = AppWnd;
-    HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(&m_Factory));
+    HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(m_Factory.GetAddressOf()));
 	if (!D3DLogCall(hr, __FUNCTION__, __FILE__, __LINE__))
 	{
 	    return FALSE;
