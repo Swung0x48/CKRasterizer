@@ -63,6 +63,9 @@ public:
     ComPtr<IDXGIOutput> m_Output;
     DXGI_ADAPTER_DESC1 m_AdapterDesc;
     DXGI_OUTPUT_DESC m_OutputDesc;
+
+    ComPtr<IDXGISwapChain> m_Swapchain;
+    ComPtr<ID3D11Device> m_Device;
 };
 
 class CKDX11RasterizerContext;

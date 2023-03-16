@@ -18,9 +18,32 @@ CKDX11RasterizerDriver::~CKDX11RasterizerDriver() {
 }
 
 CKRasterizerContext *CKDX11RasterizerDriver::CreateContext() {
+    HRESULT hr;
     auto* ctx = new CKDX11RasterizerContext();
     ctx->m_Driver = this;
     ctx->m_Owner = static_cast<CKDX11Rasterizer *>(m_Owner);
+    UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_SINGLETHREADED;
+    D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
+                                         D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1};
+#if defined(DEBUG) || defined(_DEBUG)
+    creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
+    for (int i = 0; i < _countof(featureLevels); ++i)
+    {
+        hr = D3D11CreateDevice(m_Adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, creationFlags, &featureLevels[i],
+                                  _countof(featureLevels) - i, D3D11_SDK_VERSION, m_Device.GetAddressOf(), nullptr,
+                                  nullptr);
+        if (SUCCEEDED(hr))
+            break;
+        if (hr != E_INVALIDARG)
+            D3DCall(hr);
+    }
+    if (FAILED(hr))
+    {
+        D3DCall(hr);
+        return nullptr;
+    }
+    ctx->m_Device = m_Device;
     m_Contexts.PushBack(ctx);
     return ctx;
 }
