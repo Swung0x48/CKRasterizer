@@ -310,6 +310,8 @@ public:
     //--- Construction/destruction
     CKDX11RasterizerContext();
     virtual ~CKDX11RasterizerContext();
+    void resize_buffers();
+    void toggle_fullscreen();
 
     //--- Creation
     virtual CKBOOL Create(WIN_HANDLE Window, int PosX = 0, int PosY = 0, int Width = 0, int Height = 0, int Bpp = -1,
@@ -416,7 +418,7 @@ public:
     ComPtr<ID3D11Device> m_Device;
     ComPtr<ID3D11DeviceContext> m_DeviceContext;
 
-    ComPtr<ID3D11RenderTargetView> m_BackBuffer;
+    ComPtr<ID3D11RenderTargetView> m_RenderTargetView;
     ComPtr<ID3D11DepthStencilView> m_DepthStencilView;
 
     D3D11_SAMPLER_DESC m_SamplerDesc[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];

@@ -21,4 +21,7 @@ static tracy::D3D11Ctx *g_D3d11Ctx = nullptr;
 
 bool D3DLogCall(HRESULT hr, const char* function, const char* file, int line);
 
+class CKContext;
+extern CKContext *rst_ckctx;
+
 #endif // CKRASTERIZER_CKDX11RASTERIZERCOMMON_H
