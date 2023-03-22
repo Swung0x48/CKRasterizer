@@ -31,7 +31,8 @@ LRESULT CALLBACK window_handler(int code, WPARAM wParam, LPARAM lParam)
     CWPRETSTRUCT* msg = (CWPRETSTRUCT *) lParam;
     if (msg->message == WM_SIZE)
     {
-        r->resize_buffers();
+        if (r)
+            r->resize_buffers();
     }
     return CallNextHookEx(NULL, code, wParam, lParam);
 }
@@ -41,4 +42,11 @@ void debug_setup(CKDX11RasterizerContext *rst)
     r = rst;
     hook = SetWindowsHookExA(WH_KEYBOARD, &keyboard_handler, NULL, main_thread_id);
     window_hook = SetWindowsHookExA(WH_CALLWNDPROCRET, &window_handler, NULL, main_thread_id);
+}
+
+void debug_destroy()
+{
+    r = nullptr;
+    UnhookWindowsHookEx(hook);
+    UnhookWindowsHookEx(window_hook);
 }

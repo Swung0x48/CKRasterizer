@@ -38,6 +38,7 @@ static int vbibbat = 0;
 #endif
 
 extern void debug_setup(CKDX11RasterizerContext *rst);
+extern void debug_destroy();
 
 void flag_toggle(uint32_t *state_dword, uint32_t flag, bool enabled)
 {
@@ -62,7 +63,10 @@ void InverseMatrix(VxMatrix& result, const VxMatrix &m)
 
 CKDX11RasterizerContext::CKDX11RasterizerContext() { CKRasterizerContext::CKRasterizerContext(); }
 CKDX11RasterizerContext::~CKDX11RasterizerContext()
-{ TracyD3D11Destroy(g_D3d11Ctx); }
+{
+    TracyD3D11Destroy(g_D3d11Ctx);
+    debug_destroy();
+}
 
 void CKDX11RasterizerContext::resize_buffers()
 {
@@ -170,7 +174,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     scd.BufferCount = 2;
     scd.BufferDesc.Width = Width;
     scd.BufferDesc.Height = Height;
-    scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // TODO: just use 32-bit color here, too lazy to check if valid
+    scd.BufferDesc.Format = DXGI_FORMAT_R10G10B10A2_UNORM; // TODO: just use 32-bit color here, too lazy to check if valid
     scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     scd.OutputWindow = (HWND)Window;
     scd.SampleDesc.Count = 1; // TODO: multisample support
