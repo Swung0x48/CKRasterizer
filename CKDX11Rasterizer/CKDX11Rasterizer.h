@@ -54,6 +54,7 @@ public:
 
     //--- Contexts
     virtual CKRasterizerContext *CreateContext();
+    virtual CKBOOL DestroyContext(CKRasterizerContext *Context);
     
     CKBOOL InitializeCaps(ComPtr<IDXGIAdapter1> Adapter, ComPtr<IDXGIOutput> Output);
 
@@ -487,4 +488,5 @@ public:
     XBitArray m_StateCacheMissMask;
 
     CKDX11Rasterizer *m_Owner;
+    BOOL m_Inited = FALSE;
 };

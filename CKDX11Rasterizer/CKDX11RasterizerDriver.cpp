@@ -18,11 +18,18 @@ CKDX11RasterizerDriver::~CKDX11RasterizerDriver() {
 }
 
 CKRasterizerContext *CKDX11RasterizerDriver::CreateContext() {
+    if (!m_Contexts.IsEmpty())
+        return m_Contexts.Front();
     auto* ctx = new CKDX11RasterizerContext();
     ctx->m_Driver = this;
     ctx->m_Owner = static_cast<CKDX11Rasterizer *>(m_Owner);
     m_Contexts.PushBack(ctx);
     return ctx;
+}
+
+CKBOOL CKDX11RasterizerDriver::DestroyContext(CKRasterizerContext *Context) {
+    static_cast<CKDX11RasterizerContext *>(Context)->toggle_fullscreen();
+    return TRUE;
 }
 
 //-------------------------------------------------------------------------------------

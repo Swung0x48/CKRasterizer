@@ -39,6 +39,8 @@ LRESULT CALLBACK window_handler(int code, WPARAM wParam, LPARAM lParam)
 
 void debug_setup(CKDX11RasterizerContext *rst)
 {
+    if (r)
+        return;
     r = rst;
     hook = SetWindowsHookExA(WH_KEYBOARD, &keyboard_handler, NULL, main_thread_id);
     window_hook = SetWindowsHookExA(WH_CALLWNDPROCRET, &window_handler, NULL, main_thread_id);
@@ -46,6 +48,8 @@ void debug_setup(CKDX11RasterizerContext *rst)
 
 void debug_destroy()
 {
+    if (!r)
+        return;
     r = nullptr;
     UnhookWindowsHookEx(hook);
     UnhookWindowsHookEx(window_hook);

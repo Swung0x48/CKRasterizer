@@ -64,6 +64,16 @@ void InverseMatrix(VxMatrix& result, const VxMatrix &m)
 CKDX11RasterizerContext::CKDX11RasterizerContext() { CKRasterizerContext::CKRasterizerContext(); }
 CKDX11RasterizerContext::~CKDX11RasterizerContext()
 {
+    if (m_DeviceContext)
+    {
+        ID3D11RenderTargetView *nullViews[] = {nullptr};
+        m_DeviceContext->OMSetRenderTargets(1, nullViews, nullptr);
+        m_RenderTargetView.Reset();
+        m_DeviceContext->ClearState();
+        m_DeviceContext->Flush();
+    }
+    if (m_Driver->m_Owner->m_FullscreenContext == this)
+        m_Driver->m_Owner->m_FullscreenContext = nullptr;
     TracyD3D11Destroy(g_D3d11Ctx);
     debug_destroy();
 }
@@ -77,7 +87,7 @@ void CKDX11RasterizerContext::resize_buffers()
     m_DeviceContext->Flush();
     D3DCall(m_Swapchain->ResizeBuffers(0, m_Width, m_Height, DXGI_FORMAT_UNKNOWN,
                                        (m_AllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0)));
-
+    
     ComPtr<ID3D11Texture2D> backBuffer;
     D3DCall(m_Swapchain->GetBuffer(0, IID_PPV_ARGS(&backBuffer)));
     D3DCall(m_Device->CreateRenderTargetView(backBuffer.Get(), nullptr, m_RenderTargetView.ReleaseAndGetAddressOf()));
@@ -87,11 +97,20 @@ void CKDX11RasterizerContext::resize_buffers()
 void CKDX11RasterizerContext::toggle_fullscreen() {
     m_Fullscreen = !m_Fullscreen;
     HRESULT hr;
-    LONG PrevStyle = GetWindowLongA((HWND)m_Window, GWL_STYLE);
-    SetWindowLongA((HWND)m_Window, GWL_STYLE, 
-        (PrevStyle | WS_CAPTION) & (~WS_CHILDWINDOW) |
-        (m_Fullscreen ? 0 : WS_CHILDWINDOW)
-    );
+    LONG style = GetWindowLongA((HWND)m_Window, GWL_STYLE);
+    WIN_HANDLE parent = VxGetParent(m_Window);
+    if (m_Fullscreen)
+    {
+        style &= ~WS_CHILD;
+        style &= ~WS_CAPTION;
+    } else
+    {
+        style |= WS_CHILD;
+        style |= WS_CAPTION;
+    }
+    SetWindowLongA((HWND)m_Window, GWL_STYLE, style);
+    style = GetWindowLongA((HWND)parent, GWL_STYLE);
+    SetWindowLongA((HWND)parent, GWL_STYLE, style & (~WS_CAPTION));
     D3DCall(m_Swapchain->SetFullscreenState(m_Fullscreen, nullptr));
     // if (!m_Fullscreen)
     // {
@@ -144,8 +163,9 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     freopen("CON", "w", stdout);
     freopen("CON", "w", stderr);
 #endif
+    if (m_Inited)
+        return TRUE;
     HRESULT hr;
-
     m_InCreateDestroy = TRUE;
     debug_setup(this);
 
@@ -158,9 +178,9 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
         VxScreenToClient(Parent, reinterpret_cast<CKPOINT *>(&Rect.right));
     }
     LONG PrevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
-    // SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle & ~WS_CHILDWINDOW);
+    SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle & ~WS_CHILDWINDOW);
     SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle | WS_CAPTION 
-        // | (Fullscreen ? 0 : WS_CHILDWINDOW)
+        | (Fullscreen ? 0 : WS_CHILDWINDOW)
     );
     // SetClassLongPtr((HWND)Window, GCLP_HBRBACKGROUND, (LONG)GetStockObject(NULL_BRUSH));
 
@@ -178,7 +198,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     scd.OutputWindow = (HWND)Window;
     scd.SampleDesc.Count = 1; // TODO: multisample support
-    scd.Windowed = !Fullscreen;
+    scd.Windowed = TRUE;
     scd.SwapEffect = m_FlipPresent ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT_DISCARD;
     scd.Flags = 
         // DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT |
@@ -344,6 +364,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     while (m_OriginalTitle.back() == '\0')
         m_OriginalTitle.pop_back();
 
+    
     m_PosX = PosX;
     m_PosY = PosY;
     m_Fullscreen = Fullscreen;
@@ -351,8 +372,6 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     m_ZBpp = Zbpp;
     m_Width = Width;
     m_Height = Height;
-    if (m_Fullscreen)
-        m_Driver->m_Owner->m_FullscreenContext = this;
 
     CKDWORD vs_2d_idx = 0, vs_2d_color2_idx = 9;
     CKDWORD vs_normal_tex1_idx = 1, vs_normal_tex2_idx = 2;
@@ -486,8 +505,14 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
 
     SetTitleStatus("D3D11 | DXGI %s | AllowTearing: %s",
                    m_Owner->m_DXGIVersionString.c_str(), m_AllowTearing ? "true" : "false");
-    
+
+    // if (Fullscreen && !m_Driver->m_Owner->m_FullscreenContext)
+    // {
+    //     toggle_fullscreen();
+    //     m_Driver->m_Owner->m_FullscreenContext = this;
+    // }
     m_InCreateDestroy = FALSE;
+    m_Inited = TRUE;
 
     return SUCCEEDED(hr);
 }
