@@ -17,10 +17,10 @@
 #include <algorithm>
 
 #if defined(DEBUG) || defined(_DEBUG)
-    #define LOGGING 0
+    #define LOGGING 1
     #define LOG_IA 0
     #define LOG_RENDERSTATE 0
-    #define LOG_ALPHAFLAG 1
+    #define LOG_ALPHAFLAG 0
     #define UNHANDLED_TEXSTATE 0
     #define STATUS 1
     #define VB_STRICT 0
@@ -72,14 +72,16 @@ CKDX11RasterizerContext::~CKDX11RasterizerContext()
         m_DeviceContext->ClearState();
         m_DeviceContext->Flush();
     }
-    if (m_Driver->m_Owner->m_FullscreenContext == this)
-        m_Driver->m_Owner->m_FullscreenContext = nullptr;
+    m_Fullscreen = !m_Fullscreen;
     TracyD3D11Destroy(g_D3d11Ctx);
     debug_destroy();
 }
 
 void CKDX11RasterizerContext::resize_buffers()
 {
+#if defined(DEBUG) || defined(_DEBUG)
+    fprintf(stderr, "resize_buffers\n");
+#endif
     HRESULT hr;
     ID3D11RenderTargetView *nullViews[] = {nullptr};
     m_DeviceContext->OMSetRenderTargets(1, nullViews, nullptr);
@@ -92,10 +94,19 @@ void CKDX11RasterizerContext::resize_buffers()
     D3DCall(m_Swapchain->GetBuffer(0, IID_PPV_ARGS(&backBuffer)));
     D3DCall(m_Device->CreateRenderTargetView(backBuffer.Get(), nullptr, m_RenderTargetView.ReleaseAndGetAddressOf()));
     m_DeviceContext->OMSetRenderTargets(1, m_RenderTargetView.GetAddressOf(), nullptr);
+    m_DeviceContext->Flush();
+    m_InCreateDestroy = FALSE;
 }
 
-void CKDX11RasterizerContext::toggle_fullscreen() {
-    m_Fullscreen = !m_Fullscreen;
+void CKDX11RasterizerContext::toggle_fullscreen(bool fullscreen) {
+#if defined(DEBUG) || defined(_DEBUG)
+    fprintf(stderr, "toggle_fullscreen\n");
+#endif
+    if (fullscreen && m_Owner->m_FullscreenContext == this)
+        return;
+    if (!fullscreen && m_Owner->m_FullscreenContext != this)
+        return;
+    m_Fullscreen = fullscreen;
     HRESULT hr;
     LONG style = GetWindowLongA((HWND)m_Window, GWL_STYLE);
     WIN_HANDLE parent = VxGetParent(m_Window);
@@ -105,12 +116,12 @@ void CKDX11RasterizerContext::toggle_fullscreen() {
         style &= ~WS_CAPTION;
     } else
     {
-        style |= WS_CHILD;
+        // style |= WS_CHILD;
         style |= WS_CAPTION;
     }
     SetWindowLongA((HWND)m_Window, GWL_STYLE, style);
-    style = GetWindowLongA((HWND)parent, GWL_STYLE);
-    SetWindowLongA((HWND)parent, GWL_STYLE, style & (~WS_CAPTION));
+    // style = GetWindowLongA((HWND)parent, GWL_STYLE);
+    // SetWindowLongA((HWND)parent, GWL_STYLE, style & (~WS_CAPTION));
     D3DCall(m_Swapchain->SetFullscreenState(m_Fullscreen, nullptr));
     // if (!m_Fullscreen)
     // {
@@ -132,6 +143,8 @@ void CKDX11RasterizerContext::toggle_fullscreen() {
     D3DCall(m_Swapchain->GetBuffer(0, IID_PPV_ARGS(&backBuffer)));
     D3DCall(m_Device->CreateRenderTargetView(backBuffer.Get(), nullptr, m_RenderTargetView.ReleaseAndGetAddressOf()));
     m_DeviceContext->OMSetRenderTargets(1, m_RenderTargetView.GetAddressOf(), nullptr);
+    m_Owner->m_FullscreenContext = m_Fullscreen ? this : nullptr;
+    m_DeviceContext->Flush();
 }
 
 void CKDX11RasterizerContext::SetTitleStatus(const char *fmt, ...)
@@ -155,6 +168,91 @@ void CKDX11RasterizerContext::SetTitleStatus(const char *fmt, ...)
     SetWindowTextA(GetAncestor((HWND)m_Window, GA_ROOT), ts.c_str());
 }
 
+HRESULT CKDX11RasterizerContext::CreateSwapchain(WIN_HANDLE Window, int Width, int Height)
+{
+    HRESULT hr;
+    m_AllowTearing = static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
+    m_FlipPresent = static_cast<CKDX11Rasterizer *>(m_Owner)->m_FlipPresent;
+    ComPtr<IDXGIFactory2> factory2;
+    HRESULT hr_dxgi12 = m_Owner->m_Factory.As(&factory2);
+    const DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    if (FAILED(hr_dxgi12))
+    {
+        DXGI_SWAP_CHAIN_DESC scd{};
+
+        scd.BufferCount = 2;
+        scd.BufferDesc.Width = Width;
+        scd.BufferDesc.Height = Height;
+        scd.BufferDesc.Format = format; // TODO: just use 32-bit color here, too lazy to check if valid
+        scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        scd.OutputWindow = (HWND)Window;
+        scd.SampleDesc.Count = 1; // TODO: multisample support
+        scd.Windowed = TRUE;
+        scd.SwapEffect = m_FlipPresent ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT_DISCARD;
+        scd.Flags =
+            // DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT |
+            // DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | 
+            (m_AllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
+        D3DCall(m_Owner->m_Factory->CreateSwapChain(m_Device.Get(), &scd, m_Swapchain.ReleaseAndGetAddressOf()));
+    }
+    else
+    {
+        DXGI_SWAP_CHAIN_DESC1 scd{};
+        DXGI_SWAP_CHAIN_FULLSCREEN_DESC scfd{};
+
+        scd.Width = 0;
+        scd.Height = 0;
+        scd.Format = format;
+        scd.Stereo = FALSE;
+        scd.SampleDesc.Count = 1;
+        scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        scd.BufferCount = 2;
+        scd.Scaling = DXGI_SCALING_STRETCH;
+        scd.SwapEffect = m_FlipPresent ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT_DISCARD;
+        scd.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+        scd.Flags =
+            // DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT |
+            // DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH |
+            (m_AllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
+
+        scfd.RefreshRate.Numerator = 0;
+        scfd.RefreshRate.Denominator = 0;
+        scfd.Scaling = DXGI_MODE_SCALING_STRETCHED;
+        scfd.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE;
+        scfd.Windowed = TRUE;
+        IDXGISwapChain1 *swapchain1 = nullptr;
+        D3DCall(factory2->CreateSwapChainForHwnd(m_Device.Get(), (HWND)Window, &scd, &scfd, nullptr, &swapchain1));
+        m_Swapchain = swapchain1;
+    }
+    return hr;
+}
+
+HRESULT CKDX11RasterizerContext::CreateDevice()
+{
+    HRESULT hr;
+    UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_SINGLETHREADED;
+    D3D_FEATURE_LEVEL featureLevels[] = {
+        D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0,
+        // D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1 // Sry but we can't do fl 9.x
+    };
+#if defined(DEBUG) || defined(_DEBUG)
+    creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
+    hr = D3D11CreateDevice(static_cast<CKDX11RasterizerDriver *>(m_Driver)->m_Adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN,
+                           nullptr, creationFlags, featureLevels, _countof(featureLevels), D3D11_SDK_VERSION,
+                           m_Device.ReleaseAndGetAddressOf(), nullptr, m_DeviceContext.ReleaseAndGetAddressOf());
+    if (hr == E_INVALIDARG)
+    {
+        D3DCall(D3D11CreateDevice(static_cast<CKDX11RasterizerDriver *>(m_Driver)->m_Adapter.Get(),
+                                  D3D_DRIVER_TYPE_UNKNOWN, nullptr, creationFlags, &featureLevels[1],
+                                  _countof(featureLevels) - 1, D3D11_SDK_VERSION, m_Device.ReleaseAndGetAddressOf(),
+                                  nullptr, m_DeviceContext.ReleaseAndGetAddressOf()));
+    }
+    
+    return hr;
+}
+
 CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
                                        CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
@@ -164,72 +262,29 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     freopen("CON", "w", stderr);
 #endif
     if (m_Inited)
+    {
+        m_InCreateDestroy = FALSE;
         return TRUE;
+    }
     HRESULT hr;
     m_InCreateDestroy = TRUE;
     debug_setup(this);
 
     CKRECT Rect;
+    WIN_HANDLE parent = VxGetParent(Window);
     if (Window)
     {
         VxGetWindowRect(Window, &Rect);
-        WIN_HANDLE Parent = VxGetParent(Window);
-        VxScreenToClient(Parent, reinterpret_cast<CKPOINT *>(&Rect));
-        VxScreenToClient(Parent, reinterpret_cast<CKPOINT *>(&Rect.right));
+        VxScreenToClient(parent, reinterpret_cast<CKPOINT *>(&Rect));
+        VxScreenToClient(parent, reinterpret_cast<CKPOINT *>(&Rect.right));
     }
     LONG PrevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
     SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle & ~WS_CHILDWINDOW);
-    SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle | WS_CAPTION 
-        | (Fullscreen ? 0 : WS_CHILDWINDOW)
-    );
+    SetWindowLongA((HWND)Window, GWL_STYLE, PrevStyle | (Fullscreen ? 0 : WS_CAPTION));
     // SetClassLongPtr((HWND)Window, GCLP_HBRBACKGROUND, (LONG)GetStockObject(NULL_BRUSH));
 
-    
-    m_AllowTearing = static_cast<CKDX11Rasterizer *>(m_Owner)->m_TearingSupport;
-    m_FlipPresent = static_cast<CKDX11Rasterizer *>(m_Owner)->m_FlipPresent;
-
-    DXGI_SWAP_CHAIN_DESC scd;
-    ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
-
-    scd.BufferCount = 2;
-    scd.BufferDesc.Width = Width;
-    scd.BufferDesc.Height = Height;
-    scd.BufferDesc.Format = DXGI_FORMAT_R10G10B10A2_UNORM; // TODO: just use 32-bit color here, too lazy to check if valid
-    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    scd.OutputWindow = (HWND)Window;
-    scd.SampleDesc.Count = 1; // TODO: multisample support
-    scd.Windowed = TRUE;
-    scd.SwapEffect = m_FlipPresent ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT_DISCARD;
-    scd.Flags = 
-        // DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT |
-        DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH |
-        (m_AllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
-    UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_SINGLETHREADED;
-    D3D_FEATURE_LEVEL featureLevels[] = {
-        D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0,
-        D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0,
-        D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_1
-    };
-#if defined(DEBUG) || defined(_DEBUG)
-    creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
-#endif
-    hr = D3D11CreateDeviceAndSwapChain(static_cast<CKDX11RasterizerDriver *>(m_Driver)->m_Adapter.Get(),
-                                       D3D_DRIVER_TYPE_UNKNOWN, nullptr, creationFlags, featureLevels,
-                                       _countof(featureLevels), D3D11_SDK_VERSION, &scd,
-                                       m_Swapchain.ReleaseAndGetAddressOf(), m_Device.ReleaseAndGetAddressOf(), nullptr,
-                                       m_DeviceContext.ReleaseAndGetAddressOf());
-    if (hr == E_INVALIDARG)
-    {
-        D3DCall(D3D11CreateDeviceAndSwapChain(static_cast<CKDX11RasterizerDriver *>(m_Driver)->m_Adapter.Get(),
-                                              D3D_DRIVER_TYPE_UNKNOWN, nullptr, creationFlags, &featureLevels[1],
-                                              _countof(featureLevels) - 1,
-                                              D3D11_SDK_VERSION, &scd, m_Swapchain.ReleaseAndGetAddressOf(), m_Device.ReleaseAndGetAddressOf(), nullptr,
-                                              m_DeviceContext.ReleaseAndGetAddressOf()));
-    }
-    else
-    {
-        D3DCall(hr);
-    }
+    D3DCall(CreateDevice());
+    D3DCall(CreateSwapchain(Window, Width, Height));
 #if TRACY_ENABLE
     g_D3d11Ctx = TracyD3D11Context(m_Device.Get(), m_DeviceContext.Get());
 #endif
@@ -551,6 +606,8 @@ CKBOOL CKDX11RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
 CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
     FrameMark;
 
+    if (m_InCreateDestroy)
+        return TRUE;
     if (!m_SceneBegined)
         EndScene();
     HRESULT hr;
@@ -562,14 +619,17 @@ CKBOOL CKDX11RasterizerContext::BackToFront(CKBOOL vsync) {
     directbat = 0;
     vbbat = 0;
     vbibbat = 0;
-
-    // ComPtr<ID3D11Debug> debug;
-    // D3DCall(m_Device->QueryInterface(IID_PPV_ARGS(debug.GetAddressOf())));
-    // D3DCall(debug->ReportLiveDeviceObjects(D3D11_RLDO_SUMMARY));
 #endif
-
-    D3DCall(m_Swapchain->Present(vsync ? 1 : 0, 
-        (m_AllowTearing && !m_Fullscreen && !vsync) ? DXGI_PRESENT_ALLOW_TEARING : 0));
+    if (m_NeedBufferResize)
+    {
+        resize_buffers();
+        m_NeedBufferResize = FALSE;
+    }
+    D3DCall(m_Swapchain->Present(vsync ? 1 : 0,
+                             (m_AllowTearing && !m_Fullscreen && !vsync && !m_NeedBufferResize)
+                                 ? DXGI_PRESENT_ALLOW_TEARING
+                                 : 0));
+    // D3DCall(m_Swapchain->Present(vsync ? 1 : 0, 0));
     TracyD3D11Collect(g_D3d11Ctx);
     return SUCCEEDED(hr);
 }

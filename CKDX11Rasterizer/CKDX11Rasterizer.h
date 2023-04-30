@@ -312,7 +312,7 @@ public:
     CKDX11RasterizerContext();
     virtual ~CKDX11RasterizerContext();
     void resize_buffers();
-    void toggle_fullscreen();
+    void toggle_fullscreen(bool fullscreen);
 
     //--- Creation
     virtual CKBOOL Create(WIN_HANDLE Window, int PosX = 0, int PosY = 0, int Width = 0, int Height = 0, int Bpp = -1,
@@ -410,6 +410,8 @@ protected:
     CKDX11IndexBufferDesc *TriangleFanToList(CKWORD VOffset, CKDWORD VCount, int *startIndex, int* newIndexCount);
     CKDX11IndexBufferDesc *TriangleFanToList(CKWORD *indices, int count, int *startIndex, int *newIndexCount);
     void SetTitleStatus(const char *fmt, ...);
+    HRESULT CreateSwapchain(WIN_HANDLE Window, int Width, int Height);
+    HRESULT CreateDevice();
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 #endif
@@ -489,4 +491,5 @@ public:
 
     CKDX11Rasterizer *m_Owner;
     BOOL m_Inited = FALSE;
+    BOOL m_NeedBufferResize = FALSE;
 };

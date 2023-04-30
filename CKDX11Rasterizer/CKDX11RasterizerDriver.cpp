@@ -28,7 +28,8 @@ CKRasterizerContext *CKDX11RasterizerDriver::CreateContext() {
 }
 
 CKBOOL CKDX11RasterizerDriver::DestroyContext(CKRasterizerContext *Context) {
-    static_cast<CKDX11RasterizerContext *>(Context)->toggle_fullscreen();
+    static_cast<CKDX11RasterizerContext *>(Context)->m_InCreateDestroy = TRUE;
+    static_cast<CKDX11RasterizerContext *>(Context)->toggle_fullscreen(!Context->m_Fullscreen);
     return TRUE;
 }
 
