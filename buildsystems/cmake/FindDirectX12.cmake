@@ -20,7 +20,7 @@ endif (IS_DIRECTORY "${WIN10_SDK_PATH}/Include/${WIN10_SDK_VERSION}.0")
 # Find the d3d12 and dxgi include path, it will typically look something like this.
 # C:\Program Files (x86)\Windows Kits\10\Include\10.0.10586.0\um\d3d12.h
 # C:\Program Files (x86)\Windows Kits\10\Include\10.0.10586.0\shared\dxgi1_4.h
-find_path(D3D12_INCLUDE_DIR    # Set variable D3D12_INCLUDE_DIR
+find_path(DirectX12_INCLUDE_DIR    # Set variable DirectX12_INCLUDE_DIR
           d3d12.h                # Find a path with d3d12.h
           HINTS "${WIN10_SDK_PATH}/Include/${WIN10_SDK_VERSION}/um"
           DOC "path to WIN10 SDK header files"
@@ -33,15 +33,15 @@ find_path(DXGI_INCLUDE_DIR    # Set variable DXGI_INCLUDE_DIR
           DOC "path to WIN10 SDK header files"
           HINTS
           )
-set(D3D12_INCLUDE_DIRS ${D3D12_INCLUDE_DIR} ${DXGI_INCLUDE_DIR})
+set(DirectX12_INCLUDE_DIRS ${DirectX12_INCLUDE_DIR} ${DXGI_INCLUDE_DIR})
 
 # List of D3D libraries
-set(D3D12_LIBRARIES d3d12.lib dxgi.lib d3dcompiler.lib)
+set(DirectX12_LIBRARY d3d12.lib dxgi.lib d3dcompiler.lib dxguid.lib)
 
 include(FindPackageHandleStandardArgs)
 # handle the QUIETLY and REQUIRED arguments and set D3D12_FOUND to TRUE
 # if all listed variables are TRUE
-find_package_handle_standard_args(D3D12  DEFAULT_MSG
-                                  D3D12_INCLUDE_DIRS D3D12_LIBRARIES)
+find_package_handle_standard_args(DirectX12  DEFAULT_MSG
+                                  DirectX12_INCLUDE_DIRS DirectX12_LIBRARY)
 
-mark_as_advanced(D3D12_INCLUDE_DIRS D3D12_LIBRARIES)
+mark_as_advanced(DirectX12_INCLUDE_DIRS DirectX12_LIBRARY)

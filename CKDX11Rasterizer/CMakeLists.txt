@@ -91,7 +91,6 @@ foreach(FILE ${HLSL_SHADER_FILES})
                 VS_SHADER_FLAGS "/Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb")
       endif()
       get_source_file_property(vsshflag ${FILE} VS_SHADER_FLAGS)
-      message(STATUS "out=${vsshflag}")
   else()
       add_custom_command(TARGET CKDX11RasterizerShader
                          COMMAND fxc.exe /nologo /Emain /T${shadertype}_${shadermodel} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fh ${COMPILED_SHADERS_PATH}/${FILE_WE}.h /Vn g_${FILE_WE} /Fd ${COMPILED_SHADERS_PATH}/${FILE_WE}.pdb ${FILE}
