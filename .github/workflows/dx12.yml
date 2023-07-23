@@ -22,7 +22,7 @@ env:
   CMAKE_ARGS: -DVIRTOOLS_SDK_FETCH_FROM_GIT=ON -DTRACY_ENABLE=OFF -A Win32
 
 jobs:
-  build-DX12:
+  build-dx12:
     runs-on: windows-latest
     env:
       PROJECT_ROOT: ${{github.workspace}}
