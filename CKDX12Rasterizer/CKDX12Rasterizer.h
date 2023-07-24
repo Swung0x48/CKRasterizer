@@ -326,8 +326,9 @@ protected:
     
     void SetTitleStatus(const char *fmt, ...);
     HRESULT CreateCommandQueue();
-    HRESULT CreateDevice();
     HRESULT CreateSwapchain(WIN_HANDLE Window, int Width, int Height);
+    HRESULT CreateDescriptorHeap();
+    HRESULT CreateFrameResources();
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 #endif
@@ -357,4 +358,6 @@ public:
 
     ComPtr<ID3D12CommandQueue> m_CommandQueue;
     ComPtr<IDXGISwapChain3> m_SwapChain;
+    ComPtr<ID3D12DescriptorHeap> m_RTVHeap;
+    UINT m_RTVDescriptorSize;
 };

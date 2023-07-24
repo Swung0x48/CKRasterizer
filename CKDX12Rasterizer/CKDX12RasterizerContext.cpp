@@ -125,6 +125,23 @@ HRESULT CKDX12RasterizerContext::CreateSwapchain(WIN_HANDLE Window, int Width, i
     return hr;
 }
 
+HRESULT CKDX12RasterizerContext::CreateDescriptorHeap() {
+    HRESULT hr;
+    D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
+    rtvHeapDesc.NumDescriptors = m_FrameCountBuffered;
+    rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    auto* driver = static_cast<CKDX12RasterizerDriver *>(m_Driver);
+
+    D3DCall(driver->m_Device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_RTVHeap)));
+    if (SUCCEEDED(hr))
+        m_RTVDescriptorSize = driver->m_Device->
+            GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    return hr;
+}
+
+HRESULT CKDX12RasterizerContext::CreateFrameResources() { return E_NOTIMPL; }
+
 CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
                                        CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
