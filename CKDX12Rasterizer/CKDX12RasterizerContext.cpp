@@ -160,12 +160,27 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
         D3DCall(driver->m_Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
                                                          IID_PPV_ARGS(&m_CommandAllocators[i])));
     }
+    return hr;
 }
 
 CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
                                        CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
     HRESULT hr;
+    m_Window = Window;
+    m_PosX = PosX;
+    m_PosY = PosY;
+    m_Width = Width;
+    m_Height = Height;
+    m_Fullscreen = Fullscreen;
+    m_RefreshRate = RefreshRate;
+    m_ZBpp = Zbpp;
+    m_StencilBpp = StencilBpp;
+
+    D3DCall(CreateCommandQueue());
+    D3DCall(CreateSwapchain(Window, m_Width, m_Height));
+    D3DCall(CreateDescriptorHeap());
+    D3DCall(CreateFrameResources());
     return SUCCEEDED(hr);
 }
 
