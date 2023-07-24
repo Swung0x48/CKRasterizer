@@ -41,7 +41,7 @@ if (NOT EXISTS ${FVF_HEADER_PATH})
       message(STATUS "FlexibleVertexFormat.h from DirectXMesh downloaded.")
     else()
       file(REMOVE ${FVF_HEADER_PATH})
-      message(FATAL_ERROR "Error occurred during downloading FlexibleVertexFormat.h from DirectXMesh: ${ERROR_MESSAGE}\nYou may download it manually and place it under ${FVF_HEADER_PATH}")
+      message(FATAL_ERROR "Error occurred during downloading FlexibleVertexFormat.h from DirectXMesh: ${ERROR_MESSAGE}\nYou may download it manually from\nhttps://raw.githubusercontent.com/microsoft/DirectXMesh/main/Utilities/FlexibleVertexFormat.h\nand place it under ${FVF_HEADER_PATH}")
     endif()
 else()
     
