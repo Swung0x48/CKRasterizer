@@ -64,15 +64,63 @@ void CKDX12RasterizerContext::SetTitleStatus(const char *fmt, ...)
     SetWindowTextA(GetAncestor((HWND)m_Window, GA_ROOT), ts.c_str());
 }
 
-HRESULT CKDX12RasterizerContext::CreateSwapchain(WIN_HANDLE Window, int Width, int Height)
-{
+HRESULT CKDX12RasterizerContext::CreateCommandQueue() {
     HRESULT hr;
+    D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+    queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+
+    D3DCall(static_cast<CKDX12RasterizerDriver*>(m_Driver)->
+        m_Device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_CommandQueue)));
+
     return hr;
 }
 
-HRESULT CKDX12RasterizerContext::CreateDevice()
+HRESULT CKDX12RasterizerContext::CreateSwapchain(WIN_HANDLE Window, int Width, int Height)
 {
     HRESULT hr;
+    bool allowTearing = false;
+    ComPtr<IDXGIFactory5> factory5;
+    hr = m_Owner->m_Factory.As(&factory5);
+    if (SUCCEEDED(hr))
+    {
+        // TODO: Put into context creation
+        hr = factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
+        allowTearing = allowTearing && SUCCEEDED(hr);
+    }
+
+    DXGI_SWAP_CHAIN_DESC1 scd{};
+    DXGI_SWAP_CHAIN_FULLSCREEN_DESC scfd{};
+    const DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    scd.Width = 0;
+    scd.Height = 0;
+    scd.Format = format;
+    scd.Stereo = FALSE;
+    scd.SampleDesc.Count = 1;
+    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    scd.BufferCount = 2;
+    scd.Scaling = DXGI_SCALING_NONE;
+    scd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    scd.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+    scd.Flags =
+        // DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT |
+        DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | (allowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
+
+    scfd.RefreshRate.Numerator = 0;
+    scfd.RefreshRate.Denominator = 0;
+    scfd.Scaling = DXGI_MODE_SCALING_STRETCHED;
+    scfd.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE;
+    scfd.Windowed = TRUE;
+    IDXGISwapChain1 *swapchain1 = nullptr;
+    D3DCall(m_Owner->m_Factory->CreateSwapChainForHwnd(
+        m_CommandQueue.Get(),
+        (HWND)Window,
+        &scd,
+        &scfd,
+        nullptr,
+        &swapchain1)
+    );
     
     return hr;
 }
@@ -80,7 +128,8 @@ HRESULT CKDX12RasterizerContext::CreateDevice()
 CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
                                        CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
-    return TRUE;
+    HRESULT hr;
+    return SUCCEEDED(hr);
 }
 
 CKBOOL CKDX12RasterizerContext::Resize(int PosX, int PosY, int Width, int Height, CKDWORD Flags)

@@ -57,8 +57,22 @@ XBOOL CKDX12Rasterizer::Start(WIN_HANDLE AppWnd)
     using Microsoft::WRL::ComPtr;
     m_MainWindow = AppWnd;
 
-    ComPtr<IDXGIFactory4> factory;
-    HRESULT hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&factory));
+    UINT dxgiFactoryFlags = 0;
+#if defined(_DEBUG)
+    // Enable the debug layer (requires the Graphics Tools "optional feature").
+    // NOTE: Enabling the debug layer after device creation will invalidate the active device.
+    {
+        ComPtr<ID3D12Debug> debugController;
+        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
+        {
+            debugController->EnableDebugLayer();
+
+            // Enable additional debug layers.
+            dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+        }
+    }
+#endif
+    HRESULT hr = CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_Factory));
     if (!D3DLogCall(hr, __FUNCTION__, __FILE__, __LINE__))
     {
         return FALSE;
@@ -66,7 +80,7 @@ XBOOL CKDX12Rasterizer::Start(WIN_HANDLE AppWnd)
 
     BOOL allowTearing = FALSE;
     ComPtr<IDXGIFactory5> factory5;
-    hr = factory.As(&factory5);
+    hr = m_Factory.As(&factory5);
     if (SUCCEEDED(hr))
     {
         // TODO: Put into context creation
@@ -74,7 +88,7 @@ XBOOL CKDX12Rasterizer::Start(WIN_HANDLE AppWnd)
     }
 
     ComPtr<IDXGIFactory6> factory6;
-    hr = factory.As(&factory6);
+    hr = m_Factory.As(&factory6);
     ComPtr<IDXGIAdapter1> adapter = nullptr;
     ComPtr<IDXGIOutput> output = nullptr;
 
@@ -123,7 +137,7 @@ XBOOL CKDX12Rasterizer::Start(WIN_HANDLE AppWnd)
     else
     {
 
-        for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i)
+        for (UINT i = 0; m_Factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i)
         {
             for (UINT j = 0; adapter->EnumOutputs(j, &output) != DXGI_ERROR_NOT_FOUND; ++j)
             {

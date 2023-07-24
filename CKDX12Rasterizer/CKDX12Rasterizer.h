@@ -31,7 +31,7 @@ public:
 	virtual void Close(void);
 
 public:
-    ComPtr<IDXGIFactory1> m_Factory;
+    ComPtr<IDXGIFactory4> m_Factory;
     CKBOOL m_TearingSupport = FALSE;
     CKBOOL m_FlipPresent = FALSE;
     std::string m_DXGIVersionString = "1.1";
@@ -55,6 +55,7 @@ public:
     ComPtr<IDXGIOutput> m_Output;
     DXGI_ADAPTER_DESC1 m_AdapterDesc;
     DXGI_OUTPUT_DESC m_OutputDesc;
+    ComPtr<ID3D12Device> m_Device;
 };
 
 class CKDX12RasterizerContext;
@@ -324,22 +325,36 @@ protected:
     CKBOOL InternalSetRenderState(VXRENDERSTATETYPE State, CKDWORD Value);
     
     void SetTitleStatus(const char *fmt, ...);
-    HRESULT CreateSwapchain(WIN_HANDLE Window, int Width, int Height);
+    HRESULT CreateCommandQueue();
     HRESULT CreateDevice();
+    HRESULT CreateSwapchain(WIN_HANDLE Window, int Width, int Height);
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 #endif
     
 public:
+    // We overload the meaning of FrameCount to mean both the maximum
+    // number of frames that will be queued to the GPU at a time, as well as the number
+    // of back buffers in the DXGI swap chain. For the majority of applications, this
+    // is convenient and works well. However, there will be certain cases where an
+    // application may want to queue up more frames than there are back buffers
+    // available.
+    // It should be noted that excessive buffering of frames dependent on user input
+    // may result in noticeable latency in your app.
+    static const UINT m_FrameCountBuffered = 2;
+    static const UINT m_BackBufferCount = 2;
+
     VxDirectXData m_DirectXData;
     
     CKBOOL m_InCreateDestroy = TRUE;
     std::string m_OriginalTitle;
-
 
     XBitArray m_StateCacheHitMask;
     XBitArray m_StateCacheMissMask;
 
     CKDX12Rasterizer *m_Owner;
     BOOL m_Inited = FALSE;
+
+    ComPtr<ID3D12CommandQueue> m_CommandQueue;
+    ComPtr<IDXGISwapChain3> m_SwapChain;
 };
