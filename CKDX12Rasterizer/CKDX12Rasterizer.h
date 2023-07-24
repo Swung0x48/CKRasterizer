@@ -343,7 +343,7 @@ public:
     // available.
     // It should be noted that excessive buffering of frames dependent on user input
     // may result in noticeable latency in your app.
-    static const UINT m_FrameCountBuffered = 2;
+    static const UINT m_BufferedFrameCount = 2;
     static const UINT m_BackBufferCount = 2;
 
     VxDirectXData m_DirectXData;
@@ -361,4 +361,6 @@ public:
     ComPtr<IDXGISwapChain3> m_SwapChain;
     ComPtr<ID3D12DescriptorHeap> m_RTVHeap;
     UINT m_RTVDescriptorSize;
+    ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
+    ComPtr<ID3D12CommandAllocator> m_CommandAllocators[m_BufferedFrameCount];
 };

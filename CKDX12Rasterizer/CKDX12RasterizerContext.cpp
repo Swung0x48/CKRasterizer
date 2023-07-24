@@ -128,7 +128,7 @@ HRESULT CKDX12RasterizerContext::CreateSwapchain(WIN_HANDLE Window, int Width, i
 HRESULT CKDX12RasterizerContext::CreateDescriptorHeap() {
     HRESULT hr;
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-    rtvHeapDesc.NumDescriptors = m_FrameCountBuffered;
+    rtvHeapDesc.NumDescriptors = m_BufferedFrameCount;
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     auto* driver = static_cast<CKDX12RasterizerDriver *>(m_Driver);
@@ -140,7 +140,27 @@ HRESULT CKDX12RasterizerContext::CreateDescriptorHeap() {
     return hr;
 }
 
-HRESULT CKDX12RasterizerContext::CreateFrameResources() { return E_NOTIMPL; }
+HRESULT CKDX12RasterizerContext::CreateFrameResources()
+{
+    HRESULT hr;
+    auto *driver = static_cast<CKDX12RasterizerDriver *>(m_Driver);
+
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart());
+
+    // Create a RTV and a command allocator for each frame.
+    for (UINT i = 0; i < m_BackBufferCount; i++)
+    {
+        D3DCall(m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_RenderTargets[i])));
+        driver->m_Device->CreateRenderTargetView(m_RenderTargets[i].Get(), nullptr, rtvHandle);
+        rtvHandle.Offset(1, m_RTVDescriptorSize);
+    }
+
+    for (UINT i = 0; i < m_BufferedFrameCount; i++)
+    {
+        D3DCall(driver->m_Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                                         IID_PPV_ARGS(&m_CommandAllocators[i])));
+    }
+}
 
 CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
                                        CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
