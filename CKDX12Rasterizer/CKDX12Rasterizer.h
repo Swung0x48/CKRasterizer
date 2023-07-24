@@ -56,7 +56,6 @@ public:
     ComPtr<IDXGIOutput> m_Output;
     DXGI_ADAPTER_DESC1 m_AdapterDesc;
     DXGI_OUTPUT_DESC m_OutputDesc;
-    ComPtr<ID3D12Device> m_Device;
 };
 
 class CKDX12RasterizerContext;
@@ -357,10 +356,12 @@ public:
     CKDX12Rasterizer *m_Owner;
     BOOL m_Inited = FALSE;
 
+    ComPtr<ID3D12Device> m_Device;
     ComPtr<ID3D12CommandQueue> m_CommandQueue;
     ComPtr<IDXGISwapChain3> m_SwapChain;
     ComPtr<ID3D12DescriptorHeap> m_RTVHeap;
     UINT m_RTVDescriptorSize;
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12CommandAllocator> m_CommandAllocators[m_BufferedFrameCount];
+    UINT m_FrameIndex = 0;
 };

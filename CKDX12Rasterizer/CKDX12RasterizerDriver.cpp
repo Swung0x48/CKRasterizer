@@ -283,11 +283,5 @@ CKBOOL CKDX12RasterizerDriver::InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapte
     m_Desc << buf << " (DX12, DXGI " << static_cast<CKDX12Rasterizer*>(m_Owner)->m_DXGIVersionString.c_str() << ")";
     m_CapsUpToDate = TRUE;
 
-    D3DCall(D3D12CreateDevice(
-        m_Adapter.Get(), 
-        D3D_FEATURE_LEVEL_11_0, 
-        IID_PPV_ARGS(&m_Device)
-    ));
-
     return TRUE;
 }
