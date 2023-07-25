@@ -79,7 +79,7 @@ HRESULT CKDX12RasterizerContext::CreateCommandQueue() {
 HRESULT CKDX12RasterizerContext::CreateSwapchain(WIN_HANDLE Window, int Width, int Height)
 {
     HRESULT hr;
-    bool allowTearing = false;
+    BOOL allowTearing = FALSE;
     ComPtr<IDXGIFactory5> factory5;
     hr = m_Owner->m_Factory.As(&factory5);
     if (SUCCEEDED(hr))
