@@ -3,6 +3,9 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include "CKRasterizer.h"
+
+#include <vector>
+
 #include <Windows.h>
 #include <d3d12.h>
 #include "d3dx12.h"
@@ -329,6 +332,10 @@ protected:
     HRESULT CreateSwapchain(WIN_HANDLE Window, int Width, int Height);
     HRESULT CreateDescriptorHeap();
     HRESULT CreateFrameResources();
+    HRESULT CreateSyncObject();
+
+    HRESULT WaitForGpu();
+    HRESULT MoveToNextFrame();
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 #endif
@@ -363,5 +370,13 @@ public:
     UINT m_RTVDescriptorSize;
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12CommandAllocator> m_CommandAllocators[m_BufferedFrameCount];
+    /*ComPtr<ID3D12GraphicsCommandList> m_CommandList;*/
+    ComPtr<ID3D12GraphicsCommandList> m_ClearCommandList;
+    std::vector<ID3D12CommandList *> m_PendingCommandList;
+
+    // Sync objects
     UINT m_FrameIndex = 0;
+    HANDLE m_FenceEvent;
+    ComPtr<ID3D12Fence> m_Fence;
+    UINT64 m_FenceValues[m_BufferedFrameCount];
 };

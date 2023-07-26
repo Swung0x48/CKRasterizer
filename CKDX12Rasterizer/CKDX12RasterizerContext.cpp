@@ -163,6 +163,62 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
     return hr;
 }
 
+HRESULT CKDX12RasterizerContext::CreateSyncObject() {
+    HRESULT hr;
+    D3DCall(m_Device->CreateFence(m_FenceValues[m_FrameIndex], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_Fence)));
+    m_FenceValues[m_FrameIndex]++;
+
+    // Create an event handle to use for frame synchronization.
+    m_FenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (m_FenceEvent == nullptr)
+    {
+        D3DCall(HRESULT_FROM_WIN32(GetLastError()));
+    }
+
+    // Wait for the command list to execute; we are reusing the same command
+    // list in our main loop but for now, we just want to wait for setup to
+    // complete before continuing.
+    D3DCall(WaitForGpu());
+    return hr;
+}
+
+HRESULT CKDX12RasterizerContext::WaitForGpu()
+{
+    HRESULT hr;
+    // Schedule a Signal command in the queue.
+    D3DCall(m_CommandQueue->Signal(m_Fence.Get(), m_FenceValues[m_FrameIndex]));
+
+    // Wait until the fence has been processed.
+    D3DCall(m_Fence->SetEventOnCompletion(m_FenceValues[m_FrameIndex], m_FenceEvent));
+    WaitForSingleObjectEx(m_FenceEvent, INFINITE, FALSE);
+
+    // Increment the fence value for the current frame.
+    m_FenceValues[m_FrameIndex]++;
+    return hr;
+}
+
+HRESULT CKDX12RasterizerContext::MoveToNextFrame()
+{
+    HRESULT hr;
+    // Schedule a Signal command in the queue.
+    const UINT64 currentFenceValue = m_FenceValues[m_FrameIndex];
+    D3DCall(m_CommandQueue->Signal(m_Fence.Get(), currentFenceValue));
+
+    // Update the frame index.
+    m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
+
+    // If the next frame is not ready to be rendered yet, wait until it is ready.
+    if (m_Fence->GetCompletedValue() < m_FenceValues[m_FrameIndex])
+    {
+        D3DCall(m_Fence->SetEventOnCompletion(m_FenceValues[m_FrameIndex], m_FenceEvent));
+        WaitForSingleObjectEx(m_FenceEvent, INFINITE, FALSE);
+    }
+
+    // Set the fence value for the next frame.
+    m_FenceValues[m_FrameIndex] = currentFenceValue + 1;
+    return hr;
+}
+
 CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
                                        CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
@@ -183,6 +239,18 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(CreateSwapchain(Window, m_Width, m_Height));
     D3DCall(CreateDescriptorHeap());
     D3DCall(CreateFrameResources());
+
+    // TODO: Load initial assets here (shaders etc.)
+    D3DCall(m_Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
+        m_CommandAllocators[m_FrameIndex].Get(), nullptr,
+                                 IID_PPV_ARGS(&m_ClearCommandList)));
+
+
+
+    D3DCall(m_ClearCommandList->Close());
+
+    D3DCall(CreateSyncObject());
+
     return SUCCEEDED(hr);
 }
 
@@ -201,15 +269,26 @@ CKBOOL CKDX12RasterizerContext::Resize(int PosX, int PosY, int Width, int Height
 CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD Stencil, int RectCount,
                                       CKRECT *rects)
 {
+    if (!m_SceneBegined)
+        BeginScene();
+    const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
+    m_CommandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
     
     return TRUE;
 }
 
 CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync) { return TRUE; }
 
-CKBOOL CKDX12RasterizerContext::BeginScene() { return TRUE; }
+CKBOOL CKDX12RasterizerContext::BeginScene() {
+    if (m_SceneBegined)
+        return TRUE;
+    return TRUE; }
 
-CKBOOL CKDX12RasterizerContext::EndScene() { return TRUE; }
+CKBOOL CKDX12RasterizerContext::EndScene() {
+    if (!m_SceneBegined)
+        return TRUE;
+    return TRUE;
+}
 
 CKBOOL CKDX12RasterizerContext::SetLight(CKDWORD Light, CKLightData *data) { return TRUE; }
 
