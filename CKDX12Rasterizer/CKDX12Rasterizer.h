@@ -371,7 +371,7 @@ public:
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12CommandAllocator> m_CommandAllocators[m_BufferedFrameCount];
     /*ComPtr<ID3D12GraphicsCommandList> m_CommandList;*/
-    ComPtr<ID3D12GraphicsCommandList> m_ClearCommandList;
+    ComPtr<ID3D12GraphicsCommandList> m_ClearCommandList[m_BackBufferCount];
     std::vector<ID3D12CommandList *> m_PendingCommandList;
 
     // Sync objects
