@@ -162,7 +162,7 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
             IID_PPV_ARGS(&m_CommandAllocators[i])));
     }
 
-    // ...also, a command list for each of them for clearing this exact rtv
+    // ...also, a command list for each of them
     for (UINT i = 0; i < m_BackBufferCount; ++i)
     {
         D3DCall(m_Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -268,7 +268,6 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     
 
     D3DCall(CreateSyncObject());
-
     return SUCCEEDED(hr);
 }
 
@@ -306,8 +305,9 @@ CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync)
 CKBOOL CKDX12RasterizerContext::BeginScene() {
     if (m_SceneBegined)
         return TRUE;
+    m_SceneBegined = TRUE;
     HRESULT hr;
-    D3DCall(m_CommandAllocators[m_FrameIndex]->Reset());
+    //D3DCall(m_CommandAllocators[m_FrameIndex]->Reset());
 
     return TRUE;
 }
@@ -316,6 +316,8 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
     if (!m_SceneBegined)
         return TRUE;
     m_CommandQueue->ExecuteCommandLists(m_PendingCommandList.size(), m_PendingCommandList.data());
+    m_PendingCommandList.clear();
+    m_SceneBegined = FALSE;
     return TRUE;
 }
 
