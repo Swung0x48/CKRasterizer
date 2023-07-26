@@ -167,22 +167,10 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
     {
         D3DCall(m_Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
                                             m_CommandAllocators[i].Get(), nullptr, 
-            IID_PPV_ARGS(&m_ClearCommandList[i])));
-        auto commandList = m_ClearCommandList[i];
-        const auto transitionToRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(m_RenderTargets[i].Get(), D3D12_RESOURCE_STATE_PRESENT,
-                                             D3D12_RESOURCE_STATE_RENDER_TARGET);
-        commandList->ResourceBarrier(1, &transitionToRenderTarget);
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart(), i,
-                                                m_RTVDescriptorSize);
-        commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
-        const auto transitionToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_RenderTargets[i].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
-                                                 D3D12_RESOURCE_STATE_PRESENT);
-        const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
-        commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-        commandList->ResourceBarrier(1, &transitionToPresent);
+            IID_PPV_ARGS(&m_CommandList)));
+        
 
-        D3DCall(commandList->Close());
+        D3DCall(m_CommandList->Close());
     }
     return hr;
 }
@@ -288,7 +276,7 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
 {
     if (!m_SceneBegined)
         BeginScene();
-    m_PendingCommandList.emplace_back(m_ClearCommandList[m_FrameIndex].Get());
+    
     return TRUE;
 }
 
@@ -297,6 +285,25 @@ CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync)
     if (m_SceneBegined)
         EndScene();
     HRESULT hr;
+    D3DCall(m_CommandAllocators[m_FrameIndex]->Reset());
+    D3DCall(m_CommandList->Reset(m_CommandAllocators[m_FrameIndex].Get(), nullptr));
+
+    const auto transitionToRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
+        m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_CommandList->ResourceBarrier(1, &transitionToRenderTarget);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
+                                            m_RTVDescriptorSize);
+    m_CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+    const auto transitionToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
+        m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
+    m_CommandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+    m_CommandList->ResourceBarrier(1, &transitionToPresent);
+    D3DCall(m_CommandList->Close());
+    m_PendingCommandList.emplace_back(m_CommandList.Get());
+    m_CommandQueue->ExecuteCommandLists(m_PendingCommandList.size(), m_PendingCommandList.data());
+    m_PendingCommandList.clear();
+
     D3DCall(m_SwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING));
     D3DCall(MoveToNextFrame());
     return SUCCEEDED(hr);
@@ -307,7 +314,7 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
         return TRUE;
     m_SceneBegined = TRUE;
     HRESULT hr;
-    //D3DCall(m_CommandAllocators[m_FrameIndex]->Reset());
+    
 
     return TRUE;
 }
@@ -315,8 +322,7 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
 CKBOOL CKDX12RasterizerContext::EndScene() {
     if (!m_SceneBegined)
         return TRUE;
-    m_CommandQueue->ExecuteCommandLists(m_PendingCommandList.size(), m_PendingCommandList.data());
-    m_PendingCommandList.clear();
+    
     m_SceneBegined = FALSE;
     return TRUE;
 }
