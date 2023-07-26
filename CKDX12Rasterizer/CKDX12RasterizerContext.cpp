@@ -130,14 +130,22 @@ HRESULT CKDX12RasterizerContext::CreateSwapchain(WIN_HANDLE Window, int Width, i
 HRESULT CKDX12RasterizerContext::CreateDescriptorHeap() {
     HRESULT hr;
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-    rtvHeapDesc.NumDescriptors = m_BufferedFrameCount;
+    rtvHeapDesc.NumDescriptors = m_BackBufferCount;
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-
     D3DCall(m_Device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_RTVHeap)));
     if (SUCCEEDED(hr))
         m_RTVDescriptorSize = m_Device->
             GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+    /*D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
+    dsvHeapDesc.NumDescriptors = m_BackBufferCount;
+    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    D3DCall(m_Device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_DSVHeap)));
+    if (SUCCEEDED(hr))
+        m_RTVDescriptorSize = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);*/
+
     return hr;
 }
 
@@ -153,6 +161,15 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
         m_Device->CreateRenderTargetView(m_RenderTargets[i].Get(), nullptr, rtvHandle);
         rtvHandle.Offset(1, m_RTVDescriptorSize);
     }
+
+    //CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart());
+    //for (UINT i = 0; i < m_BackBufferCount; ++i)
+    //{
+    //    // TODO: Create DSV resources
+    //    //D3DCall(m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_DepthStencils[i])));
+    //    m_Device->CreateDepthStencilView(m_DepthStencils[i].Get(), nullptr, dsvHandle);
+    //    dsvHandle.Offset(1, m_DSVDescriptorSize);
+    //}
 
     // and a command allocator...
     for (UINT i = 0; i < m_BufferedFrameCount; i++)
@@ -276,15 +293,26 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
 {
     if (!m_SceneBegined)
         BeginScene();
-    const auto transitionToRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    m_CommandList->ResourceBarrier(1, &transitionToRenderTarget);
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
                                             m_RTVDescriptorSize);
-    m_CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+    if (Flags & CKRST_CTXCLEAR_COLOR)
+    {
+        VxColor color(Ccol);
+        /*const float color[] = {0.0f, 0.2f, 0.4f, 1.0f};*/
+        m_CommandList->ClearRenderTargetView(rtvHandle, (const float*)&color, 0, nullptr);
+    }
+    /*CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
+                                            m_DSVDescriptorSize);
+    UINT dsClearFlag = 0;
+    if (Flags & CKRST_CTXCLEAR_DEPTH)
+        dsClearFlag |= D3D12_CLEAR_FLAG_DEPTH;
+    if (Flags & CKRST_CTXCLEAR_STENCIL)
+        dsClearFlag |= D3D12_CLEAR_FLAG_STENCIL;
+    if (dsClearFlag)
+        m_CommandList->ClearDepthStencilView(dsvHandle, (D3D12_CLEAR_FLAGS)D3D12_CLEAR_FLAG_DEPTH, Z, Stencil, 0,
+                                             nullptr);*/
+    /*const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};*/
     
-    const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
-    m_CommandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
     return TRUE;
 }
 
@@ -306,7 +334,12 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
     HRESULT hr;
     D3DCall(m_CommandAllocators[m_FrameIndex]->Reset());
     D3DCall(m_CommandList->Reset(m_CommandAllocators[m_FrameIndex].Get(), nullptr));
-
+    const auto transitionToRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
+        m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_CommandList->ResourceBarrier(1, &transitionToRenderTarget);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
+                                            m_RTVDescriptorSize);
+    m_CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
     return TRUE;
 }
 
