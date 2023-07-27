@@ -253,72 +253,62 @@ void CKDX12RasterizerContext::CreateFVFResources() {
     DWORD fvf = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
     std::vector<D3D12_INPUT_ELEMENT_DESC> elements;
     FVF::CreateInputLayoutFromFVF(fvf, elements);
-    D3D12_INPUT_LAYOUT_DESC input_layout{elements.data(), elements.size()};
     D3D12_SHADER_BYTECODE shader{g_VShader2DColor1, sizeof(g_VShader2DColor1)};
-    FVFResource res{input_layout, shader};
+    FVFResource res{elements, shader};
     m_FVFResources[fvf] = res;
 
     fvf = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1;
     FVF::CreateInputLayoutFromFVF(fvf, elements);
-    input_layout = {elements.data(), elements.size()};
     shader = {g_VShader2DColor2, sizeof(g_VShader2DColor2)};
-    res = {input_layout, shader};
+    res = {elements, shader};
     m_FVFResources[fvf] = res;
 
     fvf = CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1;
     FVF::CreateInputLayoutFromFVF(fvf, elements);
-    input_layout = {elements.data(), elements.size()};
     shader = {g_VShaderNormalTex1, sizeof(g_VShaderNormalTex1)};
-    res = {input_layout, shader};
+    res = {elements, shader};
     m_FVFResources[fvf] = res;
 
     fvf = CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX2;
     FVF::CreateInputLayoutFromFVF(fvf, elements);
-    input_layout = {elements.data(), elements.size()};
     shader = {g_VShaderNormalTex2, sizeof(g_VShaderNormalTex2)};
-    res = {input_layout, shader};
+    res = {elements, shader};
     m_FVFResources[fvf] = res;
 
     fvf = CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
     FVF::CreateInputLayoutFromFVF(fvf, elements);
-    input_layout = {elements.data(), elements.size()};
     shader = {g_VShaderColor1Tex1, sizeof(g_VShaderColor1Tex1)};
-    res = {input_layout, shader};
+    res = {elements, shader};
     m_FVFResources[fvf] = res;
 
     fvf = CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX2;
     FVF::CreateInputLayoutFromFVF(fvf, elements);
-    input_layout = {elements.data(), elements.size()};
     shader = {g_VShaderColor1Tex2, sizeof(g_VShaderColor1Tex2)};
-    res = {input_layout, shader};
+    res = {elements, shader};
     m_FVFResources[fvf] = res;
 
     fvf = CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1;
     FVF::CreateInputLayoutFromFVF(fvf, elements);
-    input_layout = {elements.data(), elements.size()};
     shader = {g_VShaderColor2Tex1, sizeof(g_VShaderColor2Tex1)};
-    res = {input_layout, shader};
+    res = {elements, shader};
     m_FVFResources[fvf] = res;
 
     fvf = CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX2;
     FVF::CreateInputLayoutFromFVF(fvf, elements);
-    input_layout = {elements.data(), elements.size()};
     shader = {g_VShaderColor2Tex2, sizeof(g_VShaderColor2Tex2)};
-    res = {input_layout, shader};
+    res = {elements, shader};
     m_FVFResources[fvf] = res;
 
     fvf = CKRST_VF_POSITION | CKRST_VF_TEX1;
     FVF::CreateInputLayoutFromFVF(fvf, elements);
-    input_layout = {elements.data(), elements.size()};
     shader = {g_VShaderTex, sizeof(g_VShaderTex)};
-    res = {input_layout, shader};
+    res = {elements, shader};
     m_FVFResources[fvf] = res;
 
     fvf = CKRST_VF_POSITION | CKRST_VF_DIFFUSE;
     FVF::CreateInputLayoutFromFVF(fvf, elements);
-    input_layout = {elements.data(), elements.size()};
     shader = {g_VShaderColor, sizeof(g_VShaderColor)};
-    res = {input_layout, shader};
+    res = {elements, shader};
     m_FVFResources[fvf] = res;
 }
 
@@ -327,7 +317,7 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
     for (auto &item : m_FVFResources)
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-        psoDesc.InputLayout = item.second.input_layout;
+        psoDesc.InputLayout = { item.second.input_layout.data(), item.second.input_layout.size() };
         psoDesc.pRootSignature = m_RootSignature.Get();
         psoDesc.VS = item.second.shader;
         psoDesc.PS = {g_PShaderSimple, sizeof(g_PShaderSimple)};
@@ -341,8 +331,10 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
         psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         psoDesc.SampleDesc.Count = 1;
 
+        ID3D12PipelineState *state = nullptr;
         D3DCall(m_Device->CreateGraphicsPipelineState(&psoDesc, 
-            IID_PPV_ARGS(m_PipelineState[item.first].GetAddressOf())));
+            IID_PPV_ARGS(&state)));
+        m_PipelineState[item.first] = state;
     }
 
     return hr;

@@ -233,7 +233,7 @@ typedef struct PSTexCombinatorConstantBufferStruct
 
 struct FVFResource
 {
-    D3D12_INPUT_LAYOUT_DESC input_layout;
+    std::vector<D3D12_INPUT_ELEMENT_DESC> input_layout;
     D3D12_SHADER_BYTECODE shader;
 };
 
