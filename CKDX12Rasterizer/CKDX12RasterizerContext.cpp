@@ -13,6 +13,8 @@
 #include "VShaderNormalTex2.h"
 #include "VShaderTex.h"
 #include "PShader.h"
+// TODO: Remove it soon
+#include "PShaderSimple.h"
 
 #include <algorithm>
 
@@ -211,6 +213,141 @@ HRESULT CKDX12RasterizerContext::CreateSyncObject() {
     return hr;
 }
 
+HRESULT CKDX12RasterizerContext::CreateRootSignature() {
+    HRESULT hr;
+    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+
+    // This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned
+    // will not be greater than this.
+    featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+
+    if (FAILED(m_Device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+    {
+        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+    }
+    CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+    CD3DX12_ROOT_PARAMETER1 rootParameters[1];
+
+    ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
+    // Allow input layout and deny uneccessary access to certain pipeline stages.
+    D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+    rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+    ComPtr<ID3DBlob> signature;
+    ComPtr<ID3DBlob> error;
+    D3DCall(
+        D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+    D3DCall(m_Device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
+                                                IID_PPV_ARGS(&m_RootSignature)));
+
+    return hr;
+}
+
+void CKDX12RasterizerContext::CreateFVFResources() {
+    DWORD fvf = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
+    std::vector<D3D12_INPUT_ELEMENT_DESC> elements;
+    FVF::CreateInputLayoutFromFVF(fvf, elements);
+    D3D12_INPUT_LAYOUT_DESC input_layout{elements.data(), elements.size()};
+    D3D12_SHADER_BYTECODE shader{g_VShader2DColor1, sizeof(g_VShader2DColor1)};
+    FVFResource res{input_layout, shader};
+    m_FVFResources[fvf] = res;
+
+    fvf = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1;
+    FVF::CreateInputLayoutFromFVF(fvf, elements);
+    input_layout = {elements.data(), elements.size()};
+    shader = {g_VShader2DColor2, sizeof(g_VShader2DColor2)};
+    res = {input_layout, shader};
+    m_FVFResources[fvf] = res;
+
+    fvf = CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1;
+    FVF::CreateInputLayoutFromFVF(fvf, elements);
+    input_layout = {elements.data(), elements.size()};
+    shader = {g_VShaderNormalTex1, sizeof(g_VShaderNormalTex1)};
+    res = {input_layout, shader};
+    m_FVFResources[fvf] = res;
+
+    fvf = CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX2;
+    FVF::CreateInputLayoutFromFVF(fvf, elements);
+    input_layout = {elements.data(), elements.size()};
+    shader = {g_VShaderNormalTex2, sizeof(g_VShaderNormalTex2)};
+    res = {input_layout, shader};
+    m_FVFResources[fvf] = res;
+
+    fvf = CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
+    FVF::CreateInputLayoutFromFVF(fvf, elements);
+    input_layout = {elements.data(), elements.size()};
+    shader = {g_VShaderColor1Tex1, sizeof(g_VShaderColor1Tex1)};
+    res = {input_layout, shader};
+    m_FVFResources[fvf] = res;
+
+    fvf = CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_TEX2;
+    FVF::CreateInputLayoutFromFVF(fvf, elements);
+    input_layout = {elements.data(), elements.size()};
+    shader = {g_VShaderColor1Tex2, sizeof(g_VShaderColor1Tex2)};
+    res = {input_layout, shader};
+    m_FVFResources[fvf] = res;
+
+    fvf = CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX1;
+    FVF::CreateInputLayoutFromFVF(fvf, elements);
+    input_layout = {elements.data(), elements.size()};
+    shader = {g_VShaderColor2Tex1, sizeof(g_VShaderColor2Tex1)};
+    res = {input_layout, shader};
+    m_FVFResources[fvf] = res;
+
+    fvf = CKRST_VF_POSITION | CKRST_VF_DIFFUSE | CKRST_VF_SPECULAR | CKRST_VF_TEX2;
+    FVF::CreateInputLayoutFromFVF(fvf, elements);
+    input_layout = {elements.data(), elements.size()};
+    shader = {g_VShaderColor2Tex2, sizeof(g_VShaderColor2Tex2)};
+    res = {input_layout, shader};
+    m_FVFResources[fvf] = res;
+
+    fvf = CKRST_VF_POSITION | CKRST_VF_TEX1;
+    FVF::CreateInputLayoutFromFVF(fvf, elements);
+    input_layout = {elements.data(), elements.size()};
+    shader = {g_VShaderTex, sizeof(g_VShaderTex)};
+    res = {input_layout, shader};
+    m_FVFResources[fvf] = res;
+
+    fvf = CKRST_VF_POSITION | CKRST_VF_DIFFUSE;
+    FVF::CreateInputLayoutFromFVF(fvf, elements);
+    input_layout = {elements.data(), elements.size()};
+    shader = {g_VShaderColor, sizeof(g_VShaderColor)};
+    res = {input_layout, shader};
+    m_FVFResources[fvf] = res;
+}
+
+HRESULT CKDX12RasterizerContext::CreatePSOs() {
+    HRESULT hr;
+    for (auto &item : m_FVFResources)
+    {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+        psoDesc.InputLayout = item.second.input_layout;
+        psoDesc.pRootSignature = m_RootSignature.Get();
+        psoDesc.VS = item.second.shader;
+        psoDesc.PS = {g_PShaderSimple, sizeof(g_PShaderSimple)};
+        psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+        psoDesc.DepthStencilState.DepthEnable = FALSE;
+        psoDesc.DepthStencilState.StencilEnable = FALSE;
+        psoDesc.SampleMask = UINT_MAX;
+        psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        psoDesc.NumRenderTargets = 1;
+        psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        psoDesc.SampleDesc.Count = 1;
+
+        D3DCall(m_Device->CreateGraphicsPipelineState(&psoDesc, 
+            IID_PPV_ARGS(m_PipelineState[item.first].GetAddressOf())));
+    }
+
+    return hr;
+}
+
 HRESULT CKDX12RasterizerContext::WaitForGpu()
 {
     HRESULT hr;
@@ -270,7 +407,9 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(CreateFrameResources());
 
     // TODO: Load initial assets here (shaders etc.)
-    
+    D3DCall(CreateRootSignature());
+    CreateFVFResources();
+    D3DCall(CreatePSOs());
 
     D3DCall(CreateSyncObject());
     return SUCCEEDED(hr);
@@ -297,9 +436,9 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
                                             m_RTVDescriptorSize);
     if (Flags & CKRST_CTXCLEAR_COLOR)
     {
-        VxColor color(Ccol);
-        /*const float color[] = {0.0f, 0.2f, 0.4f, 1.0f};*/
-        m_CommandList->ClearRenderTargetView(rtvHandle, (const float*)&color, 0, nullptr);
+        VxColor c(Ccol);
+        const float color[] = {0.0f, 0.2f, 0.4f, 1.0f};
+        m_CommandList->ClearRenderTargetView(rtvHandle, color/*(const float*)&c*/, 0, nullptr);
     }
     /*CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
                                             m_DSVDescriptorSize);

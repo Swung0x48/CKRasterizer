@@ -231,6 +231,12 @@ typedef struct PSTexCombinatorConstantBufferStruct
     CKDX12TexCombinatorConstant TexCombinator[MAX_TEX_STAGES];
 } PSTexCombinatorConstantBufferStruct;
 
+struct FVFResource
+{
+    D3D12_INPUT_LAYOUT_DESC input_layout;
+    D3D12_SHADER_BYTECODE shader;
+};
+
 class CKDX12RasterizerContext : public CKRasterizerContext
 {
 public:
@@ -333,6 +339,9 @@ protected:
     HRESULT CreateDescriptorHeap();
     HRESULT CreateFrameResources();
     HRESULT CreateSyncObject();
+    HRESULT CreateRootSignature();
+    void CreateFVFResources();
+    HRESULT CreatePSOs();
 
     HRESULT WaitForGpu();
     HRESULT MoveToNextFrame();
@@ -372,9 +381,13 @@ public:
     UINT m_DSVDescriptorSize;
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
+    ComPtr<ID3D12RootSignature> m_RootSignature;
     ComPtr<ID3D12CommandAllocator> m_CommandAllocators[m_BufferedFrameCount];
     ComPtr<ID3D12GraphicsCommandList> m_CommandList;
     std::vector<ID3D12CommandList *> m_PendingCommandList;
+    
+    std::unordered_map<DWORD, FVFResource> m_FVFResources;
+    std::unordered_map<DWORD, ComPtr<ID3D12PipelineState>> m_PipelineState;
 
     // Sync objects
     UINT m_FrameIndex = 0;
