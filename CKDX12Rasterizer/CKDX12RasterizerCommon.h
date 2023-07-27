@@ -3,8 +3,11 @@
 
 #include <cstdlib>
 #include <format>
-#include <intsafe.h>
 #include <string>
+
+#include <intsafe.h>
+
+#include "asio.hpp"
 
 #ifdef _DEBUG
 #define D3DCall(x)                                                                                                     \
