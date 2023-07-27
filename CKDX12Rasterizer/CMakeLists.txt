@@ -55,7 +55,7 @@ file(GLOB HLSL_VSHADER_FILES
 )
 
 file(GLOB HLSL_PSHADER_FILES
-    "PShader.hlsl"
+    "PShader*.hlsl"
 )
 
 set(HLSL_SHADER_FILES
