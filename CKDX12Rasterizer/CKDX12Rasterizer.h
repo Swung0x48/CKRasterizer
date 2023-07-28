@@ -3,6 +3,7 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include "CKRasterizer.h"
+#include "CKDX12RasterizerCommon.h"
 
 #include <vector>
 
@@ -340,11 +341,17 @@ protected:
     HRESULT CreateFrameResources();
     HRESULT CreateSyncObject();
     HRESULT CreateRootSignature();
-    void CreateFVFResources();
+    void PrepareShaders();
     HRESULT CreatePSOs();
 
     HRESULT WaitForGpu();
     HRESULT MoveToNextFrame();
+
+    CKBOOL TriangleFanToList(CKWORD VOffset, CKDWORD VCount, std::vector<CKWORD> &strip_index);
+    CKBOOL TriangleFanToList(CKWORD *indices, int count, std::vector<CKWORD> &strip_index);
+    
+    CKBOOL InternalDrawPrimitive();
+    CKBOOL InternalDrawPrimitiveIndexed();
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 #endif
@@ -389,9 +396,14 @@ public:
     std::unordered_map<DWORD, FVFResource> m_FVFResources;
     std::unordered_map<DWORD, ComPtr<ID3D12PipelineState>> m_PipelineState;
 
+    ComPtr<ID3D12Resource> m_VertexBuffer;
+    D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView;
+
     // Sync objects
     UINT m_FrameIndex = 0;
     HANDLE m_FenceEvent;
     ComPtr<ID3D12Fence> m_Fence;
     UINT64 m_FenceValues[m_BufferedFrameCount];
+
+    asio::thread_pool m_ThreadPool;
 };

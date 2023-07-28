@@ -18,6 +18,12 @@
 
 #include <algorithm>
 
+#define LOGGING 0
+#if LOGGING
+#include <conio.h>
+static bool step_mode = false;
+#endif
+
 
 void flag_toggle(uint32_t *state_dword, uint32_t flag, bool enabled)
 {
@@ -179,6 +185,13 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
         D3DCall(m_Device->CreateCommandAllocator(
             D3D12_COMMAND_LIST_TYPE_DIRECT,
             IID_PPV_ARGS(&m_CommandAllocators[i])));
+#if defined(DEBUG) || defined(_DEBUG)
+        static char buf[50];
+        sprintf(buf, "cmdAllocator%u", i);
+        WCHAR wstr[100];
+        MultiByteToWideChar(CP_ACP, 0, buf, strlen(buf), wstr, 100);
+        m_CommandAllocators[i]->SetName(wstr);
+#endif
     }
 
     // ...also, a command list for each of them
@@ -249,7 +262,7 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
     return hr;
 }
 
-void CKDX12RasterizerContext::CreateFVFResources() {
+void CKDX12RasterizerContext::PrepareShaders() {
     DWORD fvf = CKRST_VF_RASTERPOS | CKRST_VF_DIFFUSE | CKRST_VF_TEX1;
     std::vector<D3D12_INPUT_ELEMENT_DESC> elements;
     FVF::CreateInputLayoutFromFVF(fvf, elements);
@@ -314,6 +327,7 @@ void CKDX12RasterizerContext::CreateFVFResources() {
 
 HRESULT CKDX12RasterizerContext::CreatePSOs() {
     HRESULT hr;
+    assert(!m_FVFResources.empty());
     for (auto &item : m_FVFResources)
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -380,6 +394,14 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
 CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
                                        CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
+    m_InCreateDestroy = TRUE;
+#if (LOGGING)
+    AllocConsole();
+    freopen("CON", "w", stdout);
+    freopen("CON", "w", stderr);
+#endif
+    memset(m_FenceValues, 0, sizeof(m_FenceValues));
+
     HRESULT hr;
     m_Window = Window;
     m_PosX = PosX;
@@ -400,10 +422,11 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
 
     // TODO: Load initial assets here (shaders etc.)
     D3DCall(CreateRootSignature());
-    CreateFVFResources();
+    PrepareShaders();
     D3DCall(CreatePSOs());
 
     D3DCall(CreateSyncObject());
+    m_InCreateDestroy = FALSE;
     return SUCCEEDED(hr);
 }
 
@@ -422,6 +445,9 @@ CKBOOL CKDX12RasterizerContext::Resize(int PosX, int PosY, int Width, int Height
 CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD Stencil, int RectCount,
                                       CKRECT *rects)
 {
+#if LOGGING
+    fprintf(stderr, "Clear\n");
+#endif
     if (!m_SceneBegined)
         BeginScene();
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
@@ -429,7 +455,7 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
     if (Flags & CKRST_CTXCLEAR_COLOR)
     {
         VxColor c(Ccol);
-        const float color[] = {0.0f, 0.2f, 0.4f, 1.0f};
+        const float color[] = {0.0f, 0.2f, 0.5f, 1.0f};
         m_CommandList->ClearRenderTargetView(rtvHandle, color/*(const float*)&c*/, 0, nullptr);
     }
     /*CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
@@ -451,6 +477,10 @@ CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync)
 {
     if (m_SceneBegined)
         EndScene();
+#if LOGGING
+    fprintf(stderr, "BackToFront\n");
+#endif
+
     HRESULT hr;
     
     D3DCall(m_SwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING));
@@ -461,6 +491,9 @@ CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync)
 CKBOOL CKDX12RasterizerContext::BeginScene() {
     if (m_SceneBegined)
         return TRUE;
+#if LOGGING
+    fprintf(stderr, "BeginScene\n");
+#endif
     m_SceneBegined = TRUE;
     HRESULT hr;
     D3DCall(m_CommandAllocators[m_FrameIndex]->Reset());
@@ -471,12 +504,18 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
                                             m_RTVDescriptorSize);
     m_CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+    m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
     return TRUE;
 }
 
 CKBOOL CKDX12RasterizerContext::EndScene() {
     if (!m_SceneBegined)
         return TRUE;
+
+#if LOGGING
+    fprintf(stderr, "EndScene\n");
+#endif
+
     HRESULT hr;
 
     const auto transitionToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -600,59 +639,160 @@ CKBOOL CKDX12RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const v
 //    return ibo;
 //}
 //
-//CKDX12IndexBufferDesc *CKDX12RasterizerContext::TriangleFanToList(CKWORD VOffset, CKDWORD VCount, int *startIndex, int* newIndexCount)
-//{
-//    ZoneScopedN(__FUNCTION__);
-//    static std::vector<CKWORD> strip_index;
-//    strip_index.clear();
-//    strip_index.reserve(VCount * 3);
-//    // Center at VOffset
-//    for (CKWORD i = 2; i < VCount; ++i)
-//    {
-//        strip_index.emplace_back(VOffset);
-//        strip_index.emplace_back(i - 1 + VOffset);
-//        strip_index.emplace_back(i + VOffset);
-//    }
-//    if (strip_index.empty())
-//        return nullptr;
-//    *newIndexCount = strip_index.size();
-//    return GenerateIB(strip_index.data(), strip_index.size(), startIndex);
-//}
-//
-//CKDX12IndexBufferDesc *CKDX12RasterizerContext::TriangleFanToList(CKWORD *indices, int count, int *startIndex,
-//                                                                  int *newIndexCount)
-//{
-//    if (!indices)
-//        return nullptr;
-//    std::vector<CKWORD> strip_index;
-//    CKWORD center = indices[0];
-//    for (CKWORD i = 2; i < count; ++i)
-//    {
-//        strip_index.emplace_back(center);
-//        strip_index.emplace_back(indices[i - 1]);
-//        strip_index.emplace_back(indices[i]);
-//    }
-//    if (strip_index.empty())
-//        return nullptr;
-//    *newIndexCount = strip_index.size();
-//    return GenerateIB(strip_index.data(), strip_index.size(), startIndex);
-//}
+CKBOOL CKDX12RasterizerContext::TriangleFanToList(CKWORD VOffset, CKDWORD VCount,
+                                                                  std::vector<CKWORD>& strip_index)
+{
+    strip_index.clear();
+    strip_index.reserve(VCount * 3);
+    // Center at VOffset
+    for (CKWORD i = 2; i < VCount; ++i)
+    {
+        strip_index.emplace_back(VOffset);
+        strip_index.emplace_back(i - 1 + VOffset);
+        strip_index.emplace_back(i + VOffset);
+    }
+    return !strip_index.empty();
+}
+
+CKBOOL CKDX12RasterizerContext::TriangleFanToList(CKWORD *indices, int count,
+                                                  std::vector<CKWORD> &strip_index)
+{
+    if (!indices)
+        return FALSE;
+    CKWORD center = indices[0];
+    for (CKWORD i = 2; i < count; ++i)
+    {
+        strip_index.emplace_back(center);
+        strip_index.emplace_back(indices[i - 1]);
+        strip_index.emplace_back(indices[i]);
+    }
+    return !strip_index.empty();
+}
 
 CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
                                               VxDrawPrimitiveData *data)
 {
+    HRESULT hr;
+#if LOGGING
+    fprintf(stderr, "DrawPrimitive\n");
+#endif
+    if (!m_SceneBegined)
+        BeginScene();
+    CKDWORD vertexSize;
+    CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
+    size_t vbSize = vertexSize * data->VertexCount;
+    auto vb = std::vector<CKBYTE>(vbSize);
+    CKRSTLoadVertexBuffer(vb.data(), vertexFormat, vertexSize, data);
+
+    std::vector<CKWORD> index_vec;
+    switch (pType)
+    {
+        case VX_TRIANGLELIST:
+            if (indices)
+            {
+                index_vec.resize(indexcount);
+                memcpy(index_vec.data(), indices, sizeof(CKWORD) * indexcount);
+            }
+            break;
+        case VX_TRIANGLEFAN:
+            if (indices)
+                TriangleFanToList(indices, indexcount, index_vec);
+            else
+                TriangleFanToList((CKWORD)0, indexcount, index_vec);
+            break;
+        case VX_POINTLIST:
+            fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
+            break;
+        case VX_LINELIST:
+            fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
+            break;
+        case VX_LINESTRIP:
+            fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
+            break;
+        default:
+            fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
+            break;
+    }
+    auto uploadHeapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+    auto bufResDesc = CD3DX12_RESOURCE_DESC::Buffer(vbSize);
+    D3DCall(m_Device->CreateCommittedResource(&uploadHeapProp, D3D12_HEAP_FLAG_NONE, &bufResDesc,
+                                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&m_VertexBuffer)));
+    // Copy the vertex data to the vertex buffer.
+    UINT8 *pVertexDataBegin;
+    CD3DX12_RANGE readRange(0, 0); // We do not intend to read from this resource on the CPU.
+    D3DCall(m_VertexBuffer->Map(0, &readRange, reinterpret_cast<void **>(&pVertexDataBegin)));
+    memcpy(pVertexDataBegin, vb.data(), vbSize);
+    m_VertexBuffer->Unmap(0, nullptr);
+    m_VertexBufferView.BufferLocation = m_VertexBuffer->GetGPUVirtualAddress();
+    m_VertexBufferView.StrideInBytes = vertexSize;
+    m_VertexBufferView.SizeInBytes = vbSize;
+    D3DCall(m_Device->CreateFence(m_FenceValues[m_FrameIndex], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_Fence)));
+    m_FenceValues[m_FrameIndex]++;
+    m_FenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (m_FenceEvent == nullptr)
+    {
+        D3DCall(HRESULT_FROM_WIN32(GetLastError()));
+    }
+    WaitForGpu();
+
+    // Populate command list
+
+
+    /*asio::post(m_ThreadPool,
+               [this, index_vec, vb = std::move(vb)]() 
+    {
+        
+    });*/
     return TRUE;
 }
 
 CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD StartVIndex,
                                                 CKDWORD VertexCount, CKWORD *indices, int indexcount)
 {
+    switch (pType)
+    {
+        case VX_TRIANGLELIST:
+            break;
+        case VX_TRIANGLEFAN:
+            break;
+        case VX_POINTLIST:
+            fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
+            break;
+        case VX_LINELIST:
+            fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
+            break;
+        case VX_LINESTRIP:
+            fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
+            break;
+        default:
+            fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
+            break;
+    }
     return TRUE;
 }
 
 CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                                   CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
+    switch (pType)
+    {
+        case VX_TRIANGLELIST:
+            break;
+        case VX_TRIANGLEFAN:
+            break;
+        case VX_POINTLIST:
+            fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
+            break;
+        case VX_LINELIST:
+            fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
+            break;
+        case VX_LINESTRIP:
+            fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
+            break;
+        default:
+            fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
+            break;
+    }
     return TRUE;
 }
 CKBOOL CKDX12RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)

@@ -68,7 +68,7 @@ XBOOL CKDX12Rasterizer::Start(WIN_HANDLE AppWnd)
             debugController->EnableDebugLayer();
 
             // Enable additional debug layers.
-            dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+            dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;   
         }
     }
 #endif
