@@ -18,12 +18,21 @@
 
 #include <algorithm>
 
-#define LOGGING 0
+#if defined(DEBUG) || defined(_DEBUG)
+    #define STATUS 1
+    #define LOGGING 1
+#endif
+
 #if LOGGING
 #include <conio.h>
 static bool step_mode = false;
 #endif
 
+#if STATUS
+static int directbat = 0;
+static int vbbat = 0;
+static int vbibbat = 0;
+#endif
 
 void flag_toggle(uint32_t *state_dword, uint32_t flag, bool enabled)
 {
@@ -400,6 +409,12 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     freopen("CON", "w", stdout);
     freopen("CON", "w", stderr);
 #endif
+    m_OriginalTitle.resize(GetWindowTextLengthA(GetAncestor((HWND)Window, GA_ROOT)) + 1);
+    GetWindowTextA(GetAncestor((HWND)Window, GA_ROOT), m_OriginalTitle.data(), m_OriginalTitle.size());
+    while (m_OriginalTitle.back() == '\0')
+        m_OriginalTitle.pop_back();
+
+    
     memset(m_FenceValues, 0, sizeof(m_FenceValues));
 
     HRESULT hr;
@@ -455,8 +470,8 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
     if (Flags & CKRST_CTXCLEAR_COLOR)
     {
         VxColor c(Ccol);
-        const float color[] = {0.0f, 0.2f, 0.5f, 1.0f};
-        m_CommandList->ClearRenderTargetView(rtvHandle, color/*(const float*)&c*/, 0, nullptr);
+        //const float color[] = {0.0f, 0.2f, 0.5f, 1.0f};
+        m_CommandList->ClearRenderTargetView(rtvHandle, (const float*)&c, 0, nullptr);
     }
     /*CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
                                             m_DSVDescriptorSize);
@@ -479,6 +494,15 @@ CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync)
         EndScene();
 #if LOGGING
     fprintf(stderr, "BackToFront\n");
+#endif
+#if STATUS
+    // fprintf(stderr, "swap\n");
+    SetTitleStatus("D3D12 | DXGI %s | batch stats: direct %d, vb %d, vbib %d",
+                   m_Owner->m_DXGIVersionString.c_str(), directbat, vbbat, vbibbat);
+
+    directbat = 0;
+    vbbat = 0;
+    vbibbat = 0;
 #endif
 
     HRESULT hr;
@@ -669,12 +693,41 @@ CKBOOL CKDX12RasterizerContext::TriangleFanToList(CKWORD *indices, int count,
     return !strip_index.empty();
 }
 
+static CKDWORD ib_idx = 0;
+CKDWORD CKDX12RasterizerContext::GetDynamicIndexBuffer(CKDWORD IndexCount, CKDWORD AddKey)
+{
+    ib_idx %= m_IndexBuffers.Size();
+    CKIndexBufferDesc *ib = m_IndexBuffers[ib_idx];
+    if (!ib || ib->m_MaxIndexCount < IndexCount)
+    {
+        if (ib)
+        {
+            delete ib;
+            m_IndexBuffers[ib_idx] = NULL;
+        }
+
+        CKIndexBufferDesc nib;
+        nib.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+        nib.m_MaxIndexCount = IndexCount;
+        nib.m_CurrentICount = 0;
+        if (AddKey != 0)
+            nib.m_Flags |= CKRST_VB_SHARED;
+        CreateObject(ib_idx, CKRST_OBJ_INDEXBUFFER, &nib);
+    }
+    return ib_idx++;
+}
+
+static size_t idx_vb = 0;
+static size_t idx_ib = 0;
 CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
                                               VxDrawPrimitiveData *data)
 {
     HRESULT hr;
 #if LOGGING
     fprintf(stderr, "DrawPrimitive\n");
+#endif
+#if STATUS
+    ++directbat;
 #endif
     if (!m_SceneBegined)
         BeginScene();
@@ -684,21 +737,24 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     auto vb = std::vector<CKBYTE>(vbSize);
     CKRSTLoadVertexBuffer(vb.data(), vertexFormat, vertexSize, data);
 
-    std::vector<CKWORD> index_vec;
+    std::vector<CKWORD> ib;
     switch (pType)
     {
         case VX_TRIANGLELIST:
             if (indices)
             {
-                index_vec.resize(indexcount);
-                memcpy(index_vec.data(), indices, sizeof(CKWORD) * indexcount);
+                ib.resize(indexcount);
+                memcpy(ib.data(), indices, sizeof(CKWORD) * indexcount);
             }
             break;
         case VX_TRIANGLEFAN:
             if (indices)
-                TriangleFanToList(indices, indexcount, index_vec);
+                TriangleFanToList(indices, indexcount, ib);
             else
-                TriangleFanToList((CKWORD)0, indexcount, index_vec);
+            {
+                CKWORD voffset = 0;
+                TriangleFanToList(voffset, indexcount, ib);
+            }
             break;
         case VX_POINTLIST:
             fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
@@ -713,30 +769,60 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
             fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
             break;
     }
-    auto uploadHeapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-    auto bufResDesc = CD3DX12_RESOURCE_DESC::Buffer(vbSize);
-    D3DCall(m_Device->CreateCommittedResource(&uploadHeapProp, D3D12_HEAP_FLAG_NONE, &bufResDesc,
-                                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&m_VertexBuffer)));
-    // Copy the vertex data to the vertex buffer.
-    UINT8 *pVertexDataBegin;
-    CD3DX12_RANGE readRange(0, 0); // We do not intend to read from this resource on the CPU.
-    D3DCall(m_VertexBuffer->Map(0, &readRange, reinterpret_cast<void **>(&pVertexDataBegin)));
-    memcpy(pVertexDataBegin, vb.data(), vbSize);
-    m_VertexBuffer->Unmap(0, nullptr);
-    m_VertexBufferView.BufferLocation = m_VertexBuffer->GetGPUVirtualAddress();
-    m_VertexBufferView.StrideInBytes = vertexSize;
-    m_VertexBufferView.SizeInBytes = vbSize;
-    D3DCall(m_Device->CreateFence(m_FenceValues[m_FrameIndex], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_Fence)));
-    m_FenceValues[m_FrameIndex]++;
-    m_FenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-    if (m_FenceEvent == nullptr)
+    CKBOOL clip = FALSE;
+    if ((data->Flags & CKRST_DP_DOCLIP))
     {
-        D3DCall(HRESULT_FROM_WIN32(GetLastError()));
+        SetRenderState(VXRENDERSTATE_CLIPPING, 1);
+        clip = TRUE;
     }
-    WaitForGpu();
-
-    // Populate command list
-
+    else
+    {
+        SetRenderState(VXRENDERSTATE_CLIPPING, 0);
+    }
+//    auto vsize = m_VertexBuffers.Size();
+//    auto isize = m_IndexBuffers.Size();
+//    CKDWORD VB = idx_vb++;
+//    idx_vb %= vsize;
+//    CKVertexBufferDesc vdesc;
+//    vdesc.m_VertexSize = vertexSize;
+//    vdesc.m_MaxVertexCount = data->VertexCount;
+//    vdesc.m_VertexFormat = vertexFormat;
+//    CreateVertexBuffer(VB, &vdesc);
+//    auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
+//    assert(vbo && vbo->m_MaxVertexCount >= data->VertexCount && vertexSize == vbo->m_VertexSize);
+//    void *pbData = nullptr;
+//    CKDWORD vbase = 0;
+//    pbData = vbo->Lock();
+//    vbase = vbo->m_CurrentVCount;
+//    memcpy(pbData, vb.data(), vb.size() * vbo->m_VertexSize);
+//    vbo->Unlock();
+//    pbData = nullptr;
+//
+//    auto IB = GetDynamicIndexBuffer(ib.size(), clip);
+//    auto *ibo = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
+//    assert(ibo && ibo->m_MaxIndexCount >= ib.size());
+//    CKDWORD ibase = 0;
+//    pbData = ibo->Lock();
+//    vbase = ibo->m_CurrentICount;
+//    memcpy(pbData, ib.data(), ib.size() * sizeof(CKWORD));
+//    ibo->Unlock();
+//    WaitForGpu();
+//#if LOGGING
+//    fprintf(stderr, "VB, IB: %d %d\n", VB, IB);
+//#endif
+//
+//    // Populate command list
+//    m_CommandList->SetPipelineState(m_PipelineState[vertexFormat].Get());
+//    m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+//    auto to_vb = CD3DX12_RESOURCE_BARRIER::Transition(vbo->DxResource.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+//                                                      D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+//    m_CommandList->ResourceBarrier(1, &to_vb);
+//    m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
+//    auto to_ib = CD3DX12_RESOURCE_BARRIER::Transition(vbo->DxResource.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+//                                                      D3D12_RESOURCE_STATE_INDEX_BUFFER);
+//    m_CommandList->ResourceBarrier(1, &to_ib);
+//    m_CommandList->IASetIndexBuffer(&ibo->DxView);
+//    m_CommandList->DrawIndexedInstanced(ib.size(), 1, ibase, vbase, 0);
 
     /*asio::post(m_ThreadPool,
                [this, index_vec, vb = std::move(vb)]() 
@@ -749,6 +835,9 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD StartVIndex,
                                                 CKDWORD VertexCount, CKWORD *indices, int indexcount)
 {
+#if STATUS
+    ++vbbat;
+#endif
     switch (pType)
     {
         case VX_TRIANGLELIST:
@@ -774,6 +863,9 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
 CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                                   CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
+#if STATUS
+    ++vbibbat;
+#endif
     switch (pType)
     {
         case VX_TRIANGLELIST:
@@ -874,11 +966,11 @@ CKBOOL CKDX12RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *
     pd.PositionPtr = p;
     pd.ColorPtr = c;
     pd.TexCoordPtr = t;
-    CKWORD idx[6] = {0, 1, 2, 0, 2, 3};
+    static const CKWORD idx[6] = {0, 1, 2, 0, 2, 3};
     SetTexture(spr->Textures.Front().IndexTexture);
     SetRenderState(VXRENDERSTATE_CULLMODE, VXCULL_NONE);
     SetRenderState(VXRENDERSTATE_LIGHTING, FALSE);
-    DrawPrimitive(VX_TRIANGLELIST, idx, 6, &pd);
+    DrawPrimitive(VX_TRIANGLELIST, const_cast<CKWORD *>(idx), 6, &pd);
     return TRUE;
 }
 int CKDX12RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc)
@@ -956,7 +1048,18 @@ bool operator==(const CKVertexBufferDesc& a, const CKVertexBufferDesc& b){
         a.m_VertexSize == b.m_VertexSize;
 }
 
-CKBOOL CKDX12RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat) { return TRUE; }
+CKBOOL CKDX12RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat)
+{
+    if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
+        return FALSE;
+
+    auto *desc = new CKDX12VertexBufferDesc(*DesiredFormat);
+    delete m_VertexBuffers[VB];
+    auto succeeded = desc->Create(this);
+    assert(succeeded);
+    m_VertexBuffers[VB] = desc;
+    return succeeded;
+}
 
 bool operator==(const CKIndexBufferDesc &a, const CKIndexBufferDesc &b)
 {
@@ -964,4 +1067,14 @@ bool operator==(const CKIndexBufferDesc &a, const CKIndexBufferDesc &b)
         a.m_MaxIndexCount == b.m_MaxIndexCount;
 }
 
-CKBOOL CKDX12RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat) { return TRUE; }
+CKBOOL CKDX12RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat) {
+    if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
+        return FALSE;
+
+    auto *desc = new CKDX12IndexBufferDesc(*DesiredFormat);
+    delete m_IndexBuffers[IB];
+    auto succeeded = desc->Create(this);
+    assert(succeeded);
+    m_IndexBuffers[IB] = desc;
+    return succeeded;
+}

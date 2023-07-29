@@ -238,6 +238,36 @@ struct FVFResource
     D3D12_SHADER_BYTECODE shader;
 };
 
+typedef struct CKDX12VertexBufferDesc : public CKVertexBufferDesc
+{
+public:
+    ComPtr<ID3D12Resource> DxResource;
+    D3D12_VERTEX_BUFFER_VIEW DxView;
+    CKDX12VertexBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW)); }
+    CKDX12VertexBufferDesc(const CKVertexBufferDesc& desc): CKVertexBufferDesc(desc)
+    {
+        ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW));
+    }
+    virtual CKBOOL Create(CKDX12RasterizerContext *ctx);
+    virtual void *Lock();
+    virtual void Unlock();
+} CKDX12VertexBufferDesc;
+
+typedef struct CKDX12IndexBufferDesc : public CKIndexBufferDesc
+{
+public:
+    ComPtr<ID3D12Resource> DxResource;
+    D3D12_INDEX_BUFFER_VIEW DxView;
+    CKDX12IndexBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
+    CKDX12IndexBufferDesc(const CKIndexBufferDesc &desc) : CKIndexBufferDesc(desc)
+    {
+        ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW));
+    }
+    virtual CKBOOL Create(CKDX12RasterizerContext *ctx);
+    virtual void *Lock();
+    virtual void Unlock();
+} CKDX12IndexBufferDesc;
+
 class CKDX12RasterizerContext : public CKRasterizerContext
 {
 public:
@@ -349,6 +379,8 @@ protected:
 
     CKBOOL TriangleFanToList(CKWORD VOffset, CKDWORD VCount, std::vector<CKWORD> &strip_index);
     CKBOOL TriangleFanToList(CKWORD *indices, int count, std::vector<CKWORD> &strip_index);
+
+    CKDWORD GetDynamicIndexBuffer(CKDWORD IndexCount, CKDWORD AddKey);
     
     CKBOOL InternalDrawPrimitive();
     CKBOOL InternalDrawPrimitiveIndexed();
@@ -396,8 +428,11 @@ public:
     std::unordered_map<DWORD, FVFResource> m_FVFResources;
     std::unordered_map<DWORD, ComPtr<ID3D12PipelineState>> m_PipelineState;
 
-    ComPtr<ID3D12Resource> m_VertexBuffer;
+    /*ComPtr<ID3D12Resource> m_VertexBuffer;
     D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView;
+
+    ComPtr<ID3D12Resource> m_IndexBuffer;
+    D3D12_INDEX_BUFFER_VIEW m_IndexBufferView;*/
 
     // Sync objects
     UINT m_FrameIndex = 0;
