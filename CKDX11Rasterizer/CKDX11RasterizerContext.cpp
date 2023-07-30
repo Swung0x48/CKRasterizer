@@ -1940,7 +1940,7 @@ void *CKDX11RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
     return desc->Lock(this, StartVertex, VertexCount * desc->m_VertexSize, (Lock & CKRST_LOCK_DISCARD));
 }
 CKBOOL CKDX11RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
-    if (VB > m_IndexBuffers.Size())
+    if (VB > m_VertexBuffers.Size())
         return FALSE;
     auto *desc = static_cast<CKDX11VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!desc)
