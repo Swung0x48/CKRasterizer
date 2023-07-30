@@ -6,6 +6,7 @@
 #include "CKDX12RasterizerCommon.h"
 
 #include <vector>
+#include <deque>
 
 #include <Windows.h>
 #include <d3d12.h>
@@ -433,6 +434,10 @@ public:
 
     ComPtr<ID3D12Resource> m_IndexBuffer;
     D3D12_INDEX_BUFFER_VIEW m_IndexBufferView;*/
+    std::deque<CKDX12VertexBufferDesc> m_VertexBufferSubmitted;
+    size_t m_VertexBufferSubmittedCount[m_BufferedFrameCount] = {0};
+    std::deque<CKDX12IndexBufferDesc> m_IndexBufferSubmitted;
+    size_t m_IndexBufferSubmittedCount[m_BufferedFrameCount] = {0};
 
     // Sync objects
     UINT m_FrameIndex = 0;

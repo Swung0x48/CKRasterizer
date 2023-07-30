@@ -254,8 +254,8 @@ CKBOOL CKDX12RasterizerDriver::InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapte
     m_3DCaps.RasterCaps |= CKRST_RASTERCAPS_WFOG; // w fog hardcoded in shader
     m_3DCaps.SrcBlendCaps = 0x1fff; // everything
     m_3DCaps.DestBlendCaps = 0x1fff; // ditto
-    m_2DCaps.AvailableVideoMemory = 1024;
-    m_2DCaps.MaxVideoMemory = 1024;
+    m_2DCaps.AvailableVideoMemory = 4096;
+    m_2DCaps.MaxVideoMemory = 4096;
     m_2DCaps.Family = CKRST_DIRECTX;
     m_2DCaps.Caps = (CKRST_2DCAPS_3D | CKRST_2DCAPS_WINDOWED);
 
