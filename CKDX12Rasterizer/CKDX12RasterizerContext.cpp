@@ -364,6 +364,17 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
     return hr;
 }
 
+void CKDX12RasterizerContext::CreateConstantBuffers() {
+    m_VSConstantBuffer.Create(this, sizeof(VSConstantBufferStruct));
+    m_PSConstantBuffer.Create(this, sizeof(PSConstantBufferStruct));
+    m_PSLightConstantBuffer.Create(this, sizeof(PSLightConstantBufferStruct));
+    m_PSTexCombinatorConstantBuffer.Create(this, sizeof(PSTexCombinatorConstantBufferStruct));
+    ZeroMemory(&m_VSCBuffer, sizeof(VSConstantBufferStruct));
+    ZeroMemory(&m_PSCBuffer, sizeof(PSConstantBufferStruct));
+    ZeroMemory(&m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
+    ZeroMemory(&m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));
+}
+
 HRESULT CKDX12RasterizerContext::WaitForGpu()
 {
     HRESULT hr;
@@ -455,6 +466,7 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(CreateRootSignature());
     PrepareShaders();
     D3DCall(CreatePSOs());
+    CreateConstantBuffers();
 
     D3DCall(CreateSyncObject());
     m_InCreateDestroy = FALSE;
@@ -999,6 +1011,23 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     m_CommandList->IASetVertexBuffers(0, 1, &m_VertexBufferSubmitted.back().DxView);
     m_CommandList->IASetIndexBuffer(&m_IndexBufferSubmitted.back().DxView);
+
+    if (!m_VSConstantBufferUpToDate)
+    {
+        UpdateMatrices(WORLD_TRANSFORM);
+        // this->UpdateMatrices(VIEW_TRANSFORM);
+        Vx3DTransposeMatrix(m_VSCBuffer.WorldMatrix, m_WorldMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.ViewMatrix, m_ViewMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
+        InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
+        InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
+        void* pData = m_VSConstantBuffer.Lock();
+        memcpy(pData, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
+        m_VSConstantBuffer.Unlock();
+        m_VSConstantBufferUpToDate = TRUE;
+    }
+    m_CommandList->SetGraphicsRootConstantBufferView(0, m_VSConstantBuffer.DxResource->GetGPUVirtualAddress());
     m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
     return TRUE;
 }

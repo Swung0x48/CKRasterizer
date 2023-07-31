@@ -269,6 +269,17 @@ public:
     virtual void Unlock();
 } CKDX12IndexBufferDesc;
 
+typedef struct CKDX12ConstantBufferDesc
+{
+public:
+    ComPtr<ID3D12Resource> DxResource;
+    D3D12_INDEX_BUFFER_VIEW DxView;
+    CKDX12ConstantBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
+    virtual CKBOOL Create(CKDX12RasterizerContext *ctx, UINT size);
+    virtual void *Lock();
+    virtual void Unlock();
+} CKDX12ConstantBufferDesc;
+
 class CKDX12RasterizerContext : public CKRasterizerContext
 {
 public:
@@ -374,6 +385,7 @@ protected:
     HRESULT CreateRootSignature();
     void PrepareShaders();
     HRESULT CreatePSOs();
+    void CreateConstantBuffers();
 
     HRESULT WaitForGpu();
     HRESULT MoveToNextFrame();
@@ -432,6 +444,10 @@ public:
     CD3DX12_VIEWPORT m_Viewport;
     CD3DX12_RECT m_ScissorRect;
 
+    CKDX12ConstantBufferDesc m_VSConstantBuffer;
+    CKDX12ConstantBufferDesc m_PSConstantBuffer;
+    CKDX12ConstantBufferDesc m_PSLightConstantBuffer;
+    CKDX12ConstantBufferDesc m_PSTexCombinatorConstantBuffer;
     VSConstantBufferStruct m_VSCBuffer;
     PSConstantBufferStruct m_PSCBuffer;
     PSLightConstantBufferStruct m_PSLightCBuffer;
