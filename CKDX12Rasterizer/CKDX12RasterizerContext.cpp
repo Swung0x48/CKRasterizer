@@ -375,13 +375,13 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
 
 void CKDX12RasterizerContext::CreateConstantBuffers() {
     m_VSConstantBuffer.Create(this, sizeof(VSConstantBufferStruct));
-    m_PSConstantBuffer.Create(this, sizeof(PSConstantBufferStruct));
+   /* m_PSConstantBuffer.Create(this, sizeof(PSConstantBufferStruct));
     m_PSLightConstantBuffer.Create(this, sizeof(PSLightConstantBufferStruct));
-    m_PSTexCombinatorConstantBuffer.Create(this, sizeof(PSTexCombinatorConstantBufferStruct));
+    m_PSTexCombinatorConstantBuffer.Create(this, sizeof(PSTexCombinatorConstantBufferStruct));*/
     ZeroMemory(&m_VSCBuffer, sizeof(VSConstantBufferStruct));
-    ZeroMemory(&m_PSCBuffer, sizeof(PSConstantBufferStruct));
+    /*ZeroMemory(&m_PSCBuffer, sizeof(PSConstantBufferStruct));
     ZeroMemory(&m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
-    ZeroMemory(&m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));
+    ZeroMemory(&m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));*/
 }
 
 HRESULT CKDX12RasterizerContext::WaitForGpu()
