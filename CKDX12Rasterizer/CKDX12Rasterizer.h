@@ -273,7 +273,7 @@ typedef struct CKDX12ConstantBufferDesc
 {
 public:
     ComPtr<ID3D12Resource> DxResource;
-    D3D12_INDEX_BUFFER_VIEW DxView;
+    D3D12_CONSTANT_BUFFER_VIEW_DESC DxView;
     CKDX12ConstantBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
     virtual CKBOOL Create(CKDX12RasterizerContext *ctx, UINT size);
     virtual void *Lock();
@@ -432,6 +432,7 @@ public:
     UINT m_RTVDescriptorSize;
     ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
     UINT m_DSVDescriptorSize;
+    ComPtr<ID3D12DescriptorHeap> m_CBVHeap;
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
     ComPtr<ID3D12RootSignature> m_RootSignature;

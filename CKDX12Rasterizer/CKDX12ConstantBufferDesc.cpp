@@ -5,7 +5,7 @@ CKBOOL CKDX12ConstantBufferDesc::Create(CKDX12RasterizerContext *ctx, UINT size)
 {
     HRESULT hr;
     auto uploadHeapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-    auto cbResDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
+    auto cbResDesc = CD3DX12_RESOURCE_DESC::Buffer((size % 256 == 0) ? size : (size / 256 * 256 + 256));
     D3DCall(ctx->m_Device->CreateCommittedResource(&uploadHeapProp, D3D12_HEAP_FLAG_NONE, &cbResDesc,
                                               D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                                               IID_PPV_ARGS(&DxResource)));
@@ -13,8 +13,8 @@ CKBOOL CKDX12ConstantBufferDesc::Create(CKDX12RasterizerContext *ctx, UINT size)
     DxResource->SetName(L"CB");
 #endif
     DxView.BufferLocation = DxResource->GetGPUVirtualAddress();
-    DxView.Format = DXGI_FORMAT_R16_UINT;
-    DxView.SizeInBytes = size;
+    DxView.SizeInBytes = (size % 256 == 0) ? size : (size / 256 * 256 + 256);
+    ctx->m_Device->CreateConstantBufferView(&DxView, ctx->m_CBVHeap->GetCPUDescriptorHandleForHeapStart());
     return SUCCEEDED(hr);
 }
 

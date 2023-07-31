@@ -20,7 +20,7 @@
 
 #if defined(DEBUG) || defined(_DEBUG)
     #define STATUS 1
-    #define LOGGING 1
+    #define LOGGING 0
 #endif
 
 #if LOGGING
@@ -162,6 +162,15 @@ HRESULT CKDX12RasterizerContext::CreateDescriptorHeap() {
     D3DCall(m_Device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_DSVHeap)));
     if (SUCCEEDED(hr))
         m_RTVDescriptorSize = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);*/
+
+    // Describe and create a constant buffer view (CBV) descriptor heap.
+    // Flags indicate that this descriptor heap can be bound to the pipeline
+    // and that descriptors contained in it can be referenced by a root table.
+    D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
+    cbvHeapDesc.NumDescriptors = 1;
+    cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    D3DCall(m_Device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_CBVHeap)));
 
     return hr;
 }
@@ -557,6 +566,9 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
                                             m_RTVDescriptorSize);
     m_CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
     m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
+    ID3D12DescriptorHeap *ppHeaps[] = {m_CBVHeap.Get()};
+    m_CommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+    m_CommandList->SetGraphicsRootDescriptorTable(0, m_CBVHeap->GetGPUDescriptorHandleForHeapStart());
     return TRUE;
 }
 
@@ -1027,7 +1039,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         m_VSConstantBuffer.Unlock();
         m_VSConstantBufferUpToDate = TRUE;
     }
-    m_CommandList->SetGraphicsRootConstantBufferView(0, m_VSConstantBuffer.DxResource->GetGPUVirtualAddress());
     m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
     return TRUE;
 }
