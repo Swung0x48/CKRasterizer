@@ -68,7 +68,13 @@ XBOOL CKDX12Rasterizer::Start(WIN_HANDLE AppWnd)
             debugController->EnableDebugLayer();
 
             // Enable additional debug layers.
-            dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;   
+            dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+
+            ComPtr<ID3D12Debug1> debugController1;
+            if (SUCCEEDED(debugController.As(&debugController1)))
+            {
+                debugController1->SetEnableGPUBasedValidation(TRUE);
+            }
         }
     }
 #endif

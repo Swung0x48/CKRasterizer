@@ -412,6 +412,7 @@ public:
     CKDX12Rasterizer *m_Owner;
     BOOL m_Inited = FALSE;
 
+    // Pipeline objects
     ComPtr<ID3D12Device> m_Device;
     ComPtr<ID3D12CommandQueue> m_CommandQueue;
     ComPtr<IDXGISwapChain3> m_SwapChain;
@@ -428,6 +429,17 @@ public:
     
     std::unordered_map<DWORD, FVFResource> m_FVFResources;
     std::unordered_map<DWORD, ComPtr<ID3D12PipelineState>> m_PipelineState;
+    CD3DX12_VIEWPORT m_Viewport;
+    CD3DX12_RECT m_ScissorRect;
+
+    VSConstantBufferStruct m_VSCBuffer;
+    PSConstantBufferStruct m_PSCBuffer;
+    PSLightConstantBufferStruct m_PSLightCBuffer;
+    PSTexCombinatorConstantBufferStruct m_PSTexCombinatorCBuffer;
+    CKBOOL m_VSConstantBufferUpToDate = FALSE;
+    CKBOOL m_PSConstantBufferUpToDate = FALSE;
+    CKBOOL m_PSLightConstantBufferUpToDate = FALSE;
+    CKBOOL m_PSTexCombinatorConstantBufferUpToDate = FALSE;
 
     /*ComPtr<ID3D12Resource> m_VertexBuffer;
     D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView;
@@ -438,6 +450,8 @@ public:
     size_t m_VertexBufferSubmittedCount[m_BufferedFrameCount] = {0};
     std::deque<CKDX12IndexBufferDesc> m_IndexBufferSubmitted;
     size_t m_IndexBufferSubmittedCount[m_BufferedFrameCount] = {0};
+
+
 
     // Sync objects
     UINT m_FrameIndex = 0;

@@ -198,6 +198,7 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
         static char buf[50];
         sprintf(buf, "cmdAllocator%u", i);
         WCHAR wstr[100];
+        memset(wstr, 0, sizeof(wstr));
         MultiByteToWideChar(CP_ACP, 0, buf, strlen(buf), wstr, 100);
         m_CommandAllocators[i]->SetName(wstr);
 #endif
@@ -398,7 +399,7 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     assert(m_VertexBufferSubmitted.size() >= m_VertexBufferSubmittedCount[m_FrameIndex]);
     assert(m_IndexBufferSubmitted.size() >= m_IndexBufferSubmittedCount[m_FrameIndex]);
     // Release resources no longer in use.
-    for (size_t i = 0; i < m_VertexBufferSubmittedCount[m_FrameIndex]; ++i)
+   for (size_t i = 0; i < m_VertexBufferSubmittedCount[m_FrameIndex]; ++i)
     {
         m_VertexBufferSubmitted.pop_front();
     }
@@ -575,9 +576,86 @@ CKBOOL CKDX12RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable) { retu
 
 CKBOOL CKDX12RasterizerContext::SetMaterial(CKMaterialData *mat) { return TRUE; }
 
-CKBOOL CKDX12RasterizerContext::SetViewport(CKViewportData *data) { return TRUE; }
+CKBOOL CKDX12RasterizerContext::SetViewport(CKViewportData *data) {
+#if LOGGING
+    fprintf(stderr, "SetViewport\n");
+#endif
+    if (!m_SceneBegined)
+        BeginScene();
+    m_ViewportData = *data;
 
-CKBOOL CKDX12RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat) { return TRUE; }
+    m_Viewport.TopLeftX = (FLOAT)data->ViewX;
+    m_Viewport.TopLeftY = (FLOAT)data->ViewY;
+    m_Viewport.Width = (FLOAT)data->ViewWidth;
+    m_Viewport.Height = (FLOAT)data->ViewHeight;
+    m_Viewport.MaxDepth = 1.0f;
+    m_Viewport.MinDepth = 0.0f;
+    m_CommandList->RSSetViewports(1, &m_Viewport);
+
+    m_ScissorRect.left = data->ViewX;
+    m_ScissorRect.top = data->ViewY;
+    m_ScissorRect.right = data->ViewWidth;
+    m_ScissorRect.bottom = data->ViewHeight;
+    m_CommandList->RSSetScissorRects(1, &m_ScissorRect);
+
+    m_VSConstantBufferUpToDate = FALSE;
+    m_VSCBuffer.ViewportMatrix = VxMatrix::Identity();
+    float(*m)[4] = (float(*)[4]) & m_VSCBuffer.ViewportMatrix;
+    m[0][0] = 2. / data->ViewWidth;
+    m[1][1] = 2. / data->ViewHeight;
+    m[2][2] = 0;
+    m[3][0] = -(-2. * data->ViewX + data->ViewWidth) / data->ViewWidth;
+    m[3][1] = (-2. * data->ViewY + data->ViewHeight) / data->ViewHeight;
+    return TRUE;
+}
+
+CKBOOL CKDX12RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat) {
+    CKDWORD UnityMatrixMask = 0;
+    switch (Type)
+    {
+        case VXMATRIX_PROJECTION:
+            {
+                float(*m)[4] = (float(*)[4]) & Mat;
+                float A = m[2][2];
+                float B = m[3][2];
+                m_PSCBuffer.DepthRange[0] = -B / A;
+                m_PSCBuffer.DepthRange[1] = B / (1 - A); // for eye-distance fog calculation
+                m_PSConstantBufferUpToDate = FALSE;
+                break;
+            }
+        case VXMATRIX_TEXTURE0:
+        case VXMATRIX_TEXTURE1:
+        case VXMATRIX_TEXTURE2:
+        case VXMATRIX_TEXTURE3:
+        case VXMATRIX_TEXTURE4:
+        case VXMATRIX_TEXTURE5:
+        case VXMATRIX_TEXTURE6:
+        case VXMATRIX_TEXTURE7:
+            {
+                UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
+                CKDWORD tex = Type - VXMATRIX_TEXTURE0;
+                Vx3DTransposeMatrix(m_VSCBuffer.TexTransformMatrix[tex], Mat);
+                // m_VSCBuffer.TexTransformMatrix[tex] = Mat;
+                m_VSConstantBufferUpToDate = FALSE;
+                break;
+            }
+        default:
+            break;
+    }
+    auto ret = CKRasterizerContext::SetTransformMatrix(Type, Mat);
+    if (VxMatrix::Identity() == Mat)
+    {
+        if ((m_UnityMatrixMask & UnityMatrixMask) != 0)
+            return TRUE;
+        m_UnityMatrixMask |= UnityMatrixMask;
+    }
+    else
+    {
+        m_UnityMatrixMask &= ~UnityMatrixMask;
+    }
+    m_VSConstantBufferUpToDate = FALSE;
+    return ret;
+}
 
 CKBOOL CKDX12RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
@@ -840,6 +918,9 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
 #if STATUS
     ++vbbat;
 #endif
+#if LOGGING
+    fprintf(stderr, "DrawPrimitiveVB\n");
+#endif
     switch (pType)
     {
         case VX_TRIANGLELIST:
@@ -867,6 +948,9 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
 {
 #if STATUS
     ++vbibbat;
+#endif
+#if LOGGING
+    fprintf(stderr, "DrawPrimitiveVBIB\n");
 #endif
     switch (pType)
     {
@@ -898,10 +982,12 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     static char buf[50];
     sprintf(buf, "VB %u\0", VB);
     WCHAR wstr[100];
+    memset(wstr, 0, sizeof(wstr));
     MultiByteToWideChar(CP_ACP, 0, buf, strlen(buf), wstr, 100);
     vbo->DxResource->SetName(wstr);
 
     sprintf(buf, "IB %u\0", IB);
+    memset(wstr, 0, sizeof(wstr));
     MultiByteToWideChar(CP_ACP, 0, buf, strlen(buf), wstr, 100);
     ibo->DxResource->SetName(wstr);
 #endif
@@ -910,7 +996,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     m_IndexBufferSubmitted.emplace_back(*ibo);
     ++m_IndexBufferSubmittedCount[m_FrameIndex];
     m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
-    m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
+    m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     m_CommandList->IASetVertexBuffers(0, 1, &m_VertexBufferSubmitted.back().DxView);
     m_CommandList->IASetIndexBuffer(&m_IndexBufferSubmitted.back().DxView);
     m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
