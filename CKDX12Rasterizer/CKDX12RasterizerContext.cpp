@@ -907,26 +907,36 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     //vbo->Unlock();
     //pbData = nullptr;
 
-    //auto IB = GetDynamicIndexBuffer(ib.size(), clip);
-    //auto *ibo = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
-    //assert(ibo && ibo->m_MaxIndexCount >= ib.size());
-    //CKDWORD ibase = 0;
-    //pbData = ibo->Lock();
-    //vbase = ibo->m_CurrentICount;
-    //memcpy(pbData, ib.data(), ib.size() * sizeof(CKWORD));
-    //ibo->Unlock();
-    //WaitForGpu();
-
     //m_VertexBufferSubmitted.emplace_back(*vbo);
     //++m_VertexBufferSubmittedCount[m_FrameIndex];
-    //m_IndexBufferSubmitted.emplace_back(*ibo);
-    //++m_IndexBufferSubmittedCount[m_FrameIndex];
+
+    //
+    //CKDWORD ibase = 0;
+    //if (!ib.empty())
+    //{
+    //    auto IB = GetDynamicIndexBuffer(ib.size(), clip);
+    //    auto *ibo = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
+    //    assert(ibo && ibo->m_MaxIndexCount >= ib.size());
+    //    pbData = ibo->Lock();
+    //    vbase = ibo->m_CurrentICount;
+    //    memcpy(pbData, ib.data(), ib.size() * sizeof(CKWORD));
+    //    ibo->Unlock();
+
+    //    m_IndexBufferSubmitted.emplace_back(*ibo);
+    //    ++m_IndexBufferSubmittedCount[m_FrameIndex];
+    //    // WaitForGpu();
+    //}
+
     //// Populate command list
     //m_CommandList->SetPipelineState(m_PipelineState[vertexFormat].Get());
     //m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     //m_CommandList->IASetVertexBuffers(0, 1, &m_VertexBufferSubmitted.back().DxView);
     //m_CommandList->IASetIndexBuffer(&m_IndexBufferSubmitted.back().DxView);
-    //m_CommandList->DrawIndexedInstanced(ib.size(), 1, ibase, vbase, 0);
+
+    //if (!ib.empty())
+    //    m_CommandList->DrawIndexedInstanced(ib.size(), 1, ibase, vbase, 0);
+    //else
+    //    m_CommandList->DrawInstanced(data->VertexCount, 1, vbase, 0);
 
     /*asio::post(m_ThreadPool,
                [this, index_vec, vb = std::move(vb)]() 
