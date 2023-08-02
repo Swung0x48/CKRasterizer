@@ -468,8 +468,9 @@ public:
     std::deque<CKDX12IndexBufferDesc> m_IndexBufferSubmitted;
     size_t m_IndexBufferSubmittedCount[m_BufferedFrameCount] = {0};
 
-
-
+#if defined(DEBUG) || defined(_DEBUG)
+    bool m_CmdListClosed = true;
+#endif
     // Sync objects
     UINT m_FrameIndex = 0;
     HANDLE m_FenceEvent;

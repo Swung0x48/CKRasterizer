@@ -20,10 +20,12 @@
 
 #if defined(DEBUG) || defined(_DEBUG)
     #define STATUS 1
-    #define LOGGING 0
+    //#define LOGGING 1
+    #define CONSOLE 1
+    #define CMDLIST 1
 #endif
 
-#if LOGGING
+#if LOGGING || CONSOLE
 #include <conio.h>
 static bool step_mode = false;
 #endif
@@ -170,6 +172,7 @@ HRESULT CKDX12RasterizerContext::CreateDescriptorHeap() {
     cbvHeapDesc.NumDescriptors = 1;
     cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    cbvHeapDesc.NodeMask = 0; // We're not supporting multi-GPU
     D3DCall(m_Device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_CBVHeap)));
 
     return hr;
@@ -363,6 +366,7 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
         psoDesc.NumRenderTargets = 1;
         psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         psoDesc.SampleDesc.Count = 1;
+        psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
         ID3D12PipelineState *state = nullptr;
         D3DCall(m_Device->CreateGraphicsPipelineState(&psoDesc, 
@@ -440,7 +444,7 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
                                        CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
     m_InCreateDestroy = TRUE;
-#if (LOGGING)
+#if (LOGGING) || (CONSOLE)
     AllocConsole();
     freopen("CON", "w", stdout);
     freopen("CON", "w", stderr);
@@ -520,7 +524,6 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
     if (dsClearFlag)
         m_CommandList->ClearDepthStencilView(dsvHandle, (D3D12_CLEAR_FLAGS)D3D12_CLEAR_FLAG_DEPTH, Z, Stencil, 0,
                                              nullptr);*/
-    /*const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};*/
     
     return TRUE;
 }
@@ -544,7 +547,22 @@ CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync)
 
     HRESULT hr;
     
-    D3DCall(m_SwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING));
+    const auto transitionToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
+        m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    m_CommandList->ResourceBarrier(1, &transitionToPresent);
+    D3DCall(m_CommandList->Close());
+#ifdef CMDLIST
+    fprintf(stderr, "m_CommandList->Close() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
+#if defined DEBUG || defined _DEBUG
+    m_CmdListClosed = true;
+#endif // DEBUG || defined _DEBUG
+#endif
+    assert(m_CmdListClosed);
+    ID3D12CommandList *list = m_CommandList.Get();
+    m_CommandQueue->ExecuteCommandLists(1, &list);
+
+    D3DCall(m_SwapChain->Present(1, 0));
+    //D3DCall(m_SwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING));
     D3DCall(MoveToNextFrame());
     return SUCCEEDED(hr);
 }
@@ -559,6 +577,12 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
     HRESULT hr;
     D3DCall(m_CommandAllocators[m_FrameIndex]->Reset());
     D3DCall(m_CommandList->Reset(m_CommandAllocators[m_FrameIndex].Get(), nullptr));
+#ifdef CMDLIST
+    fprintf(stderr, "m_CommandList->Reset() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
+#if defined DEBUG || defined _DEBUG
+    m_CmdListClosed = false;
+#endif // DEBUG || defined _DEBUG
+#endif
     const auto transitionToRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
         m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
     m_CommandList->ResourceBarrier(1, &transitionToRenderTarget);
@@ -580,15 +604,12 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
     fprintf(stderr, "EndScene\n");
 #endif
 
-    HRESULT hr;
+    HRESULT hr = S_OK;
 
-    const auto transitionToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-    m_CommandList->ResourceBarrier(1, &transitionToPresent);
-    D3DCall(m_CommandList->Close());
-    m_PendingCommandList.emplace_back(m_CommandList.Get());
-    m_CommandQueue->ExecuteCommandLists(m_PendingCommandList.size(), m_PendingCommandList.data());
-    m_PendingCommandList.clear();
+    
+    //m_PendingCommandList.emplace_back(m_CommandList.Get());
+    //m_CommandQueue->ExecuteCommandLists(m_PendingCommandList.size(), m_PendingCommandList.data());
+    //m_PendingCommandList.clear();
 
     m_SceneBegined = FALSE;
     return SUCCEEDED(hr);
@@ -1027,7 +1048,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     if (!m_VSConstantBufferUpToDate)
     {
         UpdateMatrices(WORLD_TRANSFORM);
-        // this->UpdateMatrices(VIEW_TRANSFORM);
+        UpdateMatrices(VIEW_TRANSFORM);
         Vx3DTransposeMatrix(m_VSCBuffer.WorldMatrix, m_WorldMatrix);
         Vx3DTransposeMatrix(m_VSCBuffer.ViewMatrix, m_ViewMatrix);
         Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
