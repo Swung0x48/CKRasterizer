@@ -536,7 +536,6 @@ CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync)
     fprintf(stderr, "BackToFront\n");
 #endif
 #if STATUS
-    // fprintf(stderr, "swap\n");
     SetTitleStatus("D3D12 | DXGI %s | batch stats: direct %d, vb %d, vbib %d",
                    m_Owner->m_DXGIVersionString.c_str(), directbat, vbbat, vbibbat);
 
@@ -546,21 +545,6 @@ CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync)
 #endif
 
     HRESULT hr;
-    
-    const auto transitionToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-    m_CommandList->ResourceBarrier(1, &transitionToPresent);
-    D3DCall(m_CommandList->Close());
-#ifdef CMDLIST
-    fprintf(stderr, "m_CommandList->Close() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
-#if defined DEBUG || defined _DEBUG
-    m_CmdListClosed = true;
-#endif // DEBUG || defined _DEBUG
-#endif
-    assert(m_CmdListClosed);
-    ID3D12CommandList *list = m_CommandList.Get();
-    m_CommandQueue->ExecuteCommandLists(1, &list);
-
     D3DCall(m_SwapChain->Present(1, 0));
     //D3DCall(m_SwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING));
     D3DCall(MoveToNextFrame());
@@ -606,7 +590,19 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
 
     HRESULT hr = S_OK;
 
-    
+    const auto transitionToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
+        m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    m_CommandList->ResourceBarrier(1, &transitionToPresent);
+    D3DCall(m_CommandList->Close());
+#ifdef CMDLIST
+    fprintf(stderr, "m_CommandList->Close() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
+#if defined DEBUG || defined _DEBUG
+    m_CmdListClosed = true;
+#endif // DEBUG || defined _DEBUG
+#endif
+    assert(m_CmdListClosed);
+    ID3D12CommandList *list = m_CommandList.Get();
+    m_CommandQueue->ExecuteCommandLists(1, &list);
     //m_PendingCommandList.emplace_back(m_CommandList.Get());
     //m_CommandQueue->ExecuteCommandLists(m_PendingCommandList.size(), m_PendingCommandList.data());
     //m_PendingCommandList.clear();
