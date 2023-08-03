@@ -4,6 +4,7 @@
 
 #include "CKRasterizer.h"
 #include "CKDX12RasterizerCommon.h"
+#include "CKDX12DynamicUploadHeap.h"
 
 #include <vector>
 #include <deque>
@@ -433,6 +434,9 @@ public:
     ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
     UINT m_DSVDescriptorSize;
     ComPtr<ID3D12DescriptorHeap> m_CBVHeap;
+
+    std::unique_ptr<CKDX12DynamicUploadHeap> m_CBHeap;
+
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
     ComPtr<ID3D12RootSignature> m_RootSignature;

@@ -226,6 +226,9 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
 
         D3DCall(m_CommandList->Close());
     }
+
+    m_CBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, 256 * 30);
+
     return hr;
 }
 
