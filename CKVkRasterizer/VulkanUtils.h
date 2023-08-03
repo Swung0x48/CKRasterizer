@@ -4,6 +4,10 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
 
+#include <vector>
+
+#include <CKRasterizerEnums.h>
+
 template <typename T>
 T make_vulkan_structure()
 {
@@ -51,5 +55,13 @@ define_vk_typed_structure(VkCommandBufferBeginInfo, VK_STRUCTURE_TYPE_COMMAND_BU
 define_vk_typed_structure(VkRenderPassBeginInfo, VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO)
 define_vk_typed_structure(VkSubmitInfo, VK_STRUCTURE_TYPE_SUBMIT_INFO)
 define_vk_typed_structure(VkPresentInfoKHR, VK_STRUCTURE_TYPE_PRESENT_INFO_KHR)
+define_vk_typed_structure(VkBufferCreateInfo, VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO)
+define_vk_typed_structure(VkMemoryAllocateInfo, VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
+define_vk_typed_structure(VkDescriptorSetLayoutCreateInfo, VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO)
+
+std::vector<VkVertexInputAttributeDescription> rst_vertex_format_to_vulkan_vertex_attrib(CKRST_VERTEXFORMAT vf);
+VkVertexInputBindingDescription rst_vertex_format_to_vulkan_input_binding(CKRST_VERTEXFORMAT vf);
+
+uint32_t get_memory_type_index(uint32_t wanted_type, VkMemoryPropertyFlags prop, VkPhysicalDevice vkphydev);
 
 #endif

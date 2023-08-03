@@ -9,7 +9,7 @@ Custom rasterizers for Virtools.
 | CKDX9Rasterizer | DirectX 8 Rasterizer bundled with Virtools 2.1.0.14 reverse engineered and ported to DirectX 9 with Direct3D 9Ex support. | Mostly complete |
 | CKGLRasterizer | OpenGL Rasterizer targeting OpenGL 4.3+ built from ground up (*) | Feature complete for running _Ballance_, ~90% feature complete for general use. Not yet optimized. |
 | CKDX11Rasterizer | DirectX 11 Rasterizer with DXGI 1.5+ AllowTearing feature adaptively enabled to eliminate present latency | Feature mostly complete for running _Ballance_. Minor details differs from fixed pipeline DirectX 8/9 rasterizer. Not yet optimized (by any means!). |
-| CkVkRasterizer | (Work in progress) | Context creation |
+| CkVkRasterizer | (Work in progress) | Basic 3D mesh rendering |
 | CkDX12Rasterizer | (Also work in progress) | Seen first geometry (scrambled tho) |
 
 All of these rasterizers are built with the game _Ballance_ in mind. You may be able to build them against a newer Virtools SDK with a few changes, but do not expect it to work correctly all the time. Don't even count it on working with other games built with Virtools 2.1.
