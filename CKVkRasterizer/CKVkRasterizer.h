@@ -90,6 +90,13 @@ struct pair_hash
     { return std::hash<S>()(p.first) ^ std::hash<T>()(p.second); }
 };
 
+struct CKVkMatrixUniform
+{
+    VxMatrix world;
+    VxMatrix view;
+    VxMatrix proj;
+};
+
 struct CKGLMaterialUniform
 {
     VxColor ambi;
@@ -190,6 +197,10 @@ struct CKGLTexCombinatorUniform
         return CKGLTexCombinatorUniform{op, cargs, aargs, constant};
     }
 };
+
+class CKVkBuffer;
+class CKVkVertexBuffer;
+class CKVkIndexBuffer;
 
 class CKVkRasterizerContext : public CKRasterizerContext
 {
@@ -299,8 +310,12 @@ public:
     uint32_t gqidx;
     uint32_t pqidx;
     VkRenderPass vkrp;
+    VkDescriptorSetLayout vkdsl;
     VkPipelineLayout vkpllo;
     VkPipeline vkpl;
+    VkCommandPool cmdpool;
+    VkQueue gfxq;
+    VkQueue prsq;
 private:
     std::string m_orig_title;
     VkSurfaceKHR vksurface;
@@ -310,17 +325,17 @@ private:
     VkExtent2D swchiext;
     std::vector<VkImageView> swchivw;
     std::vector<VkFramebuffer> swchfb;
-    VkQueue gfxq;
-    VkQueue prsq;
     VkShaderModule fsh;
     VkShaderModule vsh;
-    VkCommandPool cmdpool;
     std::vector<VkCommandBuffer> cmdbuf;
     std::vector<VkSemaphore> vksimgavail;
     std::vector<VkSemaphore> vksrenderfinished;
     std::vector<VkFence> vkffrminfl;
     uint32_t curfrm = 0;
+    uint32_t image_index = 0;
 
+    CKVkMatrixUniform matrices;
+    std::vector<CKVkBuffer*> matubos;
     //debugging
     int m_step_mode = 0;
     int m_batch_status = 0;

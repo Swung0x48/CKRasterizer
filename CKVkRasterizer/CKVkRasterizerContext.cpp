@@ -1,4 +1,7 @@
 #include "CKVkRasterizer.h"
+#include "CKVkBuffer.h"
+#include "CKVkVertexBuffer.h"
+#include "CKVkIndexBuffer.h"
 #include "ResourceManagement.h"
 
 #include <algorithm>
@@ -28,6 +31,7 @@ CKVkRasterizerContext::~CKVkRasterizerContext()
     vkDestroyCommandPool(vkdev, cmdpool, nullptr);
     for (auto &fb : swchfb)
         vkDestroyFramebuffer(vkdev, fb, nullptr);
+    vkDestroyDescriptorSetLayout(vkdev, vkdsl, nullptr);
     vkDestroyPipeline(vkdev, vkpl, nullptr);
     vkDestroyPipelineLayout(vkdev, vkpllo, nullptr);
     vkDestroyRenderPass(vkdev, vkrp, nullptr);
@@ -157,6 +161,19 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
 
     VkPipelineShaderStageCreateInfo shst[] = {vshstc, fshstc};
 
+    /*VkDescriptorSetLayoutBinding ubobinding{};
+    ubobinding.binding = 0;
+    ubobinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    ubobinding.descriptorCount = 1;
+    ubobinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    ubobinding.pImmutableSamplers = nullptr;
+
+    auto dslc = make_vulkan_structure<VkDescriptorSetLayoutCreateInfo>();
+    dslc.bindingCount = 1;
+    dslc.pBindings = &ubobinding;
+    if (VK_SUCCESS != vkCreateDescriptorSetLayout(vkdev, &dslc, nullptr, &vkdsl))
+        return FALSE;*/
+
     VkAttachmentDescription coloratt{};
     coloratt.format = swchifmt;
     coloratt.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -195,10 +212,32 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     dystc.pDynamicStates = dyst.data();
 
     auto vtxinstc = make_vulkan_structure<VkPipelineVertexInputStateCreateInfo>();
-    vtxinstc.vertexBindingDescriptionCount = 0;
-    vtxinstc.pVertexBindingDescriptions = nullptr;
-    vtxinstc.vertexAttributeDescriptionCount = 0;
-    vtxinstc.pVertexAttributeDescriptions = nullptr;
+    auto vibdesc = VkVertexInputBindingDescription{
+        0,
+        3 * 4 + 3 * 4 + 2 * 4,
+        VK_VERTEX_INPUT_RATE_VERTEX
+    };
+    vtxinstc.vertexBindingDescriptionCount = 1;
+    vtxinstc.pVertexBindingDescriptions = &vibdesc;
+    vtxinstc.vertexAttributeDescriptionCount = 3;
+    VkVertexInputAttributeDescription viadesc[3] = {
+        {
+            0, 0,
+            VK_FORMAT_R32G32B32_SFLOAT, // POS
+            0
+        },
+        {
+            1, 0,
+            VK_FORMAT_R32G32B32_SFLOAT, // NORM
+            12
+        },
+        {
+            2, 0,
+            VK_FORMAT_R32G32_SFLOAT,    // TEX
+            24
+        }
+    };
+    vtxinstc.pVertexAttributeDescriptions = viadesc;
 
     auto inasc = make_vulkan_structure<VkPipelineInputAssemblyStateCreateInfo>();
     inasc.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -244,10 +283,16 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     blendstc.pAttachments = &blendst;
 
     auto plloc = make_vulkan_structure<VkPipelineLayoutCreateInfo>();
-    plloc.setLayoutCount = 0;
-    plloc.pSetLayouts = nullptr;
-    plloc.pushConstantRangeCount = 0;
-    plloc.pPushConstantRanges = nullptr;
+    plloc.setLayoutCount = 1;
+    plloc.pSetLayouts = &vkdsl;
+    VkPushConstantRange pconstr {
+        VK_SHADER_STAGE_VERTEX_BIT,
+        0, 192
+    };
+    plloc.pushConstantRangeCount = 1;
+    plloc.pPushConstantRanges = &pconstr;
+    //plloc.pushConstantRangeCount = 0;
+    //plloc.pPushConstantRanges = nullptr;
 
     if (VK_SUCCESS != vkCreatePipelineLayout(vkdev, &plloc, nullptr, &vkpllo))
         return FALSE;
@@ -330,6 +375,7 @@ CKBOOL CKVkRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
 
 CKBOOL CKVkRasterizerContext::BackToFront(CKBOOL vsync)
 {
+/*
     vkWaitForFences(vkdev, 1, &vkffrminfl[curfrm], VK_TRUE, ~0ULL);
     vkResetFences(vkdev, 1, &vkffrminfl[curfrm]);
     uint32_t imidx;
@@ -387,6 +433,7 @@ CKBOOL CKVkRasterizerContext::BackToFront(CKBOOL vsync)
     pri.pImageIndices = &imidx;
 
     vkQueuePresentKHR(prsq, &pri);
+*/
 
     ++curfrm;
     if (curfrm >= MAX_FRAMES_IN_FLIGHT)
@@ -397,11 +444,67 @@ CKBOOL CKVkRasterizerContext::BackToFront(CKBOOL vsync)
 CKBOOL CKVkRasterizerContext::BeginScene()
 {
     FrameMark;
+    vkWaitForFences(vkdev, 1, &vkffrminfl[curfrm], VK_TRUE, ~0ULL);
+    vkResetFences(vkdev, 1, &vkffrminfl[curfrm]);
+    vkAcquireNextImageKHR(vkdev, vkswch, ~0ULL, vksimgavail[curfrm], VK_NULL_HANDLE, &image_index);
+    vkResetCommandBuffer(cmdbuf[curfrm], 0);
+    auto cmdbufi = make_vulkan_structure<VkCommandBufferBeginInfo>();
+    cmdbufi.flags = 0;
+    cmdbufi.pInheritanceInfo = nullptr;
+    if (VK_SUCCESS != vkBeginCommandBuffer(cmdbuf[curfrm], &cmdbufi))
+        return FALSE;
+
+    auto rpi = make_vulkan_structure<VkRenderPassBeginInfo>();
+    rpi.renderPass = vkrp;
+    rpi.framebuffer = swchfb[image_index];//
+    rpi.renderArea.offset = {0, 0};
+    rpi.renderArea.extent = swchiext;
+    VkClearValue clearColor = {{{0., 0., 0., 1.}}};
+    rpi.clearValueCount = 1;
+    rpi.pClearValues = &clearColor;
+
+    vkCmdBeginRenderPass(cmdbuf[curfrm], &rpi, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, vkpl);
+
+    VkViewport vp{0., (float)swchiext.height, (float)swchiext.width, -(float)swchiext.height, 0., 1.};
+    vkCmdSetViewport(cmdbuf[curfrm], 0, 1, &vp);
+    VkRect2D sc{{0, 0}, swchiext};
+    vkCmdSetScissor(cmdbuf[curfrm], 0, 1, &sc);
     return TRUE;
 }
 
 CKBOOL CKVkRasterizerContext::EndScene()
 {
+    vkCmdEndRenderPass(cmdbuf[curfrm]);
+    if (VK_SUCCESS != vkEndCommandBuffer(cmdbuf[curfrm]))
+        return FALSE;
+
+    auto submiti = make_vulkan_structure<VkSubmitInfo>();
+
+    VkSemaphore waitsem[] = {vksimgavail[curfrm]};
+    VkPipelineStageFlags waitst[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submiti.waitSemaphoreCount = 1;
+    submiti.pWaitSemaphores = waitsem;
+    submiti.pWaitDstStageMask = waitst;
+    submiti.commandBufferCount = 1;
+    submiti.pCommandBuffers = &cmdbuf[curfrm];
+
+    VkSemaphore signalsem[] = {vksrenderfinished[curfrm]};
+    submiti.signalSemaphoreCount = 1;
+    submiti.pSignalSemaphores = signalsem;
+
+    if (VK_SUCCESS != vkQueueSubmit(gfxq, 1, &submiti, vkffrminfl[curfrm]))
+        return FALSE;
+
+    auto pri = make_vulkan_structure<VkPresentInfoKHR>();
+    pri.waitSemaphoreCount = 1;
+    pri.pWaitSemaphores = signalsem;
+    VkSwapchainKHR swch[] = {vkswch};
+    pri.swapchainCount = 1;
+    pri.pSwapchains = swch;
+    pri.pImageIndices = &image_index;
+
+    vkQueuePresentKHR(prsq, &pri);
     return TRUE;
 }
 
@@ -426,12 +529,108 @@ CKBOOL CKVkRasterizerContext::SetMaterial(CKMaterialData *mat)
 CKBOOL CKVkRasterizerContext::SetViewport(CKViewportData *data)
 {
     ZoneScopedN(__FUNCTION__);
+
+    /*VkViewport vp {
+        data->ViewX, data->ViewY + data->ViewHeight,
+        data->ViewWidth, -data->ViewHeight,
+        data->ViewZMin, data->ViewZMax
+    };
+    vkCmdSetViewport(cmdbuf[curfrm], 0, 1, &vp);*/
+
     return TRUE;
 }
 
 CKBOOL CKVkRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat)
 {
     ZoneScopedN(__FUNCTION__);
+    CKRasterizerContext::SetTransformMatrix(Type, Mat);
+    CKDWORD UnityMatrixMask = 0;
+    switch (Type)
+    {
+        case VXMATRIX_WORLD: UnityMatrixMask = WORLD_TRANSFORM; break;
+        case VXMATRIX_VIEW: UnityMatrixMask = VIEW_TRANSFORM; break;
+        case VXMATRIX_PROJECTION: UnityMatrixMask = PROJ_TRANSFORM; break;
+        case VXMATRIX_TEXTURE0:
+        case VXMATRIX_TEXTURE1:
+        case VXMATRIX_TEXTURE2:
+        case VXMATRIX_TEXTURE3:
+        case VXMATRIX_TEXTURE4:
+        case VXMATRIX_TEXTURE5:
+        case VXMATRIX_TEXTURE6:
+        case VXMATRIX_TEXTURE7:
+            UnityMatrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
+            break;
+    }
+    if (VxMatrix::Identity() == Mat)
+    {
+        if ((m_UnityMatrixMask & UnityMatrixMask) != 0)
+            return TRUE;
+        m_UnityMatrixMask |= UnityMatrixMask;
+    } else
+        m_UnityMatrixMask &= ~UnityMatrixMask;
+
+    switch (Type)
+    {
+        case VXMATRIX_WORLD:
+        {
+            m_WorldMatrix = matrices.world = Mat;
+            Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            //m_prgm->stage_uniform("world", CKGLUniformValue::make_f32mat4(1, (float*)&m_WorldMatrix));
+            //VxMatrix tmat;
+            //Vx3DTransposeMatrix(tmat, Mat); //row-major to column-major conversion madness
+            //m_tiworldmtx = inv(tmat);
+            //m_prgm->stage_uniform("tiworld", CKGLUniformValue::make_f32mat4(1, (float*)&m_tiworldmtx));
+            //Vx3DTransposeMatrix(tmat, m_ModelViewMatrix);
+            //m_tiworldviewmtx = inv(tmat);
+            //m_prgm->stage_uniform("tiworldview", CKGLUniformValue::make_f32mat4(1, (float*)&m_tiworldviewmtx));
+            m_MatrixUptodate &= ~0U ^ WORLD_TRANSFORM;
+            break;
+        }
+        case VXMATRIX_VIEW:
+        {
+            m_ViewMatrix = matrices.view = Mat;
+            Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
+            //m_prgm->stage_uniform("view", CKGLUniformValue::make_f32mat4(1, (float*)&m_ViewMatrix));
+            m_MatrixUptodate = 0;
+            //VxMatrix tmat;
+            //Vx3DInverseMatrix(tmat, Mat);
+            //m_viewpos = VxVector(tmat[3][0], tmat[3][1], tmat[3][2]);
+            //m_prgm->stage_uniform("vpos", CKGLUniformValue::make_f32v3v(1, (float*)&m_viewpos));
+            //Vx3DTransposeMatrix(tmat, m_ModelViewMatrix);
+            //m_tiworldviewmtx = inv(tmat);
+            //m_prgm->stage_uniform("tiworldview", CKGLUniformValue::make_f32mat4(1, (float*)&m_tiworldviewmtx));
+            break;
+        }
+        case VXMATRIX_PROJECTION:
+        {
+            m_ProjectionMatrix = matrices.proj = Mat;
+            //m_prgm->stage_uniform("proj", CKGLUniformValue::make_f32mat4(1, (float*)&m_ProjectionMatrix));
+            //float (*m)[4] = (float(*)[4])&Mat;
+            //float A = m[2][2];
+            //float B = m[3][2];
+            //float zp[2] = {-B / A, B / (1 - A)}; //for eye-distance fog calculation
+            //m_prgm->stage_uniform("depth_range", CKGLUniformValue::make_f32v2v(1, zp, true));
+            m_MatrixUptodate = 0;
+            break;
+        }
+        case VXMATRIX_TEXTURE0:
+        case VXMATRIX_TEXTURE1:
+        case VXMATRIX_TEXTURE2:
+        case VXMATRIX_TEXTURE3:
+        case VXMATRIX_TEXTURE4:
+        case VXMATRIX_TEXTURE5:
+        case VXMATRIX_TEXTURE6:
+        case VXMATRIX_TEXTURE7:
+        {
+            CKDWORD tex = Type - VXMATRIX_TEXTURE0;
+            //m_textrmtx[tex] = Mat;
+            //m_prgm->stage_uniform("textr[" + std::to_string(tex) + "]", CKGLUniformValue::make_f32mat4(1, (float*)&m_textrmtx[tex]));
+            break;
+        }
+        default:
+            return FALSE;
+    }
+    vkCmdPushConstants(cmdbuf[curfrm], vkpllo, VK_SHADER_STAGE_VERTEX_BIT, 0, 192, &m_WorldMatrix);
     return TRUE;
 }
 
@@ -507,7 +706,24 @@ CKBOOL CKVkRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
 #endif
     ++vbibbat;
     ZoneScopedN(__FUNCTION__);
-    return FALSE;
+
+    if (VB >= m_VertexBuffers.Size()) return FALSE;
+    CKVkVertexBuffer *vbo = static_cast<CKVkVertexBuffer*>(m_VertexBuffers[VB]);
+    if (vbo->m_VertexFormat != (CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1))
+        return FALSE;
+    if (!vbo) return FALSE;
+
+    if (IB >= m_IndexBuffers.Size()) return FALSE;
+    CKVkIndexBuffer *ibo = static_cast<CKVkIndexBuffer*>(m_IndexBuffers[IB]);
+    if (!ibo) return FALSE;
+
+    vbo->bind(cmdbuf[curfrm]);
+    ibo->bind(cmdbuf[curfrm]);
+
+    if (pType != VX_TRIANGLELIST)
+        return FALSE;
+    vkCmdDrawIndexed(cmdbuf[curfrm], Indexcount, 1, StartIndex, MinVIndex, 0);
+    return TRUE;
 }
 
 /*CKBOOL CKVkRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBuffer *vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt, bool vbbound)
@@ -565,12 +781,19 @@ void * CKVkRasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, 
     CKRST_LOCKFLAGS Lock)
 {
     ZoneScopedN(__FUNCTION__);
-    return NULL;
+    if (VB >= m_VertexBuffers.Size()) return NULL;
+    CKVkVertexBuffer *vb = static_cast<CKVkVertexBuffer*>(m_VertexBuffers[VB]);
+    if (!vb) return NULL;
+    return vb->lock(StartVertex * vb->m_VertexSize, VertexCount * vb->m_VertexSize);
 }
 
 CKBOOL CKVkRasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 {
     ZoneScopedN(__FUNCTION__);
+    if (VB >= m_VertexBuffers.Size()) return NULL;
+    CKVkVertexBuffer *vb = static_cast<CKVkVertexBuffer*>(m_VertexBuffers[VB]);
+    if (!vb) return NULL;
+    vb->unlock();
     return TRUE;
 }
 
@@ -618,11 +841,18 @@ CKBOOL CKVkRasterizerContext::GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane &
 
 void * CKVkRasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
 {
-    return NULL;
+    if (IB >= m_IndexBuffers.Size()) return NULL;
+    CKVkIndexBuffer *ib = static_cast<CKVkIndexBuffer*>(m_IndexBuffers[IB]);
+    if (!ib) return NULL;
+    return ib->lock(2 * StartIndex, 2 * IndexCount);
 }
 
 CKBOOL CKVkRasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
+    if (IB >= m_IndexBuffers.Size()) return NULL;
+    CKVkIndexBuffer *ib = static_cast<CKVkIndexBuffer*>(m_IndexBuffers[IB]);
+    if (!ib) return NULL;
+    ib->unlock();
     return TRUE;
 }
 
@@ -674,12 +904,28 @@ CKBOOL CKVkRasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDe
 CKBOOL CKVkRasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat)
 {
     ZoneScopedN(__FUNCTION__);
+    if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
+        return 0;
+    if (m_VertexBuffers[VB])
+        delete m_VertexBuffers[VB];
+
+    CKVkVertexBuffer* vb = new CKVkVertexBuffer(DesiredFormat, this);
+    vb->create();
+    m_VertexBuffers[VB] = vb;
     return FALSE;
 }
 
 CKBOOL CKVkRasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat)
 {
     ZoneScopedN(__FUNCTION__);
+    if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
+        return 0;
+    if (m_IndexBuffers[IB])
+        delete m_IndexBuffers[IB];
+
+    CKVkIndexBuffer* ib = new CKVkIndexBuffer(DesiredFormat, this);
+    ib->create();
+    m_IndexBuffers[IB] = ib;
     return FALSE;
 }
 
