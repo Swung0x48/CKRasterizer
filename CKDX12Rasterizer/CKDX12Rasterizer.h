@@ -275,7 +275,7 @@ public:
     ComPtr<ID3D12Resource> DxResource;
     D3D12_CONSTANT_BUFFER_VIEW_DESC DxView;
     CKDX12ConstantBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
-    virtual CKBOOL Create(CKDX12RasterizerContext *ctx, UINT size);
+    virtual CKBOOL Create(CKDX12RasterizerContext *ctx, UINT size, CD3DX12_CPU_DESCRIPTOR_HANDLE cbvHandle);
     virtual void *Lock();
     virtual void Unlock();
 } CKDX12ConstantBufferDesc;
@@ -433,6 +433,7 @@ public:
     ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
     UINT m_DSVDescriptorSize;
     ComPtr<ID3D12DescriptorHeap> m_CBVHeap;
+    UINT m_CBVDescriptorSize;
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
     ComPtr<ID3D12RootSignature> m_RootSignature;
@@ -445,15 +446,15 @@ public:
     CD3DX12_VIEWPORT m_Viewport;
     CD3DX12_RECT m_ScissorRect;
 
-    CKDX12ConstantBufferDesc m_VSConstantBuffer;
-    CKDX12ConstantBufferDesc m_PSConstantBuffer;
-    CKDX12ConstantBufferDesc m_PSLightConstantBuffer;
-    CKDX12ConstantBufferDesc m_PSTexCombinatorConstantBuffer;
+    CKDX12ConstantBufferDesc m_VSConstantBuffer[m_BufferedFrameCount];
+    CKDX12ConstantBufferDesc m_PSConstantBuffer[m_BufferedFrameCount];
+    CKDX12ConstantBufferDesc m_PSLightConstantBuffer[m_BufferedFrameCount];
+    CKDX12ConstantBufferDesc m_PSTexCombinatorConstantBuffer[m_BufferedFrameCount];
     VSConstantBufferStruct m_VSCBuffer;
     PSConstantBufferStruct m_PSCBuffer;
     PSLightConstantBufferStruct m_PSLightCBuffer;
     PSTexCombinatorConstantBufferStruct m_PSTexCombinatorCBuffer;
-    CKBOOL m_VSConstantBufferUpToDate = FALSE;
+    CKBOOL m_VSConstantBufferUpToDate[m_BufferedFrameCount] {};
     CKBOOL m_PSConstantBufferUpToDate = FALSE;
     CKBOOL m_PSLightConstantBufferUpToDate = FALSE;
     CKBOOL m_PSTexCombinatorConstantBufferUpToDate = FALSE;

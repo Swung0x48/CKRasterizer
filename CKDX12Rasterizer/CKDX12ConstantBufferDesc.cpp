@@ -1,7 +1,7 @@
 #include "CKDX12Rasterizer.h"
 #include "CKDX12RasterizerCommon.h"
 
-CKBOOL CKDX12ConstantBufferDesc::Create(CKDX12RasterizerContext *ctx, UINT size)
+CKBOOL CKDX12ConstantBufferDesc::Create(CKDX12RasterizerContext *ctx, UINT size, CD3DX12_CPU_DESCRIPTOR_HANDLE cbvHandle)
 {
     HRESULT hr;
     auto uploadHeapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
@@ -15,7 +15,7 @@ CKBOOL CKDX12ConstantBufferDesc::Create(CKDX12RasterizerContext *ctx, UINT size)
 #endif
     DxView.BufferLocation = DxResource->GetGPUVirtualAddress();
     DxView.SizeInBytes = bufferActualSize;
-    ctx->m_Device->CreateConstantBufferView(&DxView, ctx->m_CBVHeap->GetCPUDescriptorHandleForHeapStart());
+    ctx->m_Device->CreateConstantBufferView(&DxView, cbvHandle);
     return SUCCEEDED(hr);
 }
 

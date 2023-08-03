@@ -20,9 +20,9 @@
 
 #if defined(DEBUG) || defined(_DEBUG)
     #define STATUS 1
-    //#define LOGGING 1
+    #define LOGGING 1
     #define CONSOLE 1
-    #define CMDLIST 1
+    #define CMDLIST 0
 #endif
 
 #if LOGGING || CONSOLE
@@ -169,7 +169,7 @@ HRESULT CKDX12RasterizerContext::CreateDescriptorHeap() {
     // Flags indicate that this descriptor heap can be bound to the pipeline
     // and that descriptors contained in it can be referenced by a root table.
     D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
-    cbvHeapDesc.NumDescriptors = 1;
+    cbvHeapDesc.NumDescriptors = m_BufferedFrameCount;
     cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     cbvHeapDesc.NodeMask = 0; // We're not supporting multi-GPU
@@ -378,7 +378,14 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
 }
 
 void CKDX12RasterizerContext::CreateConstantBuffers() {
-    m_VSConstantBuffer.Create(this, sizeof(VSConstantBufferStruct));
+    m_CBVDescriptorSize = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE cbvHandle(m_CBVHeap->GetCPUDescriptorHandleForHeapStart());
+
+    for (auto i = 0; i < m_BufferedFrameCount; ++i)
+    {
+        m_VSConstantBuffer[i].Create(this, sizeof(VSConstantBufferStruct), cbvHandle);
+        cbvHandle.Offset(1, m_CBVDescriptorSize);
+    }
    /* m_PSConstantBuffer.Create(this, sizeof(PSConstantBufferStruct));
     m_PSLightConstantBuffer.Create(this, sizeof(PSLightConstantBufferStruct));
     m_PSTexCombinatorConstantBuffer.Create(this, sizeof(PSTexCombinatorConstantBufferStruct));*/
@@ -608,6 +615,9 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
     //m_PendingCommandList.clear();
 
     m_SceneBegined = FALSE;
+
+    m_MatrixUptodate = 0;
+
     return SUCCEEDED(hr);
 }
 
@@ -639,7 +649,7 @@ CKBOOL CKDX12RasterizerContext::SetViewport(CKViewportData *data) {
     m_ScissorRect.bottom = data->ViewHeight;
     m_CommandList->RSSetScissorRects(1, &m_ScissorRect);
 
-    m_VSConstantBufferUpToDate = FALSE;
+    m_VSConstantBufferUpToDate[m_FrameIndex] = FALSE;
     m_VSCBuffer.ViewportMatrix = VxMatrix::Identity();
     float(*m)[4] = (float(*)[4]) & m_VSCBuffer.ViewportMatrix;
     m[0][0] = 2. / data->ViewWidth;
@@ -651,6 +661,9 @@ CKBOOL CKDX12RasterizerContext::SetViewport(CKViewportData *data) {
 }
 
 CKBOOL CKDX12RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat) {
+#if TRANSFROM_MAT || LOGGING
+    fprintf(stderr, "SetTransformMatrix\n");
+#endif
     CKDWORD UnityMatrixMask = 0;
     switch (Type)
     {
@@ -677,7 +690,7 @@ CKBOOL CKDX12RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
                 CKDWORD tex = Type - VXMATRIX_TEXTURE0;
                 Vx3DTransposeMatrix(m_VSCBuffer.TexTransformMatrix[tex], Mat);
                 // m_VSCBuffer.TexTransformMatrix[tex] = Mat;
-                m_VSConstantBufferUpToDate = FALSE;
+                m_VSConstantBufferUpToDate[m_FrameIndex] = FALSE;
                 break;
             }
         default:
@@ -694,7 +707,7 @@ CKBOOL CKDX12RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
     {
         m_UnityMatrixMask &= ~UnityMatrixMask;
     }
-    m_VSConstantBufferUpToDate = FALSE;
+    m_VSConstantBufferUpToDate[m_FrameIndex] = FALSE;
     return ret;
 }
 
@@ -865,54 +878,54 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 #endif
     if (!m_SceneBegined)
         BeginScene();
-    CKDWORD vertexSize;
-    CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
-    size_t vbSize = vertexSize * data->VertexCount;
-    auto vb = std::vector<CKBYTE>(vbSize);
-    CKRSTLoadVertexBuffer(vb.data(), vertexFormat, vertexSize, data);
+    //CKDWORD vertexSize;
+    //CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
+    //size_t vbSize = vertexSize * data->VertexCount;
+    //auto vb = std::vector<CKBYTE>(vbSize);
+    //CKRSTLoadVertexBuffer(vb.data(), vertexFormat, vertexSize, data);
 
-    std::vector<CKWORD> ib;
-    switch (pType)
-    {
-        case VX_TRIANGLELIST:
-            if (indices)
-            {
-                ib.resize(indexcount);
-                memcpy(ib.data(), indices, sizeof(CKWORD) * indexcount);
-            }
-            break;
-        case VX_TRIANGLEFAN:
-            if (indices)
-                TriangleFanToList(indices, indexcount, ib);
-            else
-            {
-                CKWORD voffset = 0;
-                TriangleFanToList(voffset, indexcount, ib);
-            }
-            break;
-        case VX_POINTLIST:
-            fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
-            break;
-        case VX_LINELIST:
-            fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
-            break;
-        case VX_LINESTRIP:
-            fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
-            break;
-        default:
-            fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
-            break;
-    }
-    CKBOOL clip = FALSE;
-    if ((data->Flags & CKRST_DP_DOCLIP))
-    {
-        SetRenderState(VXRENDERSTATE_CLIPPING, 1);
-        clip = TRUE;
-    }
-    else
-    {
-        SetRenderState(VXRENDERSTATE_CLIPPING, 0);
-    }
+    //std::vector<CKWORD> ib;
+    //switch (pType)
+    //{
+    //    case VX_TRIANGLELIST:
+    //        if (indices)
+    //        {
+    //            ib.resize(indexcount);
+    //            memcpy(ib.data(), indices, sizeof(CKWORD) * indexcount);
+    //        }
+    //        break;
+    //    case VX_TRIANGLEFAN:
+    //        if (indices)
+    //            TriangleFanToList(indices, indexcount, ib);
+    //        else
+    //        {
+    //            CKWORD voffset = 0;
+    //            TriangleFanToList(voffset, indexcount, ib);
+    //        }
+    //        break;
+    //    case VX_POINTLIST:
+    //        fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
+    //        break;
+    //    case VX_LINELIST:
+    //        fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
+    //        break;
+    //    case VX_LINESTRIP:
+    //        fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
+    //        break;
+    //    default:
+    //        fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
+    //        break;
+    //}
+    //CKBOOL clip = FALSE;
+    //if ((data->Flags & CKRST_DP_DOCLIP))
+    //{
+    //    SetRenderState(VXRENDERSTATE_CLIPPING, 1);
+    //    clip = TRUE;
+    //}
+    //else
+    //{
+    //    SetRenderState(VXRENDERSTATE_CLIPPING, 0);
+    //}
     //CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
     //auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     //assert(vbo && vbo->m_MaxVertexCount >= data->VertexCount && vertexSize == vbo->m_VertexSize);
@@ -935,7 +948,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     //    auto *ibo = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     //    assert(ibo && ibo->m_MaxIndexCount >= ib.size());
     //    pbData = ibo->Lock();
-    //    vbase = ibo->m_CurrentICount;
+    //    ibase = ibo->m_CurrentICount;
     //    memcpy(pbData, ib.data(), ib.size() * sizeof(CKWORD));
     //    ibo->Unlock();
 
@@ -1051,20 +1064,20 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     m_CommandList->IASetVertexBuffers(0, 1, &m_VertexBufferSubmitted.back().DxView);
     m_CommandList->IASetIndexBuffer(&m_IndexBufferSubmitted.back().DxView);
 
-    if (!m_VSConstantBufferUpToDate)
+    if (!m_VSConstantBufferUpToDate[m_FrameIndex])
     {
-        UpdateMatrices(WORLD_TRANSFORM);
-        UpdateMatrices(VIEW_TRANSFORM);
+        UpdateMatrices(WORLD_TRANSFORM | VIEW_TRANSFORM);
         Vx3DTransposeMatrix(m_VSCBuffer.WorldMatrix, m_WorldMatrix);
         Vx3DTransposeMatrix(m_VSCBuffer.ViewMatrix, m_ViewMatrix);
         Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
         Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
-        void* pData = m_VSConstantBuffer.Lock();
+        void *pData = m_VSConstantBuffer[m_FrameIndex].Lock();
         memcpy(pData, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
-        m_VSConstantBuffer.Unlock();
-        m_VSConstantBufferUpToDate = TRUE;
+        m_VSConstantBuffer[m_FrameIndex].Unlock();
+        WaitForGpu();
+        m_VSConstantBufferUpToDate[m_FrameIndex] = TRUE;
     }
     m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
     return TRUE;
@@ -1180,7 +1193,7 @@ void *CKDX12RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
     auto *desc = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
 
     assert(StartVertex + VertexCount <= desc->m_MaxVertexCount);
-    return desc->Lock();
+    return (char*)desc->Lock();
 }
 CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     if (VB > m_VertexBuffers.Size())
@@ -1199,7 +1212,7 @@ void *CKDX12RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, C
     auto *desc = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return nullptr;
-    return desc->Lock();
+    return (char *)desc->Lock() + StartIndex * sizeof(CKWORD);
 }
 
 CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
