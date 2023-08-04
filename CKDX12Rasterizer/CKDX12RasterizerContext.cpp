@@ -227,7 +227,8 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
         D3DCall(m_CommandList->Close());
     }
 
-    m_CBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, 256 * 30);
+    m_CBHeap =
+        std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * 30);
 
     return hr;
 }
@@ -579,7 +580,6 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
     m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
     ID3D12DescriptorHeap *ppHeaps[] = {m_CBVHeap.Get()};
     m_CommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-    m_CommandList->SetGraphicsRootDescriptorTable(0, m_CBVHeap->GetGPUDescriptorHandleForHeapStart());
     return TRUE;
 }
 
@@ -1067,6 +1067,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         void* pData = m_VSConstantBuffer.Lock();
         memcpy(pData, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         m_VSConstantBuffer.Unlock();
+        m_CommandList->SetGraphicsRootDescriptorTable(0, m_CBVHeap->GetGPUDescriptorHandleForHeapStart());
         m_VSConstantBufferUpToDate = TRUE;
     }
     m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);

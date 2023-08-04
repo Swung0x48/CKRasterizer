@@ -56,10 +56,9 @@ CKDX12AllocatedResource CKDX12RingBuffer::Allocate(size_t SizeInBytes)
     if (Offset == CKDX12RingBufferBase::InvalidOffset)
         return {nullptr, 0, 0};
     
-    CKDX12AllocatedResource alloc(m_pBuffer.Get(), Offset, SizeInBytes);
+    CKDX12AllocatedResource alloc(m_pBuffer, Offset, SizeInBytes);
     alloc.GPUAddress = m_GpuVirtualAddress + Offset;
-    alloc.CPUAddress = m_CpuVirtualAddress;
-    if (alloc.CPUAddress)
+    if (m_CpuVirtualAddress)
         alloc.CPUAddress = static_cast<char *>(alloc.CPUAddress) + Offset;
     return alloc;
 }
