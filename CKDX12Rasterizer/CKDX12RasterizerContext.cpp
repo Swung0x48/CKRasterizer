@@ -157,23 +157,13 @@ HRESULT CKDX12RasterizerContext::CreateDescriptorHeap() {
         m_RTVDescriptorSize = m_Device->
             GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
-    /*D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
+    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
     dsvHeapDesc.NumDescriptors = m_BackBufferCount;
     dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
     dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     D3DCall(m_Device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_DSVHeap)));
     if (SUCCEEDED(hr))
-        m_RTVDescriptorSize = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);*/
-
-    // Describe and create a constant buffer view (CBV) descriptor heap.
-    // Flags indicate that this descriptor heap can be bound to the pipeline
-    // and that descriptors contained in it can be referenced by a root table.
-    //D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
-    //cbvHeapDesc.NumDescriptors = 1;
-    //cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    //cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    //cbvHeapDesc.NodeMask = 0; // We're not supporting multi-GPU
-    //D3DCall(m_Device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_CBVHeap)));
+        m_DSVDescriptorSize = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
     return hr;
 }
@@ -191,14 +181,35 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
         rtvHandle.Offset(1, m_RTVDescriptorSize);
     }
 
-    //CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart());
-    //for (UINT i = 0; i < m_BackBufferCount; ++i)
-    //{
-    //    // TODO: Create DSV resources
-    //    //D3DCall(m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_DepthStencils[i])));
-    //    m_Device->CreateDepthStencilView(m_DepthStencils[i].Get(), nullptr, dsvHandle);
-    //    dsvHandle.Offset(1, m_DSVDescriptorSize);
-    //}
+    CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart());
+    D3D12_RESOURCE_DESC dsDesc;
+    ZeroMemory(&dsDesc, sizeof(D3D12_RESOURCE_DESC));
+    auto heapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+    D3D12_CLEAR_VALUE clearValueDs;
+    ZeroMemory(&clearValueDs, sizeof(D3D12_CLEAR_VALUE));
+    clearValueDs.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    clearValueDs.DepthStencil.Stencil = 0;
+    clearValueDs.DepthStencil.Depth = 1.0f;
+    for (UINT i = 0; i < m_BackBufferCount; ++i)
+    {
+        // TODO: Create DSV resources
+        dsDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        dsDesc.Alignment = 0;
+        dsDesc.Width = m_Width;
+        dsDesc.Height = m_Height;
+        dsDesc.DepthOrArraySize = 1;
+        dsDesc.MipLevels = 1;
+        dsDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        dsDesc.SampleDesc.Count = 1;
+        dsDesc.SampleDesc.Quality = 0;
+        dsDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        dsDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        D3DCall(m_Device->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_NONE, &dsDesc, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                                          &clearValueDs, IID_PPV_ARGS(&m_DepthStencils[i])));
+        //D3DCall(m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_DepthStencils[i])));
+        m_Device->CreateDepthStencilView(m_DepthStencils[i].Get(), nullptr, dsvHandle);
+        dsvHandle.Offset(1, m_DSVDescriptorSize);
+    }
 
     // and a command allocator...
     for (UINT i = 0; i < m_BufferedFrameCount; i++)
@@ -365,12 +376,29 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
         psoDesc.PS = {g_PShaderSimple, sizeof(g_PShaderSimple)};
         psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
         psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-        psoDesc.DepthStencilState.DepthEnable = FALSE;
-        psoDesc.DepthStencilState.StencilEnable = FALSE;
+        psoDesc.DepthStencilState.DepthEnable = TRUE;
+        psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+        // Stencil test parameters
+        psoDesc.DepthStencilState.StencilEnable = TRUE;
+        psoDesc.DepthStencilState.StencilReadMask = 0xFF;
+        psoDesc.DepthStencilState.StencilWriteMask = 0xFF;
+
+        // Stencil operations if pixel is front-facing
+        psoDesc.DepthStencilState.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+        psoDesc.DepthStencilState.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_INCR;
+        psoDesc.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+        psoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+
+        // Stencil operations if pixel is back-facing
+        psoDesc.DepthStencilState.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+        psoDesc.DepthStencilState.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_DECR;
+        psoDesc.DepthStencilState.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+        psoDesc.DepthStencilState.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
         psoDesc.SampleMask = UINT_MAX;
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         psoDesc.NumRenderTargets = 1;
         psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
         psoDesc.SampleDesc.Count = 1;
         psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
@@ -525,7 +553,7 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
         //const float color[] = {0.0f, 0.2f, 0.5f, 1.0f};
         m_CommandList->ClearRenderTargetView(rtvHandle, (const float*)&c, 0, nullptr);
     }
-    /*CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
+    CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
                                             m_DSVDescriptorSize);
     UINT dsClearFlag = 0;
     if (Flags & CKRST_CTXCLEAR_DEPTH)
@@ -533,8 +561,8 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
     if (Flags & CKRST_CTXCLEAR_STENCIL)
         dsClearFlag |= D3D12_CLEAR_FLAG_STENCIL;
     if (dsClearFlag)
-        m_CommandList->ClearDepthStencilView(dsvHandle, (D3D12_CLEAR_FLAGS)D3D12_CLEAR_FLAG_DEPTH, Z, Stencil, 0,
-                                             nullptr);*/
+        m_CommandList->ClearDepthStencilView(dsvHandle, (D3D12_CLEAR_FLAGS)dsClearFlag, Z, Stencil, 0,
+                                             nullptr);
     
     return TRUE;
 }
@@ -556,8 +584,8 @@ CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync)
 #endif
 
     HRESULT hr;
-    D3DCall(m_SwapChain->Present(1, 0));
-    //D3DCall(m_SwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING));
+    //D3DCall(m_SwapChain->Present(1, 0));
+    D3DCall(m_SwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING));
     D3DCall(MoveToNextFrame());
     return SUCCEEDED(hr);
 }
@@ -583,7 +611,9 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
     m_CommandList->ResourceBarrier(1, &transitionToRenderTarget);
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
                                             m_RTVDescriptorSize);
-    m_CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
+                                            m_DSVDescriptorSize);
+    m_CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
     m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
     ID3D12DescriptorHeap *ppHeaps[] = {m_VSCBVHeap->m_Heap.Get()};
     m_CommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
