@@ -10,7 +10,7 @@ public:
     using OffsetType = size_t;
     struct FrameTailAttribs
     {
-        FrameTailAttribs(UINT64 fv, OffsetType off, OffsetType sz) : FenceValue(fv), Offset(off), Size(sz) {}
+        FrameTailAttribs(UINT64 fenceValue, OffsetType offset, OffsetType size) : FenceValue(fenceValue), Offset(offset), Size(size) {}
         // Fence value associated with the command list in which
         // the allocation could have been referenced last time
         UINT64 FenceValue;
