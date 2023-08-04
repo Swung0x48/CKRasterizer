@@ -32,4 +32,5 @@ HRESULT CKDX12DescriptorHeap::CreateView(const CKDX12AllocatedResource &resource
     m_Device->CreateConstantBufferView(&desc, cpuHandle);
     gpuHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(m_Heap->GetGPUDescriptorHandleForHeapStart(),
         m_IncrementSize * offset);
+    return S_OK;
 }

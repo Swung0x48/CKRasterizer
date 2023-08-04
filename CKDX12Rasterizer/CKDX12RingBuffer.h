@@ -28,7 +28,7 @@ public:
     CKDX12RingBuffer(size_t MaxSize, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, bool AllowCPUAccess);
 
     CKDX12RingBuffer(CKDX12RingBuffer &&rhs) = default;
-    CKDX12RingBuffer &operator=(CKDX12RingBuffer &&rhs) = default;
+    CKDX12RingBuffer &operator=(CKDX12RingBuffer &&rhs) noexcept = default;
     CKDX12RingBuffer(const CKDX12RingBuffer &) = delete;
     CKDX12RingBuffer &operator=(CKDX12RingBuffer &) = delete;
     ~CKDX12RingBuffer() = default;
