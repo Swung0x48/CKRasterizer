@@ -5,9 +5,11 @@
 #include "CKRasterizer.h"
 #include "CKDX12RasterizerCommon.h"
 #include "CKDX12DynamicUploadHeap.h"
+#include "CKDX12DescriptorHeap.h"
 
 #include <vector>
 #include <deque>
+#include <memory>
 
 #include <Windows.h>
 #include <d3d12.h>
@@ -270,16 +272,16 @@ public:
     virtual void Unlock();
 } CKDX12IndexBufferDesc;
 
-typedef struct CKDX12ConstantBufferDesc
-{
-public:
-    ComPtr<ID3D12Resource> DxResource;
-    D3D12_CONSTANT_BUFFER_VIEW_DESC DxView;
-    CKDX12ConstantBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
-    virtual CKBOOL Create(CKDX12RasterizerContext *ctx, UINT size);
-    virtual void *Lock();
-    virtual void Unlock();
-} CKDX12ConstantBufferDesc;
+//typedef struct CKDX12ConstantBufferDesc
+//{
+//public:
+//    ComPtr<ID3D12Resource> DxResource;
+//    D3D12_CONSTANT_BUFFER_VIEW_DESC DxView;
+//    CKDX12ConstantBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
+//    virtual CKBOOL Create(CKDX12RasterizerContext *ctx, UINT size);
+//    virtual void *Lock();
+//    virtual void Unlock();
+//} CKDX12ConstantBufferDesc;
 
 class CKDX12RasterizerContext : public CKRasterizerContext
 {
@@ -433,9 +435,9 @@ public:
     UINT m_RTVDescriptorSize;
     ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
     UINT m_DSVDescriptorSize;
-    ComPtr<ID3D12DescriptorHeap> m_CBVHeap;
-
-    std::unique_ptr<CKDX12DynamicUploadHeap> m_CBHeap;
+    std::unique_ptr<CKDX12DescriptorHeap> m_VSCBVHeap;
+    //ComPtr<ID3D12DescriptorHeap> m_CBVHeap;
+    std::unique_ptr<CKDX12DynamicUploadHeap> m_VSCBHeap;
 
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
@@ -449,10 +451,10 @@ public:
     CD3DX12_VIEWPORT m_Viewport;
     CD3DX12_RECT m_ScissorRect;
 
-    CKDX12ConstantBufferDesc m_VSConstantBuffer;
+    /*CKDX12ConstantBufferDesc m_VSConstantBuffer;
     CKDX12ConstantBufferDesc m_PSConstantBuffer;
     CKDX12ConstantBufferDesc m_PSLightConstantBuffer;
-    CKDX12ConstantBufferDesc m_PSTexCombinatorConstantBuffer;
+    CKDX12ConstantBufferDesc m_PSTexCombinatorConstantBuffer;*/
     VSConstantBufferStruct m_VSCBuffer;
     PSConstantBufferStruct m_PSCBuffer;
     PSLightConstantBufferStruct m_PSLightCBuffer;

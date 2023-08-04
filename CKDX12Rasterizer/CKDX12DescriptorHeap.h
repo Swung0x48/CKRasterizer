@@ -16,7 +16,7 @@ public:
 
     HRESULT CreateView(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
 
-private:
+public:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_Heap;
     D3D12_DESCRIPTOR_HEAP_DESC m_HeapDesc = {};
     Microsoft::WRL::ComPtr<ID3D12Device> m_Device;

@@ -22,7 +22,7 @@
     #define STATUS 1
     //#define LOGGING 1
     #define CONSOLE 1
-    #define CMDLIST 1
+    #define CMDLIST 0
 #endif
 
 #if LOGGING || CONSOLE
@@ -168,12 +168,12 @@ HRESULT CKDX12RasterizerContext::CreateDescriptorHeap() {
     // Describe and create a constant buffer view (CBV) descriptor heap.
     // Flags indicate that this descriptor heap can be bound to the pipeline
     // and that descriptors contained in it can be referenced by a root table.
-    D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
-    cbvHeapDesc.NumDescriptors = 1;
-    cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    cbvHeapDesc.NodeMask = 0; // We're not supporting multi-GPU
-    D3DCall(m_Device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_CBVHeap)));
+    //D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
+    //cbvHeapDesc.NumDescriptors = 1;
+    //cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    //cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    //cbvHeapDesc.NodeMask = 0; // We're not supporting multi-GPU
+    //D3DCall(m_Device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_CBVHeap)));
 
     return hr;
 }
@@ -227,8 +227,10 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
         D3DCall(m_CommandList->Close());
     }
 
-    m_CBHeap =
-        std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * 30);
+    const size_t size = 512;
+    m_VSCBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device,
+                                                         D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * size);
+    m_VSCBVHeap = std::make_unique<CKDX12DescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
 
     return hr;
 }
@@ -382,11 +384,11 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
 }
 
 void CKDX12RasterizerContext::CreateConstantBuffers() {
-    m_VSConstantBuffer.Create(this, sizeof(VSConstantBufferStruct));
+    //m_VSConstantBuffer.Create(this, sizeof(VSConstantBufferStruct));
    /* m_PSConstantBuffer.Create(this, sizeof(PSConstantBufferStruct));
     m_PSLightConstantBuffer.Create(this, sizeof(PSLightConstantBufferStruct));
     m_PSTexCombinatorConstantBuffer.Create(this, sizeof(PSTexCombinatorConstantBufferStruct));*/
-    ZeroMemory(&m_VSCBuffer, sizeof(VSConstantBufferStruct));
+    //ZeroMemory(&m_VSCBuffer, sizeof(VSConstantBufferStruct));
     /*ZeroMemory(&m_PSCBuffer, sizeof(PSConstantBufferStruct));
     ZeroMemory(&m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
     ZeroMemory(&m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));*/
@@ -417,12 +419,17 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     // Update the frame index.
     m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
 
+    auto completedValue = m_Fence->GetCompletedValue();
     // If the next frame is not ready to be rendered yet, wait until it is ready.
-    if (m_Fence->GetCompletedValue() < m_FenceValues[m_FrameIndex])
+    if (completedValue < m_FenceValues[m_FrameIndex])
     {
         D3DCall(m_Fence->SetEventOnCompletion(m_FenceValues[m_FrameIndex], m_FenceEvent));
         WaitForSingleObjectEx(m_FenceEvent, INFINITE, FALSE);
     }
+
+    m_VSCBHeap->FinishFrame(m_FenceValues[m_FrameIndex], completedValue);
+    m_VSCBVHeap->FinishCurrentFrame(m_FenceValues[m_FrameIndex]);
+    m_VSCBVHeap->ReleaseCompletedFrames(completedValue);
 
     assert(m_VertexBufferSubmitted.size() >= m_VertexBufferSubmittedCount[m_FrameIndex]);
     assert(m_IndexBufferSubmitted.size() >= m_IndexBufferSubmittedCount[m_FrameIndex]);
@@ -565,7 +572,7 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
     HRESULT hr;
     D3DCall(m_CommandAllocators[m_FrameIndex]->Reset());
     D3DCall(m_CommandList->Reset(m_CommandAllocators[m_FrameIndex].Get(), nullptr));
-#ifdef CMDLIST
+#if CMDLIST
     fprintf(stderr, "m_CommandList->Reset() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
 #if defined DEBUG || defined _DEBUG
     m_CmdListClosed = false;
@@ -578,7 +585,7 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
                                             m_RTVDescriptorSize);
     m_CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
     m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
-    ID3D12DescriptorHeap *ppHeaps[] = {m_CBVHeap.Get()};
+    ID3D12DescriptorHeap *ppHeaps[] = {m_VSCBVHeap->m_Heap.Get()};
     m_CommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
     return TRUE;
 }
@@ -597,7 +604,7 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
         m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     m_CommandList->ResourceBarrier(1, &transitionToPresent);
     D3DCall(m_CommandList->Close());
-#ifdef CMDLIST
+#if CMDLIST
     fprintf(stderr, "m_CommandList->Close() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
 #if defined DEBUG || defined _DEBUG
     m_CmdListClosed = true;
@@ -1064,10 +1071,13 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
-        void* pData = m_VSConstantBuffer.Lock();
-        memcpy(pData, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
-        m_VSConstantBuffer.Unlock();
-        m_CommandList->SetGraphicsRootDescriptorTable(0, m_CBVHeap->GetGPUDescriptorHandleForHeapStart());
+        auto res = 
+            m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
+        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+        HRESULT hr;
+        D3DCall(m_VSCBVHeap->CreateView(res, handle));
+        m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
     m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);

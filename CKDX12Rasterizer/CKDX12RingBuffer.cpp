@@ -59,6 +59,6 @@ CKDX12AllocatedResource CKDX12RingBuffer::Allocate(size_t SizeInBytes)
     CKDX12AllocatedResource alloc(m_pBuffer, Offset, SizeInBytes);
     alloc.GPUAddress = m_GpuVirtualAddress + Offset;
     if (m_CpuVirtualAddress)
-        alloc.CPUAddress = static_cast<char *>(alloc.CPUAddress) + Offset;
+        alloc.CPUAddress = reinterpret_cast<char *>(m_CpuVirtualAddress) + Offset;
     return alloc;
 }

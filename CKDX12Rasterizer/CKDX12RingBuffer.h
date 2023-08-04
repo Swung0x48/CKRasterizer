@@ -35,7 +35,7 @@ public:
 
     CKDX12AllocatedResource Allocate(size_t SizeInBytes);
 private:
-    void *m_CpuVirtualAddress;
+    void *m_CpuVirtualAddress = nullptr;
     D3D12_GPU_VIRTUAL_ADDRESS m_GpuVirtualAddress;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_pBuffer;
 };
