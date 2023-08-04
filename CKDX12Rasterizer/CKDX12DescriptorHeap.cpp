@@ -18,7 +18,7 @@ CKDX12DescriptorHeap::CKDX12DescriptorHeap(size_t size, D3D12_DESCRIPTOR_HEAP_TY
     m_TailHandle = m_HeadHandle;*/
 }
 
-HRESULT CKDX12DescriptorHeap::CreateView(CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE& gpuHandle)
+HRESULT CKDX12DescriptorHeap::CreateView(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE& gpuHandle)
 {
     auto offset = CKDX12RingBufferBase::Allocate(1);
     if (offset == InvalidOffset)

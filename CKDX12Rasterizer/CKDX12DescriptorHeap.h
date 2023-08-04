@@ -14,7 +14,8 @@ public:
     CKDX12DescriptorHeap(CKDX12DescriptorHeap &) = delete;
     CKDX12DescriptorHeap& operator=(CKDX12DescriptorHeap) = delete;
 
-    HRESULT CreateView(CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE& gpuHandle);
+    HRESULT CreateView(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
+
 private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_Heap;
     D3D12_DESCRIPTOR_HEAP_DESC m_HeapDesc = {};
