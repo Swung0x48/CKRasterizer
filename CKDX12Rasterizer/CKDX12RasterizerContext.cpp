@@ -455,8 +455,8 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
         WaitForSingleObjectEx(m_FenceEvent, INFINITE, FALSE);
     }
 
-    m_VSCBVHeap->FinishFrame(m_FenceValues[m_FrameIndex], completedValue);
-    m_VSCBHeap->FinishFrame(m_FenceValues[m_FrameIndex], completedValue);
+    m_VSCBVHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
+    m_VSCBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
 
     assert(m_VertexBufferSubmitted.size() >= m_VertexBufferSubmittedCount[m_FrameIndex]);
     assert(m_IndexBufferSubmitted.size() >= m_IndexBufferSubmittedCount[m_FrameIndex]);
