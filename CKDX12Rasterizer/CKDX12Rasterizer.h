@@ -5,7 +5,7 @@
 #include "CKRasterizer.h"
 #include "CKDX12RasterizerCommon.h"
 #include "CKDX12DynamicUploadHeap.h"
-#include "CKDX12DescriptorHeap.h"
+#include "CKDX12DynamicDescriptorHeap.h"
 
 #include <vector>
 #include <deque>
@@ -435,8 +435,7 @@ public:
     UINT m_RTVDescriptorSize;
     ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
     UINT m_DSVDescriptorSize;
-    std::unique_ptr<CKDX12DescriptorHeap> m_VSCBVHeap;
-    //ComPtr<ID3D12DescriptorHeap> m_CBVHeap;
+    std::unique_ptr<CKDX12DynamicDescriptorHeap> m_VSCBVHeap;
     std::unique_ptr<CKDX12DynamicUploadHeap> m_VSCBHeap;
 
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];

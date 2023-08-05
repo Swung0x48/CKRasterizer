@@ -170,7 +170,7 @@ HRESULT CKDX12RasterizerContext::CreateDescriptorHeap() {
 
 HRESULT CKDX12RasterizerContext::CreateFrameResources()
 {
-    HRESULT hr;
+    HRESULT hr = S_OK;
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart());
 
     // Create a RTV for each frame.
@@ -238,10 +238,10 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
         D3DCall(m_CommandList->Close());
     }
 
-    const size_t size = 512;
+    const size_t size = 1024;
     m_VSCBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device,
                                                          D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * size);
-    m_VSCBVHeap = std::make_unique<CKDX12DescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
+    m_VSCBVHeap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
 
     return hr;
 }
@@ -455,9 +455,8 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
         WaitForSingleObjectEx(m_FenceEvent, INFINITE, FALSE);
     }
 
+    m_VSCBVHeap->FinishFrame(m_FenceValues[m_FrameIndex], completedValue);
     m_VSCBHeap->FinishFrame(m_FenceValues[m_FrameIndex], completedValue);
-    m_VSCBVHeap->FinishCurrentFrame(m_FenceValues[m_FrameIndex]);
-    m_VSCBVHeap->ReleaseCompletedFrames(completedValue);
 
     assert(m_VertexBufferSubmitted.size() >= m_VertexBufferSubmittedCount[m_FrameIndex]);
     assert(m_IndexBufferSubmitted.size() >= m_IndexBufferSubmittedCount[m_FrameIndex]);
@@ -615,8 +614,12 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
                                             m_DSVDescriptorSize);
     m_CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
     m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
-    ID3D12DescriptorHeap *ppHeaps[] = {m_VSCBVHeap->m_Heap.Get()};
-    m_CommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+    std::vector<ID3D12DescriptorHeap *> ppHeaps(m_VSCBVHeap->m_Heaps.size(), nullptr);
+    for (auto i = 0; i < m_VSCBVHeap->m_Heaps.size(); ++i)
+    {
+        ppHeaps[i] = m_VSCBVHeap->m_Heaps[i].m_Heap.Get();
+    }
+    m_CommandList->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
     return TRUE;
 }
 
@@ -1106,7 +1109,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         HRESULT hr;
-        D3DCall(m_VSCBVHeap->CreateView(res, handle));
+        D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
         m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }

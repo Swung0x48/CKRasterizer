@@ -1,6 +1,6 @@
-#include "CKDX12DescriptorHeap.h"
+#include "CKDX12DescriptorRing.h"
 
-CKDX12DescriptorHeap::CKDX12DescriptorHeap(size_t size, D3D12_DESCRIPTOR_HEAP_TYPE type,
+CKDX12DescriptorRing::CKDX12DescriptorRing(size_t size, D3D12_DESCRIPTOR_HEAP_TYPE type,
                                            Microsoft::WRL::ComPtr<ID3D12Device> device):
     CKDX12RingBufferBase(size),
     m_Device(device),
@@ -18,7 +18,7 @@ CKDX12DescriptorHeap::CKDX12DescriptorHeap(size_t size, D3D12_DESCRIPTOR_HEAP_TY
     m_TailHandle = m_HeadHandle;*/
 }
 
-HRESULT CKDX12DescriptorHeap::CreateView(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE& gpuHandle)
+HRESULT CKDX12DescriptorRing::CreateDescriptor(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE& gpuHandle)
 {
     auto offset = CKDX12RingBufferBase::Allocate(1);
     if (offset == InvalidOffset)
