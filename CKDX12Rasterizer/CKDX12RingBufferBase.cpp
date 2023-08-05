@@ -1,16 +1,16 @@
 #include "CKDX12RingBufferBase.h"
 
-void CKDX12RingBufferBase::FinishCurrentFrame(UINT64 FenceValue)
+void CKDX12RingBufferBase::FinishCurrentFrame(UINT64 nextFenceValue)
 {
-    m_CompletedFrameTails.emplace_back(FenceValue, m_Tail, m_CurrFrameSize);
+    m_CompletedFrameTails.emplace_back(nextFenceValue, m_Tail, m_CurrFrameSize);
     m_CurrFrameSize = 0;
 }
 
-void CKDX12RingBufferBase::ReleaseCompletedFrames(UINT64 CompletedFenceValue)
+void CKDX12RingBufferBase::ReleaseCompletedFrames(UINT64 completedFenceValue)
 {
     // We can release all tails whose associated fence value is less
-    // than or equal to CompletedFenceValue
-    while (!m_CompletedFrameTails.empty() && m_CompletedFrameTails.front().FenceValue <= CompletedFenceValue)
+    // than or equal to completedFenceValue
+    while (!m_CompletedFrameTails.empty() && m_CompletedFrameTails.front().FenceValue <= completedFenceValue)
     {
         const auto &OldestFrameTail = m_CompletedFrameTails.front();
         assert(OldestFrameTail.Size <= m_UsedSize);

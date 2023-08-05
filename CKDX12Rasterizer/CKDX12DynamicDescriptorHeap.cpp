@@ -20,14 +20,14 @@ HRESULT CKDX12DynamicDescriptorHeap::CreateDescriptor(const CKDX12AllocatedResou
     return hr;
 }
 
-void CKDX12DynamicDescriptorHeap::FinishFrame(UINT64 FenceValue, UINT64 LastCompletedFenceValue)
+void CKDX12DynamicDescriptorHeap::FinishFrame(UINT64 nextFenceValue, UINT64 lastCompletedFenceValue)
 {
     size_t bufToDelete = 0;
     for (size_t i = 0; i < m_Heaps.size(); ++i)
     {
         auto &heap = m_Heaps[i];
-        heap.FinishCurrentFrame(FenceValue);
-        heap.ReleaseCompletedFrames(LastCompletedFenceValue);
+        heap.FinishCurrentFrame(nextFenceValue);
+        heap.ReleaseCompletedFrames(lastCompletedFenceValue);
         if (bufToDelete == i && i < m_Heaps.size() - 1 && heap.IsEmpty())
         {
             ++bufToDelete;

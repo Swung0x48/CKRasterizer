@@ -30,8 +30,8 @@ public:
 
     OffsetType Allocate(OffsetType Size);
 
-    void FinishCurrentFrame(UINT64 FenceValue);
-    void ReleaseCompletedFrames(UINT64 CompletedFenceValue);
+    void FinishCurrentFrame(UINT64 nextFenceValue);
+    void ReleaseCompletedFrames(UINT64 completedFenceValue);
 
     OffsetType GetMaxSize() const { return m_MaxSize; }
     bool IsFull() const { return m_UsedSize == m_MaxSize; };

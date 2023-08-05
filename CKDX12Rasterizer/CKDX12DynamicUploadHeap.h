@@ -23,7 +23,7 @@ public:
 
     CKDX12AllocatedResource Allocate(size_t SizeInBytes, size_t Alignment = DEFAULT_ALIGN);
 
-    void FinishFrame(UINT64 FenceValue, UINT64 LastCompletedFenceValue);
+    void FinishFrame(UINT64 nextFenceValue, UINT64 lastCompletedFenceValue);
 
 private:
     static constexpr size_t DEFAULT_ALIGN = 0;

@@ -22,7 +22,7 @@ public:
     CKDX12DynamicDescriptorHeap &operator=(CKDX12DynamicDescriptorHeap &&) = default;
 
     HRESULT CreateDescriptor(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
-    void FinishFrame(UINT64 FenceValue, UINT64 LastCompletedFenceValue);
+    void FinishFrame(UINT64 nextFenceValue, UINT64 lastCompletedFenceValue);
 
 public:
     D3D12_DESCRIPTOR_HEAP_DESC m_HeapDesc = {};
