@@ -333,6 +333,7 @@ private:
     std::vector<VkFence> vkffrminfl;
     uint32_t curfrm = 0;
     uint32_t image_index = 0;
+    bool in_scene = false;
 
     CKVkMatrixUniform matrices;
     std::vector<CKVkBuffer*> matubos;

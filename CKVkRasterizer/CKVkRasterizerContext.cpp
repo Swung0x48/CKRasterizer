@@ -360,6 +360,8 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
             VK_SUCCESS != vkCreateFence(vkdev, &fenc, nullptr, &vkffrminfl[i]))
             return FALSE;
 
+    m_ViewportData = CKViewportData {0, 0, (int)swchiext.width, (int)swchiext.height, 0., 1.};
+
     return TRUE;
 }
 
@@ -466,7 +468,14 @@ CKBOOL CKVkRasterizerContext::BeginScene()
     vkCmdBeginRenderPass(cmdbuf[curfrm], &rpi, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, vkpl);
 
-    VkViewport vp{0., (float)swchiext.height, (float)swchiext.width, -(float)swchiext.height, 0., 1.};
+    in_scene = true;
+
+    auto vpd = &m_ViewportData;
+    VkViewport vp {
+            (float)vpd->ViewX, (float)(vpd->ViewY + vpd->ViewHeight),
+            (float)vpd->ViewWidth, (float)-vpd->ViewHeight,
+            vpd->ViewZMin, vpd->ViewZMax
+        };
     vkCmdSetViewport(cmdbuf[curfrm], 0, 1, &vp);
     VkRect2D sc{{0, 0}, swchiext};
     vkCmdSetScissor(cmdbuf[curfrm], 0, 1, &sc);
@@ -478,6 +487,8 @@ CKBOOL CKVkRasterizerContext::EndScene()
     vkCmdEndRenderPass(cmdbuf[curfrm]);
     if (VK_SUCCESS != vkEndCommandBuffer(cmdbuf[curfrm]))
         return FALSE;
+
+    in_scene = false;
 
     auto submiti = make_vulkan_structure<VkSubmitInfo>();
 
@@ -530,12 +541,16 @@ CKBOOL CKVkRasterizerContext::SetViewport(CKViewportData *data)
 {
     ZoneScopedN(__FUNCTION__);
 
-    /*VkViewport vp {
-        data->ViewX, data->ViewY + data->ViewHeight,
-        data->ViewWidth, -data->ViewHeight,
-        data->ViewZMin, data->ViewZMax
-    };
-    vkCmdSetViewport(cmdbuf[curfrm], 0, 1, &vp);*/
+    memcpy(&m_ViewportData, data, sizeof(m_ViewportData));
+    if (in_scene)
+    {
+        VkViewport vp {
+            (float)data->ViewX, (float)(data->ViewY + data->ViewHeight),
+            (float)data->ViewWidth, (float)-data->ViewHeight,
+            data->ViewZMin, data->ViewZMax
+        };
+        vkCmdSetViewport(cmdbuf[curfrm], 0, 1, &vp);
+    }
 
     return TRUE;
 }
@@ -630,7 +645,8 @@ CKBOOL CKVkRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
         default:
             return FALSE;
     }
-    vkCmdPushConstants(cmdbuf[curfrm], vkpllo, VK_SHADER_STAGE_VERTEX_BIT, 0, 192, &m_WorldMatrix);
+    if (in_scene)
+        vkCmdPushConstants(cmdbuf[curfrm], vkpllo, VK_SHADER_STAGE_VERTEX_BIT, 0, 192, &m_WorldMatrix);
     return TRUE;
 }
 
