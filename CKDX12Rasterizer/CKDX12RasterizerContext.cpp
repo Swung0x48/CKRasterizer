@@ -118,7 +118,7 @@ HRESULT CKDX12RasterizerContext::CreateSwapchain(WIN_HANDLE Window, int Width, i
     scd.Stereo = FALSE;
     scd.SampleDesc.Count = 1;
     scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    scd.BufferCount = 2;
+    scd.BufferCount = m_BackBufferCount;
     scd.Scaling = DXGI_SCALING_NONE;
     scd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
     scd.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
