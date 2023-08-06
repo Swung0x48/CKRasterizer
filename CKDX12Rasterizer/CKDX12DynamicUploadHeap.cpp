@@ -23,13 +23,13 @@ CKDX12AllocatedResource CKDX12DynamicUploadHeap::Allocate(size_t SizeInBytes, si
 
 void CKDX12DynamicUploadHeap::FinishFrame(UINT64 nextFenceValue, UINT64 lastCompletedFenceValue)
 {
+    if (m_noShrink)
+        return;
     size_t bufToDelete = 0;
     for (size_t i = 0; i < m_RingBuffers.size(); ++i)
     {
         auto &buffer = m_RingBuffers[i];
         buffer.FinishCurrentFrame(nextFenceValue);
-        if (m_noShrink)
-            continue;
         buffer.ReleaseCompletedFrames(lastCompletedFenceValue);
         if (bufToDelete == i && i < m_RingBuffers.size() - 1 && buffer.IsEmpty())
         {
