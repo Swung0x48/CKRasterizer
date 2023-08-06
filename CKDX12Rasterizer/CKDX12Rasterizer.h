@@ -485,12 +485,7 @@ public:
     CKBOOL m_PSConstantBufferUpToDate = FALSE;
     CKBOOL m_PSLightConstantBufferUpToDate = FALSE;
     CKBOOL m_PSTexCombinatorConstantBufferUpToDate = FALSE;
-
-    /*ComPtr<ID3D12Resource> m_VertexBuffer;
-    D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView;
-
-    ComPtr<ID3D12Resource> m_IndexBuffer;
-    D3D12_INDEX_BUFFER_VIEW m_IndexBufferView;*/
+    
     std::deque<CKDX12VertexBufferDesc> m_VertexBufferSubmitted;
     size_t m_VertexBufferSubmittedCount[m_BufferedFrameCount] = {0};
     std::deque<CKDX12IndexBufferDesc> m_IndexBufferSubmitted;

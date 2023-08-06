@@ -799,51 +799,6 @@ CKBOOL CKDX12RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const v
     return CKRasterizerContext::SetPixelShaderConstant(Register, Data, CstCount);
 }
 
-
-//CKDX12IndexBufferDesc* CKDX12RasterizerContext::GenerateIB(void *indices, int indexCount, int *startIndex)
-//{
-//    ZoneScopedN(__FUNCTION__);
-//    if (!indices)
-//        return nullptr;
-//    CKDX12IndexBufferDesc *ibo = nullptr;
-//    void *pdata = nullptr;
-//    auto iboid = m_DynamicIndexBufferCounter++;
-//    if (m_DynamicIndexBufferCounter >= DYNAMIC_IBO_COUNT)
-//        m_DynamicIndexBufferCounter = 0;
-//    if (!m_DynamicIndexBuffer[iboid] || m_DynamicIndexBuffer[iboid]->m_MaxIndexCount < indexCount)
-//    {
-//        if (m_DynamicIndexBuffer[iboid])
-//            delete m_DynamicIndexBuffer[iboid];
-//        ibo = new CKDX12IndexBufferDesc;
-//        ibo->m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
-//        ibo->m_MaxIndexCount = indexCount + 100 < DEFAULT_VB_SIZE ? DEFAULT_VB_SIZE : indexCount + 100;
-//        ibo->m_CurrentICount = 0;
-//        if (!ibo->Create(this))
-//        {
-//            m_DynamicIndexBuffer[iboid] = nullptr;
-//            return FALSE;
-//        }
-//        m_DynamicIndexBuffer[iboid] = ibo;
-//    }
-//    ibo = m_DynamicIndexBuffer[iboid];
-//    if (indexCount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
-//    {
-//        pdata = ibo->Lock(this, sizeof(CKWORD) * ibo->m_CurrentICount, sizeof(CKWORD) * indexCount, false);
-//        *startIndex = ibo->m_CurrentICount;
-//        ibo->m_CurrentICount += indexCount;
-//    }
-//    else
-//    {
-//        pdata = ibo->Lock(this, 0, sizeof(CKWORD) * indexCount, true);
-//        *startIndex = 0;
-//        ibo->m_CurrentICount = indexCount;
-//    }
-//    if (pdata)
-//        std::memcpy(pdata, indices, sizeof(CKWORD) * indexCount);
-//    ibo->Unlock(this);
-//    return ibo;
-//}
-//
 CKBOOL CKDX12RasterizerContext::TriangleFanToList(CKWORD VOffset, CKDWORD VCount,
                                                                   std::vector<CKWORD>& strip_index)
 {
@@ -987,6 +942,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
 
     int ibcount = (pType == VX_TRIANGLEFAN) ? ib.size() : indexcount;
+    assert(ibcount > 0);
     if (indices || pType == VX_TRIANGLEFAN)
     {
         auto res = m_IBHeap->Allocate(ibcount * sizeof(CKWORD));
@@ -995,13 +951,15 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         desc.m_CurrentICount = 0;
         desc.m_Flags = 0;
         CKDX12IndexBufferDesc ibo(desc, res);
+        //m_IndexBufferSubmitted.emplace_back(desc, res);
+        //++m_IndexBufferSubmittedCount[m_FrameIndex];
         assert(pType == VX_TRIANGLELIST || pType == VX_TRIANGLEFAN);
         if (pType == VX_TRIANGLELIST)
             memcpy(ibo.CPUAddress, indices, indexcount * sizeof(CKWORD));
         else if (pType == VX_TRIANGLEFAN)
             memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
         m_CommandList->IASetIndexBuffer(&ibo.DxView);
-        m_CommandList->DrawIndexedInstanced(ib.size(), 1, desc.m_CurrentICount, vbase, 0);
+        m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, vbase, 0);
     } else
     {
         m_CommandList->DrawInstanced(data->VertexCount, 1, vbase, 0);
