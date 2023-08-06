@@ -26,7 +26,7 @@ public:
     void FinishFrame(UINT64 nextFenceValue, UINT64 lastCompletedFenceValue);
 
 private:
-    static constexpr size_t DEFAULT_ALIGN = 0;
+    static constexpr size_t DEFAULT_ALIGN = 1;
     const bool m_IsCPUAccessible = false;
     std::vector<CKDX12RingBuffer> m_RingBuffers;
     Microsoft::WRL::ComPtr<ID3D12Device> m_Device;

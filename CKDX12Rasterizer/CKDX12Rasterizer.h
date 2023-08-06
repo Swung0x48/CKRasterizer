@@ -245,31 +245,51 @@ struct FVFResource
 typedef struct CKDX12VertexBufferDesc : public CKVertexBufferDesc
 {
 public:
-    ComPtr<ID3D12Resource> DxResource;
+    //ComPtr<ID3D12Resource> DxResource;
     D3D12_VERTEX_BUFFER_VIEW DxView;
     CKDX12VertexBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW)); }
     CKDX12VertexBufferDesc(const CKVertexBufferDesc& desc): CKVertexBufferDesc(desc)
     {
         ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW));
     }
-    virtual CKBOOL Create(CKDX12RasterizerContext *ctx);
+    CKDX12VertexBufferDesc(const CKVertexBufferDesc &desc, const CKDX12AllocatedResource& resource):
+        CKVertexBufferDesc(desc)
+    {
+        ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW));
+        DxView.BufferLocation = resource.GPUAddress;
+        DxView.SizeInBytes = desc.m_VertexSize * desc.m_MaxVertexCount;
+        DxView.StrideInBytes = desc.m_VertexSize;
+        CPUAddress = resource.CPUAddress;
+    }
+    void *CPUAddress = nullptr;
+    /*virtual CKBOOL Create(CKDX12RasterizerContext *ctx);
     virtual void *Lock();
-    virtual void Unlock();
+    virtual void Unlock();*/
 } CKDX12VertexBufferDesc;
 
 typedef struct CKDX12IndexBufferDesc : public CKIndexBufferDesc
 {
 public:
-    ComPtr<ID3D12Resource> DxResource;
+    //ComPtr<ID3D12Resource> DxResource;
     D3D12_INDEX_BUFFER_VIEW DxView;
     CKDX12IndexBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
     CKDX12IndexBufferDesc(const CKIndexBufferDesc &desc) : CKIndexBufferDesc(desc)
     {
         ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW));
     }
-    virtual CKBOOL Create(CKDX12RasterizerContext *ctx);
+    CKDX12IndexBufferDesc(const CKIndexBufferDesc &desc, const CKDX12AllocatedResource &resource) :
+        CKIndexBufferDesc(desc)
+    {
+        ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW));
+        DxView.BufferLocation = resource.GPUAddress;
+        DxView.SizeInBytes = resource.Size;
+        DxView.Format = DXGI_FORMAT_R16_UINT;
+        CPUAddress = resource.CPUAddress;
+    }
+    void *CPUAddress = nullptr;
+    /*virtual CKBOOL Create(CKDX12RasterizerContext *ctx);
     virtual void *Lock();
-    virtual void Unlock();
+    virtual void Unlock();*/
 } CKDX12IndexBufferDesc;
 
 //typedef struct CKDX12ConstantBufferDesc
@@ -437,6 +457,9 @@ public:
     UINT m_DSVDescriptorSize;
     std::unique_ptr<CKDX12DynamicDescriptorHeap> m_VSCBVHeap;
     std::unique_ptr<CKDX12DynamicUploadHeap> m_VSCBHeap;
+
+    std::unique_ptr<CKDX12DynamicUploadHeap> m_VBHeap;
+    std::unique_ptr<CKDX12DynamicUploadHeap> m_IBHeap;
 
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
