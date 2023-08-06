@@ -27,10 +27,8 @@ HRESULT CKDX12DescriptorRing::CreateDescriptor(const CKDX12AllocatedResource &re
     desc.BufferLocation = resource.GPUAddress;
     desc.SizeInBytes = resource.Size;
     assert(m_HeapDesc.Type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    auto cpuHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Heap->GetCPUDescriptorHandleForHeapStart(), 
-        m_IncrementSize * offset);
+    auto cpuHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Heap->GetCPUDescriptorHandleForHeapStart(), offset, m_IncrementSize);
     m_Device->CreateConstantBufferView(&desc, cpuHandle);
-    gpuHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(m_Heap->GetGPUDescriptorHandleForHeapStart(),
-        m_IncrementSize * offset);
+    gpuHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(m_Heap->GetGPUDescriptorHandleForHeapStart(), offset, m_IncrementSize);
     return S_OK;
 }

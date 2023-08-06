@@ -910,21 +910,16 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 #endif
     if (!m_SceneBegined)
         BeginScene();
-    CKDWORD vertexSize;
-    CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
-    size_t vbSize = vertexSize * data->VertexCount;
-    auto vb = std::vector<CKBYTE>(vbSize);
-    CKRSTLoadVertexBuffer(vb.data(), vertexFormat, vertexSize, data);
 
     std::vector<CKWORD> ib;
     switch (pType)
     {
         case VX_TRIANGLELIST:
-            if (indices)
+            /*if (indices)
             {
                 ib.resize(indexcount);
                 memcpy(ib.data(), indices, sizeof(CKWORD) * indexcount);
-            }
+            }*/
             break;
         case VX_TRIANGLEFAN:
             if (indices)
@@ -948,6 +943,30 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
             fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
             break;
     }
+    CKDWORD vertexSize;
+    CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
+    m_CommandList->SetPipelineState(m_PipelineState[vertexFormat].Get());
+    m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    if (!m_VSConstantBufferUpToDate)
+    {
+        UpdateMatrices(WORLD_TRANSFORM);
+        UpdateMatrices(VIEW_TRANSFORM);
+        Vx3DTransposeMatrix(m_VSCBuffer.WorldMatrix, m_WorldMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.ViewMatrix, m_ViewMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
+        InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
+        InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
+        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
+        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+        HRESULT hr;
+        D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
+        m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
+        m_VSConstantBufferUpToDate = TRUE;
+    }
+
     CKBOOL clip = FALSE;
     if ((data->Flags & CKRST_DP_DOCLIP))
     {
@@ -958,20 +977,35 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     {
         SetRenderState(VXRENDERSTATE_CLIPPING, 0);
     }
-    //CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
-    //auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
-    //assert(vbo && vbo->m_MaxVertexCount >= data->VertexCount && vertexSize == vbo->m_VertexSize);
-    //void *pbData = nullptr;
-    //CKDWORD vbase = 0;
-    //pbData = vbo->Lock();
-    //vbase = vbo->m_CurrentVCount;
-    //memcpy(pbData, vb.data(), vb.size() * vbo->m_VertexSize);
-    //vbo->Unlock();
-    //pbData = nullptr;
+    
+    CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
+    auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
+    assert(vbo && vbo->m_MaxVertexCount >= data->VertexCount && vertexSize == vbo->m_VertexSize);
+    CKDWORD vbase = vbo->m_CurrentVCount;
+    CKRSTLoadVertexBuffer((CKBYTE*)vbo->CPUAddress, vertexFormat, vertexSize, data);
 
-    //m_VertexBufferSubmitted.emplace_back(*vbo);
-    //++m_VertexBufferSubmittedCount[m_FrameIndex];
+    m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
 
+    int ibcount = (pType == VX_TRIANGLEFAN) ? ib.size() : indexcount;
+    if (indices || pType == VX_TRIANGLEFAN)
+    {
+        auto res = m_IBHeap->Allocate(ibcount * sizeof(CKWORD));
+        CKIndexBufferDesc desc;
+        desc.m_MaxIndexCount = indexcount;
+        desc.m_CurrentICount = 0;
+        desc.m_Flags = 0;
+        CKDX12IndexBufferDesc ibo(desc, res);
+        assert(pType == VX_TRIANGLELIST || pType == VX_TRIANGLEFAN);
+        if (pType == VX_TRIANGLELIST)
+            memcpy(ibo.CPUAddress, indices, indexcount * sizeof(CKWORD));
+        else if (pType == VX_TRIANGLEFAN)
+            memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
+        m_CommandList->IASetIndexBuffer(&ibo.DxView);
+        m_CommandList->DrawIndexedInstanced(ib.size(), 1, desc.m_CurrentICount, vbase, 0);
+    } else
+    {
+        m_CommandList->DrawInstanced(data->VertexCount, 1, vbase, 0);
+    }
     //
     //CKDWORD ibase = 0;
     //if (!ib.empty())
@@ -1231,6 +1265,7 @@ void *CKDX12RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
     assert(StartVertex + VertexCount <= desc->m_MaxVertexCount);
     return desc->CPUAddress;
 }
+
 CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     if (VB > m_VertexBuffers.Size())
         return FALSE;
