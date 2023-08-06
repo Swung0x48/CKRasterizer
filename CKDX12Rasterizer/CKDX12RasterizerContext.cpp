@@ -242,8 +242,8 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
     m_VSCBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device,
                                                          D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * size);
     m_VSCBVHeap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
-    m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size * size);
-    m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size * size);
+    m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
+    m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
 
     return hr;
 }

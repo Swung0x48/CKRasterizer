@@ -28,6 +28,8 @@ void CKDX12DynamicUploadHeap::FinishFrame(UINT64 nextFenceValue, UINT64 lastComp
     {
         auto &buffer = m_RingBuffers[i];
         buffer.FinishCurrentFrame(nextFenceValue);
+        if (m_noShrink)
+            continue;
         buffer.ReleaseCompletedFrames(lastCompletedFenceValue);
         if (bufToDelete == i && i < m_RingBuffers.size() - 1 && buffer.IsEmpty())
         {

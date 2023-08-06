@@ -9,8 +9,8 @@
 class CKDX12DynamicUploadHeap
 {
 public:
-    CKDX12DynamicUploadHeap(bool IsCPUAccessible, Microsoft::WRL::ComPtr<ID3D12Device> device, size_t size) :
-        m_IsCPUAccessible(IsCPUAccessible), m_Device(device)
+    CKDX12DynamicUploadHeap(bool IsCPUAccessible, Microsoft::WRL::ComPtr<ID3D12Device> device, size_t size, bool noShrink = false) :
+        m_IsCPUAccessible(IsCPUAccessible), m_Device(device), m_noShrink(noShrink)
     {
         CKDX12RingBuffer buffer(size, device, m_IsCPUAccessible);
         m_RingBuffers.emplace_back(std::move(buffer));
@@ -28,6 +28,7 @@ public:
 private:
     static constexpr size_t DEFAULT_ALIGN = 1;
     const bool m_IsCPUAccessible = false;
+    const bool m_noShrink = false;
     std::vector<CKDX12RingBuffer> m_RingBuffers;
     Microsoft::WRL::ComPtr<ID3D12Device> m_Device;
 };
