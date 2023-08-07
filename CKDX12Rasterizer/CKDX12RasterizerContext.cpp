@@ -238,13 +238,6 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
         D3DCall(m_CommandList->Close());
     }
 
-    const size_t size = 1024;
-    m_VSCBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device,
-                                                         D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * size);
-    m_VSCBVHeap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
-    m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
-    m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
-
     return hr;
 }
 
@@ -413,15 +406,14 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
     return hr;
 }
 
-void CKDX12RasterizerContext::CreateConstantBuffers() {
-    //m_VSConstantBuffer.Create(this, sizeof(VSConstantBufferStruct));
-   /* m_PSConstantBuffer.Create(this, sizeof(PSConstantBufferStruct));
-    m_PSLightConstantBuffer.Create(this, sizeof(PSLightConstantBufferStruct));
-    m_PSTexCombinatorConstantBuffer.Create(this, sizeof(PSTexCombinatorConstantBufferStruct));*/
-    //ZeroMemory(&m_VSCBuffer, sizeof(VSConstantBufferStruct));
-    /*ZeroMemory(&m_PSCBuffer, sizeof(PSConstantBufferStruct));
-    ZeroMemory(&m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
-    ZeroMemory(&m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));*/
+void CKDX12RasterizerContext::CreateResources()
+{
+    const size_t size = 1024;
+    m_VSCBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device,
+                                                           D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * size);
+    m_VSCBVHeap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
+    m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
+    m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
 }
 
 HRESULT CKDX12RasterizerContext::WaitForGpu()
@@ -521,7 +513,7 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(CreateRootSignature());
     PrepareShaders();
     D3DCall(CreatePSOs());
-    CreateConstantBuffers();
+    CreateResources();
 
     D3DCall(CreateSyncObject());
     m_InCreateDestroy = FALSE;
@@ -936,9 +928,21 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     
     CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
-    assert(vbo && vbo->m_MaxVertexCount >= data->VertexCount && vertexSize == vbo->m_VertexSize);
-    CKDWORD vbase = vbo->m_CurrentVCount;
-    CKRSTLoadVertexBuffer((CKBYTE*)vbo->CPUAddress, vertexFormat, vertexSize, data);
+    CKBYTE *pData = nullptr;
+    CKDWORD vbase = 0;
+    if (vbo->m_CurrentVCount + data->VertexCount <= vbo->m_MaxVertexCount)
+    {
+        pData = (CKBYTE *)vbo->CPUAddress + vertexSize * vbo->m_CurrentVCount;
+        vbase = vbo->m_CurrentVCount;
+        vbo->m_CurrentVCount += data->VertexCount;
+    } else
+    {
+        pData = (CKBYTE *)vbo->CPUAddress;
+        vbase = 0;
+        vbo->m_CurrentVCount = data->VertexCount;
+    }
+    
+    CKRSTLoadVertexBuffer((CKBYTE *)pData, vertexFormat, vertexSize, data);
 
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
 
@@ -965,34 +969,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     {
         m_CommandList->DrawInstanced(data->VertexCount, 1, vbase, 0);
     }
-    //
-    //CKDWORD ibase = 0;
-    //if (!ib.empty())
-    //{
-    //    auto IB = GetDynamicIndexBuffer(ib.size(), clip);
-    //    auto *ibo = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
-    //    assert(ibo && ibo->m_MaxIndexCount >= ib.size());
-    //    pbData = ibo->Lock();
-    //    vbase = ibo->m_CurrentICount;
-    //    memcpy(pbData, ib.data(), ib.size() * sizeof(CKWORD));
-    //    ibo->Unlock();
-
-    //    m_IndexBufferSubmitted.emplace_back(*ibo);
-    //    ++m_IndexBufferSubmittedCount[m_FrameIndex];
-    //    // WaitForGpu();
-    //}
-
-    //// Populate command list
-    //m_CommandList->SetPipelineState(m_PipelineState[vertexFormat].Get());
-    //m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    //m_CommandList->IASetVertexBuffers(0, 1, &m_VertexBufferSubmitted.back().DxView);
-    //m_CommandList->IASetIndexBuffer(&m_IndexBufferSubmitted.back().DxView);
-
-    //if (!ib.empty())
-    //    m_CommandList->DrawIndexedInstanced(ib.size(), 1, ibase, vbase, 0);
-    //else
-    //    m_CommandList->DrawInstanced(data->VertexCount, 1, vbase, 0);
-
     /*asio::post(m_ThreadPool,
                [this, index_vec, vb = std::move(vb)]() 
     {

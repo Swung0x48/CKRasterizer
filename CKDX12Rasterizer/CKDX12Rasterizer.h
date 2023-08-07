@@ -408,7 +408,7 @@ protected:
     HRESULT CreateRootSignature();
     void PrepareShaders();
     HRESULT CreatePSOs();
-    void CreateConstantBuffers();
+    void CreateResources();
 
     HRESULT WaitForGpu();
     HRESULT MoveToNextFrame();
