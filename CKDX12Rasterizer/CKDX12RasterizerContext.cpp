@@ -379,7 +379,7 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
         psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
         psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
         psoDesc.DepthStencilState.DepthEnable = TRUE;
-        psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+        psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
         // Stencil test parameters
         psoDesc.DepthStencilState.StencilEnable = TRUE;
         psoDesc.DepthStencilState.StencilReadMask = 0xFF;
@@ -877,6 +877,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
             }*/
             break;
         case VX_TRIANGLEFAN:
+            return TRUE;
             if (indices)
                 TriangleFanToList(indices, indexcount, ib);
             else
@@ -1009,11 +1010,19 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
 #if LOGGING
     fprintf(stderr, "DrawPrimitiveVB\n");
 #endif
+    std::vector<CKWORD> ib;
     switch (pType)
     {
         case VX_TRIANGLELIST:
             break;
         case VX_TRIANGLEFAN:
+            if (indices)
+                TriangleFanToList(indices, indexcount, ib);
+            else
+            {
+                CKWORD voffset = 0;
+                TriangleFanToList(voffset, indexcount, ib);
+            }
             break;
         case VX_POINTLIST:
             fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
@@ -1027,6 +1036,55 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
         default:
             fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
             break;
+    }
+    auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
+    m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
+
+    m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
+    m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    if (!m_VSConstantBufferUpToDate)
+    {
+        UpdateMatrices(WORLD_TRANSFORM);
+        UpdateMatrices(VIEW_TRANSFORM);
+        Vx3DTransposeMatrix(m_VSCBuffer.WorldMatrix, m_WorldMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.ViewMatrix, m_ViewMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
+        InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
+        InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
+        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
+        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+        HRESULT hr;
+        D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
+        m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
+        m_VSConstantBufferUpToDate = TRUE;
+    }
+
+    int ibcount = (pType == VX_TRIANGLEFAN) ? ib.size() : indexcount;
+    assert(ibcount > 0);
+    if (indices || pType == VX_TRIANGLEFAN)
+    {
+        auto res = m_IBHeap->Allocate(ibcount * sizeof(CKWORD));
+        CKIndexBufferDesc desc;
+        desc.m_MaxIndexCount = indexcount;
+        desc.m_CurrentICount = 0;
+        desc.m_Flags = 0;
+        CKDX12IndexBufferDesc ibo(desc, res);
+        // m_IndexBufferSubmitted.emplace_back(desc, res);
+        //++m_IndexBufferSubmittedCount[m_FrameIndex];
+        assert(pType == VX_TRIANGLELIST || pType == VX_TRIANGLEFAN);
+        if (pType == VX_TRIANGLELIST)
+            memcpy(ibo.CPUAddress, indices, indexcount * sizeof(CKWORD));
+        else if (pType == VX_TRIANGLEFAN)
+            memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
+        m_CommandList->IASetIndexBuffer(&ibo.DxView);
+        m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, StartVIndex, 0);
+    }
+    else
+    {
+        m_CommandList->DrawInstanced(VertexCount, 1, StartVIndex, 0);
     }
     return TRUE;
 }

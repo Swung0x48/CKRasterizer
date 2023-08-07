@@ -2,5 +2,5 @@
 
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
-    return float4(input.normal, 1.0);
+    return float4(sin(input.texcoord0.x), cos(input.texcoord0.y), sin(input.texcoord0.y), 1);
 }
