@@ -8,6 +8,7 @@ CKVkIndexBuffer::CKVkIndexBuffer(CKIndexBufferDesc *desired_format, CKVkRasteriz
     csbuf(nullptr), ssbuf(nullptr), rctx(ctx)
 {
     m_CurrentICount = 0;
+    m_Flags |= CKRST_VB_VALID;
     size = 2 * m_MaxIndexCount;
 }
 
