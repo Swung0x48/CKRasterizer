@@ -806,9 +806,9 @@ void * CKVkRasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, 
 CKBOOL CKVkRasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 {
     ZoneScopedN(__FUNCTION__);
-    if (VB >= m_VertexBuffers.Size()) return NULL;
+    if (VB >= m_VertexBuffers.Size()) return FALSE;
     CKVkVertexBuffer *vb = static_cast<CKVkVertexBuffer*>(m_VertexBuffers[VB]);
-    if (!vb) return NULL;
+    if (!vb) return FALSE;
     vb->unlock();
     return TRUE;
 }
@@ -865,9 +865,9 @@ void * CKVkRasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CK
 
 CKBOOL CKVkRasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
-    if (IB >= m_IndexBuffers.Size()) return NULL;
+    if (IB >= m_IndexBuffers.Size()) return FALSE;
     CKVkIndexBuffer *ib = static_cast<CKVkIndexBuffer*>(m_IndexBuffers[IB]);
-    if (!ib) return NULL;
+    if (!ib) return FALSE;
     ib->unlock();
     return TRUE;
 }

@@ -8,6 +8,7 @@ CKVkVertexBuffer::CKVkVertexBuffer(CKVertexBufferDesc *desired_format, CKVkRaste
     csbuf(nullptr), ssbuf(nullptr), rctx(ctx)
 {
     m_CurrentVCount = 0;
+    m_Flags |= CKRST_VB_VALID;
     size = CKRSTGetVertexSize(m_VertexFormat) * m_MaxVertexCount;
 }
 
@@ -46,11 +47,7 @@ void CKVkVertexBuffer::bind(VkCommandBuffer cmdbuf)
 void *CKVkVertexBuffer::lock(uint64_t offset, uint64_t size)
 {
     if (csbuf)
-    {
-        void * r = csbuf->lock(offset, size ? size : this->size);
-        memset(r, 0, size ? size : this->size);
-        return r;
-    }
+        return csbuf->lock(offset, size ? size : this->size);
     else
         return ssbuf->lock(offset, size ? size : this->size);
 }
