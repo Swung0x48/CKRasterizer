@@ -414,6 +414,7 @@ void CKDX12RasterizerContext::CreateResources()
     m_VSCBVHeap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
     m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
     m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
+    m_DynamicIBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
 }
 
 HRESULT CKDX12RasterizerContext::WaitForGpu()
@@ -453,6 +454,7 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     m_VSCBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_VBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_IBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
+    m_DynamicIBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
 
     assert(m_VertexBufferSubmitted.size() >= m_VertexBufferSubmittedCount[m_FrameIndex]);
     assert(m_IndexBufferSubmitted.size() >= m_IndexBufferSubmittedCount[m_FrameIndex]);
@@ -950,7 +952,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     assert(ibcount > 0);
     if (indices || pType == VX_TRIANGLEFAN)
     {
-        auto res = m_IBHeap->Allocate(ibcount * sizeof(CKWORD));
+        auto res = m_DynamicIBHeap->Allocate(ibcount * sizeof(CKWORD));
         CKIndexBufferDesc desc;
         desc.m_MaxIndexCount = indexcount;
         desc.m_CurrentICount = 0;
@@ -1042,7 +1044,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
     assert(ibcount > 0);
     if (indices || pType == VX_TRIANGLEFAN)
     {
-        auto res = m_IBHeap->Allocate(ibcount * sizeof(CKWORD));
+        auto res = m_DynamicIBHeap->Allocate(ibcount * sizeof(CKWORD));
         CKIndexBufferDesc desc;
         desc.m_MaxIndexCount = indexcount;
         desc.m_CurrentICount = 0;

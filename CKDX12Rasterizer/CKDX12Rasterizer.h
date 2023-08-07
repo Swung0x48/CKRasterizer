@@ -460,6 +460,7 @@ public:
 
     std::unique_ptr<CKDX12DynamicUploadHeap> m_VBHeap;
     std::unique_ptr<CKDX12DynamicUploadHeap> m_IBHeap;
+    std::unique_ptr<CKDX12DynamicUploadHeap> m_DynamicIBHeap;
 
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
