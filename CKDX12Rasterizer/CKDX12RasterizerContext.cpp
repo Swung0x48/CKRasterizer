@@ -372,7 +372,8 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
         psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
         psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
         psoDesc.DepthStencilState.DepthEnable = TRUE;
-        psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+        psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+        psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
         // Stencil test parameters
         psoDesc.DepthStencilState.StencilEnable = TRUE;
         psoDesc.DepthStencilState.StencilReadMask = 0xFF;
