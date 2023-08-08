@@ -414,6 +414,7 @@ void CKDX12RasterizerContext::CreateResources()
     m_VSCBVHeap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
     m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
     m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
+    m_DynamicVBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
     m_DynamicIBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
 }
 
@@ -1342,7 +1343,12 @@ CKBOOL CKDX12RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDes
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
         return FALSE;
 
-    auto res = m_VBHeap->Allocate(DesiredFormat->m_VertexSize * DesiredFormat->m_MaxVertexCount);
+    CKDX12DynamicUploadHeap *heap = nullptr;
+    if (DesiredFormat->m_Flags & CKRST_VB_DYNAMIC)
+        heap = m_DynamicVBHeap.get();
+    else
+        heap = m_VBHeap.get();
+    auto res = heap->Allocate(DesiredFormat->m_VertexSize * DesiredFormat->m_MaxVertexCount);
     auto *desc = new CKDX12VertexBufferDesc(*DesiredFormat, res);
     delete m_VertexBuffers[VB];
     
