@@ -456,22 +456,23 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     m_VSCBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_VBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_IBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
+    //m_DynamicVBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_DynamicIBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
 
-    assert(m_VertexBufferSubmitted.size() >= m_VertexBufferSubmittedCount[m_FrameIndex]);
-    assert(m_IndexBufferSubmitted.size() >= m_IndexBufferSubmittedCount[m_FrameIndex]);
-    // Release resources no longer in use.
-   for (size_t i = 0; i < m_VertexBufferSubmittedCount[m_FrameIndex]; ++i)
-    {
-        m_VertexBufferSubmitted.pop_front();
-    }
-    m_VertexBufferSubmittedCount[m_FrameIndex] = 0;
+   // assert(m_VertexBufferSubmitted.size() >= m_VertexBufferSubmittedCount[m_FrameIndex]);
+   // assert(m_IndexBufferSubmitted.size() >= m_IndexBufferSubmittedCount[m_FrameIndex]);
+   // // Release resources no longer in use.
+   //for (size_t i = 0; i < m_VertexBufferSubmittedCount[m_FrameIndex]; ++i)
+   // {
+   //     m_VertexBufferSubmitted.pop_front();
+   // }
+   // m_VertexBufferSubmittedCount[m_FrameIndex] = 0;
 
-    for (size_t i = 0; i < m_IndexBufferSubmittedCount[m_FrameIndex]; ++i)
-    {
-        m_IndexBufferSubmitted.pop_front();
-    }
-    m_IndexBufferSubmittedCount[m_FrameIndex] = 0;
+   // for (size_t i = 0; i < m_IndexBufferSubmittedCount[m_FrameIndex]; ++i)
+   // {
+   //     m_IndexBufferSubmitted.pop_front();
+   // }
+   // m_IndexBufferSubmittedCount[m_FrameIndex] = 0;
 
     // Set the fence value for the next frame.
     m_FenceValues[m_FrameIndex] = currentFenceValue + 1;
