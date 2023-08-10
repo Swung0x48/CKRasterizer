@@ -244,29 +244,74 @@ struct FVFResource
     D3D12_SHADER_BYTECODE shader;
 };
 
+class CKDX12RasterizerContext;
 typedef struct CKDX12VertexBufferDesc : public CKVertexBufferDesc
 {
 public:
-    //ComPtr<ID3D12Resource> DxResource;
     D3D12_VERTEX_BUFFER_VIEW DxView;
     CKDX12VertexBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW)); }
-    CKDX12VertexBufferDesc(const CKVertexBufferDesc& desc): CKVertexBufferDesc(desc)
+    CKDX12VertexBufferDesc(const CKVertexBufferDesc &desc, D3D12MA::Allocator *allocator, ComPtr<ID3D12Device> device) :
+        CKVertexBufferDesc(desc), Device(device)
     {
+        HRESULT hr;
         ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW));
+        bool dynamic = desc.m_Flags & CKRST_VB_DYNAMIC;
+
+        auto resourceDesc =
+            CD3DX12_RESOURCE_DESC::Buffer(desc.m_MaxVertexCount * desc.m_VertexSize);
+        D3D12MA::ALLOCATION_DESC allocationDesc = {};
+        allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
+        D3DCall(allocator->CreateResource(&allocationDesc, &resourceDesc,
+                                  dynamic ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr,
+                                  &DxUploadAllocation, IID_PPV_ARGS(&DxUploadResource)));
+
+        if (dynamic)
+        {
+            allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+            D3DCall(allocator->CreateResource(&allocationDesc, &resourceDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                              &DxDefaultAllocation, IID_PPV_ARGS(&DxDefaultResource)));
+        }
+
     }
-    CKDX12VertexBufferDesc(const CKVertexBufferDesc &desc, const CKDX12AllocatedResource& resource):
-        CKVertexBufferDesc(desc)
+
+    void *Lock()
     {
-        ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW));
-        DxView.BufferLocation = resource.GPUAddress;
-        DxView.SizeInBytes = desc.m_VertexSize * desc.m_MaxVertexCount;
-        DxView.StrideInBytes = desc.m_VertexSize;
-        CPUAddress = resource.CPUAddress;
+        HRESULT hr;
+        if (!CPUAddress)
+        {
+            CD3DX12_RANGE readRange(0, 0); // We do not intend to read from this resource on the CPU.
+            D3DCall(DxUploadResource->Map(0, &readRange, &CPUAddress));
+        }
+        return CPUAddress;
     }
+
+    void Unlock(ID3D12GraphicsCommandList* list, ID3D12CommandQueue* queue, D3D12_RESOURCE_STATES stateAfter)
+    {
+        if (m_Flags & CKRST_VB_DYNAMIC)
+            return;
+        list->CopyResource(DxDefaultResource.Get(), DxUploadResource.Get());
+        const auto transition = CD3DX12_RESOURCE_BARRIER::Transition(DxDefaultResource.Get(), 
+            D3D12_RESOURCE_STATE_COPY_DEST, stateAfter);
+        list->ResourceBarrier(1, &transition);
+    }
+
+    std::future<void> WaitTillReady()
+    {
+        return std::async(std::launch::async, [&]
+        {
+
+            return;
+        });
+    }
+
+private:
+    ComPtr<D3D12MA::Allocation> DxUploadAllocation;
+    ComPtr<ID3D12Resource> DxUploadResource;
+    ComPtr<D3D12MA::Allocation> DxDefaultAllocation;
+    ComPtr<ID3D12Resource> DxDefaultResource;
     void *CPUAddress = nullptr;
-    /*virtual CKBOOL Create(CKDX12RasterizerContext *ctx);
-    virtual void *Lock();
-    virtual void Unlock();*/
+    ComPtr<ID3D12Device> Device;
+
 } CKDX12VertexBufferDesc;
 
 typedef struct CKDX12IndexBufferDesc : public CKIndexBufferDesc
@@ -457,19 +502,16 @@ public:
     UINT m_RTVDescriptorSize;
     ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
     UINT m_DSVDescriptorSize;
-    std::unique_ptr<CKDX12DynamicDescriptorHeap> m_VSCBVHeap;
-    std::unique_ptr<CKDX12DynamicUploadHeap> m_VSCBHeap;
 
-    std::unique_ptr<CKDX12DynamicUploadHeap> m_VBHeap;
-    std::unique_ptr<CKDX12DynamicUploadHeap> m_IBHeap;
-    std::unique_ptr<CKDX12DynamicUploadHeap> m_DynamicVBHeap;
-    std::unique_ptr<CKDX12DynamicUploadHeap> m_DynamicIBHeap;
+    ComPtr<D3D12MA::Allocator> m_Allocator;
+
+    std::unique_ptr<CKDX12DynamicDescriptorHeap> m_VSCBVHeap;
 
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
     ComPtr<ID3D12RootSignature> m_RootSignature;
     ComPtr<ID3D12CommandAllocator> m_CommandAllocators[m_BufferedFrameCount];
-    ComPtr<ID3D12GraphicsCommandList> m_CommandList;
+    ComPtr<ID3D12GraphicsCommandList> m_GraphicsCommandList;
     std::vector<ID3D12CommandList *> m_PendingCommandList;
     
     std::unordered_map<DWORD, FVFResource> m_FVFResources;

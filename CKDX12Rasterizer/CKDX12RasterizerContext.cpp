@@ -232,10 +232,10 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
     {
         D3DCall(m_Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
                                             m_CommandAllocators[i].Get(), nullptr, 
-            IID_PPV_ARGS(&m_CommandList)));
+            IID_PPV_ARGS(&m_GraphicsCommandList)));
         
 
-        D3DCall(m_CommandList->Close());
+        D3DCall(m_GraphicsCommandList->Close());
     }
 
     return hr;
@@ -409,14 +409,14 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
 
 void CKDX12RasterizerContext::CreateResources()
 {
+    HRESULT hr;
+    D3D12MA::ALLOCATOR_DESC desc;
+    desc.pDevice = m_Device.Get();
+    desc.pAdapter = static_cast<CKDX12RasterizerDriver *>(m_Driver)->m_Adapter.Get();
+    D3DCall(D3D12MA::CreateAllocator(&desc, &m_Allocator));
+
     const size_t size = 1024;
-    m_VSCBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device,
-                                                           D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * size);
     m_VSCBVHeap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
-    m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
-    m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
-    m_DynamicVBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
-    m_DynamicIBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
 }
 
 HRESULT CKDX12RasterizerContext::WaitForGpu()
@@ -453,26 +453,6 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     }
 
     m_VSCBVHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
-    m_VSCBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
-    m_VBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
-    m_IBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
-    //m_DynamicVBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
-    m_DynamicIBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
-
-   // assert(m_VertexBufferSubmitted.size() >= m_VertexBufferSubmittedCount[m_FrameIndex]);
-   // assert(m_IndexBufferSubmitted.size() >= m_IndexBufferSubmittedCount[m_FrameIndex]);
-   // // Release resources no longer in use.
-   //for (size_t i = 0; i < m_VertexBufferSubmittedCount[m_FrameIndex]; ++i)
-   // {
-   //     m_VertexBufferSubmitted.pop_front();
-   // }
-   // m_VertexBufferSubmittedCount[m_FrameIndex] = 0;
-
-   // for (size_t i = 0; i < m_IndexBufferSubmittedCount[m_FrameIndex]; ++i)
-   // {
-   //     m_IndexBufferSubmitted.pop_front();
-   // }
-   // m_IndexBufferSubmittedCount[m_FrameIndex] = 0;
 
     // Set the fence value for the next frame.
     m_FenceValues[m_FrameIndex] = currentFenceValue + 1;
@@ -551,7 +531,7 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
     {
         VxColor c(Ccol);
         //const float color[] = {0.0f, 0.2f, 0.5f, 1.0f};
-        m_CommandList->ClearRenderTargetView(rtvHandle, (const float*)&c, 0, nullptr);
+        m_GraphicsCommandList->ClearRenderTargetView(rtvHandle, (const float*)&c, 0, nullptr);
     }
     CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
                                             m_DSVDescriptorSize);
@@ -561,7 +541,7 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
     if (Flags & CKRST_CTXCLEAR_STENCIL)
         dsClearFlag |= D3D12_CLEAR_FLAG_STENCIL;
     if (dsClearFlag)
-        m_CommandList->ClearDepthStencilView(dsvHandle, (D3D12_CLEAR_FLAGS)dsClearFlag, Z, Stencil, 0,
+        m_GraphicsCommandList->ClearDepthStencilView(dsvHandle, (D3D12_CLEAR_FLAGS)dsClearFlag, Z, Stencil, 0,
                                              nullptr);
     
     return TRUE;
@@ -599,28 +579,28 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
     m_SceneBegined = TRUE;
     HRESULT hr;
     D3DCall(m_CommandAllocators[m_FrameIndex]->Reset());
-    D3DCall(m_CommandList->Reset(m_CommandAllocators[m_FrameIndex].Get(), nullptr));
+    D3DCall(m_GraphicsCommandList->Reset(m_CommandAllocators[m_FrameIndex].Get(), nullptr));
 #if CMDLIST
-    fprintf(stderr, "m_CommandList->Reset() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
+    fprintf(stderr, "m_GraphicsCommandList->Reset() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
 #if defined DEBUG || defined _DEBUG
     m_CmdListClosed = false;
 #endif // DEBUG || defined _DEBUG
 #endif
     const auto transitionToRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
         m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    m_CommandList->ResourceBarrier(1, &transitionToRenderTarget);
+    m_GraphicsCommandList->ResourceBarrier(1, &transitionToRenderTarget);
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
                                             m_RTVDescriptorSize);
     CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
                                             m_DSVDescriptorSize);
-    m_CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
-    m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
+    m_GraphicsCommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+    m_GraphicsCommandList->SetGraphicsRootSignature(m_RootSignature.Get());
     std::vector<ID3D12DescriptorHeap *> ppHeaps(m_VSCBVHeap->m_Heaps.size(), nullptr);
     for (auto i = 0; i < m_VSCBVHeap->m_Heaps.size(); ++i)
     {
         ppHeaps[i] = m_VSCBVHeap->m_Heaps[i].m_Heap.Get();
     }
-    m_CommandList->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
+    m_GraphicsCommandList->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
     return TRUE;
 }
 
@@ -636,18 +616,18 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
 
     const auto transitionToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
         m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-    m_CommandList->ResourceBarrier(1, &transitionToPresent);
-    D3DCall(m_CommandList->Close());
+    m_GraphicsCommandList->ResourceBarrier(1, &transitionToPresent);
+    D3DCall(m_GraphicsCommandList->Close());
 #if CMDLIST
-    fprintf(stderr, "m_CommandList->Close() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
+    fprintf(stderr, "m_GraphicsCommandList->Close() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
 #if defined DEBUG || defined _DEBUG
     m_CmdListClosed = true;
 #endif // DEBUG || defined _DEBUG
 #endif
     assert(m_CmdListClosed);
-    ID3D12CommandList *list = m_CommandList.Get();
+    ID3D12CommandList *list = m_GraphicsCommandList.Get();
     m_CommandQueue->ExecuteCommandLists(1, &list);
-    //m_PendingCommandList.emplace_back(m_CommandList.Get());
+    //m_PendingCommandList.emplace_back(m_GraphicsCommandList.Get());
     //m_CommandQueue->ExecuteCommandLists(m_PendingCommandList.size(), m_PendingCommandList.data());
     //m_PendingCommandList.clear();
 
@@ -675,13 +655,13 @@ CKBOOL CKDX12RasterizerContext::SetViewport(CKViewportData *data) {
     m_Viewport.Height = (FLOAT)data->ViewHeight;
     m_Viewport.MaxDepth = 1.0f;
     m_Viewport.MinDepth = 0.0f;
-    m_CommandList->RSSetViewports(1, &m_Viewport);
+    m_GraphicsCommandList->RSSetViewports(1, &m_Viewport);
 
     m_ScissorRect.left = data->ViewX;
     m_ScissorRect.top = data->ViewY;
     m_ScissorRect.right = data->ViewWidth;
     m_ScissorRect.bottom = data->ViewHeight;
-    m_CommandList->RSSetScissorRects(1, &m_ScissorRect);
+    m_GraphicsCommandList->RSSetScissorRects(1, &m_ScissorRect);
 
     m_VSConstantBufferUpToDate = FALSE;
     m_VSCBuffer.ViewportMatrix = VxMatrix::Identity();
@@ -898,8 +878,8 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     }
     CKDWORD vertexSize;
     CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
-    m_CommandList->SetPipelineState(m_PipelineState[vertexFormat].Get());
-    m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_GraphicsCommandList->SetPipelineState(m_PipelineState[vertexFormat].Get());
+    m_GraphicsCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     if (!m_VSConstantBufferUpToDate)
     {
@@ -911,12 +891,12 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
-        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
+        //auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        //memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         HRESULT hr;
-        D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
-        m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
+        //D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
+        m_GraphicsCommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
 
@@ -937,42 +917,39 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     CKDWORD vbase = 0;
     if (vbo->m_CurrentVCount + data->VertexCount <= vbo->m_MaxVertexCount)
     {
-        pData = (CKBYTE *)vbo->CPUAddress + vertexSize * vbo->m_CurrentVCount;
+        //pData = (CKBYTE *)vbo->CPUAddress + vertexSize * vbo->m_CurrentVCount;
         vbase = vbo->m_CurrentVCount;
         vbo->m_CurrentVCount += data->VertexCount;
     } else
     {
-        pData = (CKBYTE *)vbo->CPUAddress;
+        //pData = (CKBYTE *)vbo->CPUAddress;
         vbase = 0;
         vbo->m_CurrentVCount = data->VertexCount;
     }
     
     CKRSTLoadVertexBuffer((CKBYTE *)pData, vertexFormat, vertexSize, data);
 
-    m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
+    m_GraphicsCommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
 
     int ibcount = (pType == VX_TRIANGLEFAN) ? ib.size() : indexcount;
     assert(ibcount > 0);
     if (indices || pType == VX_TRIANGLEFAN)
     {
-        auto res = m_DynamicIBHeap->Allocate(ibcount * sizeof(CKWORD));
+        //auto res = m_DynamicIBHeap->Allocate(ibcount * sizeof(CKWORD));
         CKIndexBufferDesc desc;
         desc.m_MaxIndexCount = indexcount;
         desc.m_CurrentICount = 0;
         desc.m_Flags = 0;
-        CKDX12IndexBufferDesc ibo(desc, res);
-        //m_IndexBufferSubmitted.emplace_back(desc, res);
-        //++m_IndexBufferSubmittedCount[m_FrameIndex];
         assert(pType == VX_TRIANGLELIST || pType == VX_TRIANGLEFAN);
-        if (pType == VX_TRIANGLELIST)
-            memcpy(ibo.CPUAddress, indices, indexcount * sizeof(CKWORD));
-        else if (pType == VX_TRIANGLEFAN)
-            memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
-        m_CommandList->IASetIndexBuffer(&ibo.DxView);
-        m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, vbase, 0);
+        //if (pType == VX_TRIANGLELIST)
+            //memcpy(ibo.CPUAddress, indices, indexcount * sizeof(CKWORD));
+        //else if (pType == VX_TRIANGLEFAN)
+            //memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
+        //m_GraphicsCommandList->IASetIndexBuffer(&ibo.DxView);
+        m_GraphicsCommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, vbase, 0);
     } else
     {
-        m_CommandList->DrawInstanced(data->VertexCount, 1, vbase, 0);
+        m_GraphicsCommandList->DrawInstanced(data->VertexCount, 1, vbase, 0);
     }
     /*asio::post(m_ThreadPool,
                [this, index_vec, vb = std::move(vb)]() 
@@ -1019,10 +996,10 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
             break;
     }
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
-    m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
+    m_GraphicsCommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
 
-    m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
-    m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_GraphicsCommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
+    m_GraphicsCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     if (!m_VSConstantBufferUpToDate)
     {
@@ -1034,12 +1011,12 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
         Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
-        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
+        //auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        //memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         HRESULT hr;
-        D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
-        m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
+        //D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
+        m_GraphicsCommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
 
@@ -1047,25 +1024,23 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
     assert(ibcount > 0);
     if (indices || pType == VX_TRIANGLEFAN)
     {
-        auto res = m_DynamicIBHeap->Allocate(ibcount * sizeof(CKWORD));
+        //auto res = m_DynamicIBHeap->Allocate(ibcount * sizeof(CKWORD));
         CKIndexBufferDesc desc;
         desc.m_MaxIndexCount = indexcount;
         desc.m_CurrentICount = 0;
         desc.m_Flags = 0;
-        CKDX12IndexBufferDesc ibo(desc, res);
-        // m_IndexBufferSubmitted.emplace_back(desc, res);
-        //++m_IndexBufferSubmittedCount[m_FrameIndex];
+        //CKDX12IndexBufferDesc ibo(desc, res);
         assert(pType == VX_TRIANGLELIST || pType == VX_TRIANGLEFAN);
-        if (pType == VX_TRIANGLELIST)
+        /*if (pType == VX_TRIANGLELIST)
             memcpy(ibo.CPUAddress, indices, indexcount * sizeof(CKWORD));
         else if (pType == VX_TRIANGLEFAN)
-            memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
-        m_CommandList->IASetIndexBuffer(&ibo.DxView);
-        m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, StartVIndex, 0);
+            memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));*/
+        m_GraphicsCommandList->IASetIndexBuffer(&ibo.DxView);
+        m_GraphicsCommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, StartVIndex, 0);
     }
     else
     {
-        m_CommandList->DrawInstanced(VertexCount, 1, StartVIndex, 0);
+        m_GraphicsCommandList->DrawInstanced(VertexCount, 1, StartVIndex, 0);
     }
     return TRUE;
 }
@@ -1122,10 +1097,10 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     ++m_VertexBufferSubmittedCount[m_FrameIndex];
     m_IndexBufferSubmitted.emplace_back(*ibo);
     ++m_IndexBufferSubmittedCount[m_FrameIndex];*/
-    m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
-    m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
-    m_CommandList->IASetIndexBuffer(&ibo->DxView);
+    m_GraphicsCommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
+    m_GraphicsCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_GraphicsCommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
+    m_GraphicsCommandList->IASetIndexBuffer(&ibo->DxView);
 
     if (!m_VSConstantBufferUpToDate)
     {
@@ -1137,16 +1112,16 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
-        auto res = 
+        /*auto res = 
             m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
+        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));*/
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         HRESULT hr;
-        D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
-        m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
+        //D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
+        m_GraphicsCommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
-    m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
+    m_GraphicsCommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
     return TRUE;
 }
 CKBOOL CKDX12RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
@@ -1345,16 +1320,17 @@ CKBOOL CKDX12RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDes
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
         return FALSE;
 
-    CKDX12DynamicUploadHeap *heap = nullptr;
+    auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(DesiredFormat->m_MaxVertexCount * DesiredFormat->m_VertexSize);
+    D3D12MA::ALLOCATION_DESC allocationDesc = {};
     if (DesiredFormat->m_Flags & CKRST_VB_DYNAMIC)
-        heap = m_DynamicVBHeap.get();
+        allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
     else
-        heap = m_VBHeap.get();
-    auto res = heap->Allocate(DesiredFormat->m_VertexSize * DesiredFormat->m_MaxVertexCount);
-    auto *desc = new CKDX12VertexBufferDesc(*DesiredFormat, res);
+        allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+    //auto res = heap->Allocate(DesiredFormat->m_VertexSize * DesiredFormat->m_MaxVertexCount);
+    //auto *desc = new CKDX12VertexBufferDesc(*DesiredFormat, res);
     delete m_VertexBuffers[VB];
     
-    m_VertexBuffers[VB] = desc;
+    //m_VertexBuffers[VB] = desc;
     return TRUE;
 }
 
@@ -1368,10 +1344,10 @@ CKBOOL CKDX12RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc 
     if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
         return FALSE;
 
-    auto res = m_IBHeap->Allocate(DesiredFormat->m_MaxIndexCount * sizeof(CKWORD));
-    auto *desc = new CKDX12IndexBufferDesc(*DesiredFormat, res);
+    //auto res = m_IBHeap->Allocate(DesiredFormat->m_MaxIndexCount * sizeof(CKWORD));
+    //auto *desc = new CKDX12IndexBufferDesc(*DesiredFormat, res);
     delete m_IndexBuffers[IB];
 
-    m_IndexBuffers[IB] = desc;
+    //m_IndexBuffers[IB] = desc;
     return TRUE;
 }
