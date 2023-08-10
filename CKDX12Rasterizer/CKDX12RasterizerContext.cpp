@@ -1035,7 +1035,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
             memcpy(ibo.CPUAddress, indices, indexcount * sizeof(CKWORD));
         else if (pType == VX_TRIANGLEFAN)
             memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));*/
-        m_GraphicsCommandList->IASetIndexBuffer(&ibo.DxView);
+        //m_GraphicsCommandList->IASetIndexBuffer(&ibo.DxView);
         m_GraphicsCommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, StartVIndex, 0);
     }
     else
@@ -1235,7 +1235,7 @@ void *CKDX12RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
     auto *desc = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
 
     assert(StartVertex + VertexCount <= desc->m_MaxVertexCount);
-    return desc->CPUAddress;
+    return /*desc->CPUAddress*/nullptr;
 }
 
 CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
