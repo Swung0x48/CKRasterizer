@@ -23,6 +23,8 @@
     #include <dxgidebug.h>
 #endif
 
+#include "D3D12MemAlloc.h"
+
 #include <string>
 #include <unordered_map>
 #include <XBitArray.h>
