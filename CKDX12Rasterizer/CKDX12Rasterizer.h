@@ -245,10 +245,23 @@ struct FVFResource
 };
 
 class CKDX12RasterizerContext;
+
+typedef struct CKDX12Buffer
+{
+public:
+    CKDX12Buffer() {}
+    CKDX12Buffer(D3D12MA::Allocator *allocator, bool cpuAccessible, size_t size);
+    
+    bool m_cpuAccessible = false;
+    ComPtr<D3D12MA::Allocation> Allocation;
+    ComPtr<ID3D12Resource> Resource;
+    void *CPUAddress = nullptr;
+    D3D12_GPU_VIRTUAL_ADDRESS GPUAddress = 0;
+} CKDX12Buffer;
+
 typedef struct CKDX12VertexBufferDesc : public CKVertexBufferDesc
 {
 public:
-    D3D12_VERTEX_BUFFER_VIEW DxView;
     CKDX12VertexBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW)); }
     CKDX12VertexBufferDesc(const CKVertexBufferDesc &desc, D3D12MA::Allocator *allocator, ComPtr<ID3D12Device> device) :
         CKVertexBufferDesc(desc), Device(device)
@@ -304,6 +317,7 @@ public:
         });
     }
 
+    D3D12_VERTEX_BUFFER_VIEW DxView;
 private:
     ComPtr<D3D12MA::Allocation> DxUploadAllocation;
     ComPtr<ID3D12Resource> DxUploadResource;
