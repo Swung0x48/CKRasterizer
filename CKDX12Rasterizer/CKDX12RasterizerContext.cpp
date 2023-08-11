@@ -410,7 +410,7 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
 void CKDX12RasterizerContext::CreateResources()
 {
     HRESULT hr;
-    D3D12MA::ALLOCATOR_DESC desc;
+    D3D12MA::ALLOCATOR_DESC desc = {};
     desc.pDevice = m_Device.Get();
     desc.pAdapter = static_cast<CKDX12RasterizerDriver *>(m_Driver)->m_Adapter.Get();
     D3DCall(D3D12MA::CreateAllocator(&desc, &m_Allocator));
@@ -453,6 +453,10 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     }
 
     m_VSCBVHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
+    while (!m_BufferSubmitted.empty() && m_BufferSubmitted.front().FenceValue <= completedValue)
+    {
+        m_BufferSubmitted.pop_front();
+    }
 
     // Set the fence value for the next frame.
     m_FenceValues[m_FrameIndex] = currentFenceValue + 1;
@@ -840,6 +844,8 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 #if STATUS
     ++directbat;
 #endif
+    return TRUE;
+
     if (!m_SceneBegined)
         BeginScene();
 
@@ -968,6 +974,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
 #if LOGGING
     fprintf(stderr, "DrawPrimitiveVB\n");
 #endif
+    return TRUE;
     std::vector<CKWORD> ib;
     switch (pType)
     {
@@ -1076,7 +1083,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!vbo)
         return FALSE;
-    auto size = m_IndexBuffers.Size();
     auto *ibo = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!ibo)
         return FALSE;
@@ -1097,6 +1103,8 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     ++m_VertexBufferSubmittedCount[m_FrameIndex];
     m_IndexBufferSubmitted.emplace_back(*ibo);
     ++m_IndexBufferSubmittedCount[m_FrameIndex];*/
+    m_BufferSubmitted.emplace_back(m_FenceValues[m_FrameIndex], vbo->Buffer);
+    m_BufferSubmitted.emplace_back(m_FenceValues[m_FrameIndex], ibo->Buffer);
     m_GraphicsCommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
     m_GraphicsCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     m_GraphicsCommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
@@ -1112,12 +1120,12 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
-        /*auto res = 
-            m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));*/
+        CKDX12ConstantBufferDesc desc(sizeof(VSConstantBufferStruct), m_Allocator.Get());
+        void *pData = desc.Lock();
+        memcpy(pData, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         HRESULT hr;
-        //D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
+        D3DCall(m_VSCBVHeap->CreateDescriptor(desc.DxView, handle));
         m_GraphicsCommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
@@ -1235,7 +1243,7 @@ void *CKDX12RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
     auto *desc = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
 
     assert(StartVertex + VertexCount <= desc->m_MaxVertexCount);
-    return /*desc->CPUAddress*/nullptr;
+    return (char *)desc->Lock() + StartVertex * desc->m_VertexSize;
 }
 
 CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
@@ -1244,8 +1252,7 @@ CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     auto *desc = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!desc)
         return FALSE;
-    // We won't actually unlock here.
-    // It's okay to leave resources locked in D3D12
+    desc->Unlock(m_GraphicsCommandList.Get());
     return TRUE;
 }
 
@@ -1256,7 +1263,7 @@ void *CKDX12RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, C
     auto *desc = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return nullptr;
-    return desc->CPUAddress;
+    return (char*)desc->Lock() + StartIndex * sizeof(CKWORD);
 }
 
 CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
@@ -1266,8 +1273,7 @@ CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
     auto *desc = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return FALSE;
-    // We won't actually unlock here.
-    // It's okay to leave resources locked in D3D12
+    desc->Unlock(m_GraphicsCommandList.Get());
     return TRUE;
 }
 
@@ -1320,17 +1326,10 @@ CKBOOL CKDX12RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDes
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
         return FALSE;
 
-    auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(DesiredFormat->m_MaxVertexCount * DesiredFormat->m_VertexSize);
-    D3D12MA::ALLOCATION_DESC allocationDesc = {};
-    if (DesiredFormat->m_Flags & CKRST_VB_DYNAMIC)
-        allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
-    else
-        allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
-    //auto res = heap->Allocate(DesiredFormat->m_VertexSize * DesiredFormat->m_MaxVertexCount);
-    //auto *desc = new CKDX12VertexBufferDesc(*DesiredFormat, res);
+    auto *desc = new CKDX12VertexBufferDesc(*DesiredFormat, m_Allocator.Get());
     delete m_VertexBuffers[VB];
     
-    //m_VertexBuffers[VB] = desc;
+    m_VertexBuffers[VB] = desc;
     return TRUE;
 }
 
@@ -1344,10 +1343,8 @@ CKBOOL CKDX12RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc 
     if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
         return FALSE;
 
-    //auto res = m_IBHeap->Allocate(DesiredFormat->m_MaxIndexCount * sizeof(CKWORD));
-    //auto *desc = new CKDX12IndexBufferDesc(*DesiredFormat, res);
+    auto *desc = new CKDX12IndexBufferDesc(*DesiredFormat, m_Allocator.Get());
     delete m_IndexBuffers[IB];
-
-    //m_IndexBuffers[IB] = desc;
+    m_IndexBuffers[IB] = desc;
     return TRUE;
 }

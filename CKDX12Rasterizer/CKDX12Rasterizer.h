@@ -29,6 +29,8 @@
 #include <unordered_map>
 #include <XBitArray.h>
 
+// #include "asio.hpp"
+
 #include "FlexibleVertexFormat.h"
 using Microsoft::WRL::ComPtr;
 
@@ -259,110 +261,112 @@ public:
     D3D12_GPU_VIRTUAL_ADDRESS GPUAddress = 0;
 } CKDX12Buffer;
 
+typedef struct CKDX12BufferComplex {
+    CKDX12BufferComplex() {}
+    CKDX12BufferComplex(D3D12MA::Allocator *allocator, bool hasGPUOnlyBuffer, size_t size):
+        hasGPUOnlyBuffer(hasGPUOnlyBuffer)
+    {
+        UploadBuffer = CKDX12Buffer(allocator, true, size);
+        if (hasGPUOnlyBuffer)
+            DefaultBuffer = CKDX12Buffer(allocator, false, size);
+    }
+    void *Lock() { return UploadBuffer.CPUAddress; }
+    void Unlock(ID3D12GraphicsCommandList *list, D3D12_RESOURCE_STATES stateAfter)
+    {
+        if (!hasGPUOnlyBuffer)
+            return;
+        list->CopyResource(DefaultBuffer.Resource.Get(), UploadBuffer.Resource.Get());
+        const auto transition = CD3DX12_RESOURCE_BARRIER::Transition(DefaultBuffer.Resource.Get(),
+                                                                     D3D12_RESOURCE_STATE_COPY_DEST, stateAfter);
+        list->ResourceBarrier(1, &transition);
+    }
+    
+    D3D12_GPU_VIRTUAL_ADDRESS GetGPUAddress() {
+        return hasGPUOnlyBuffer ? DefaultBuffer.GPUAddress : UploadBuffer.GPUAddress;
+    }
+
+    CKDX12Buffer UploadBuffer;
+    CKDX12Buffer DefaultBuffer;
+    bool hasGPUOnlyBuffer = false;
+} CKDX12BufferComplex;
+
 typedef struct CKDX12VertexBufferDesc : public CKVertexBufferDesc
 {
 public:
     CKDX12VertexBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW)); }
-    CKDX12VertexBufferDesc(const CKVertexBufferDesc &desc, D3D12MA::Allocator *allocator, ComPtr<ID3D12Device> device) :
-        CKVertexBufferDesc(desc), Device(device)
+    CKDX12VertexBufferDesc(const CKVertexBufferDesc &desc, D3D12MA::Allocator *allocator) :
+        CKVertexBufferDesc(desc),
+        Buffer(allocator, !(desc.m_Flags & CKRST_VB_DYNAMIC), desc.m_MaxVertexCount * desc.m_VertexSize)
     {
-        HRESULT hr;
         ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW));
-        bool dynamic = desc.m_Flags & CKRST_VB_DYNAMIC;
-
-        auto resourceDesc =
-            CD3DX12_RESOURCE_DESC::Buffer(desc.m_MaxVertexCount * desc.m_VertexSize);
-        D3D12MA::ALLOCATION_DESC allocationDesc = {};
-        allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
-        D3DCall(allocator->CreateResource(&allocationDesc, &resourceDesc,
-                                  dynamic ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr,
-                                  &DxUploadAllocation, IID_PPV_ARGS(&DxUploadResource)));
-
-        if (dynamic)
-        {
-            allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
-            D3DCall(allocator->CreateResource(&allocationDesc, &resourceDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-                                              &DxDefaultAllocation, IID_PPV_ARGS(&DxDefaultResource)));
-        }
-
+        DxView.BufferLocation = Buffer.GetGPUAddress();
+        DxView.SizeInBytes = desc.m_MaxVertexCount * desc.m_VertexSize;
+        DxView.StrideInBytes = desc.m_VertexSize;
     }
 
     void *Lock()
-    {
-        HRESULT hr;
-        if (!CPUAddress)
-        {
-            CD3DX12_RANGE readRange(0, 0); // We do not intend to read from this resource on the CPU.
-            D3DCall(DxUploadResource->Map(0, &readRange, &CPUAddress));
-        }
-        return CPUAddress;
+    { 
+        return Buffer.Lock();
     }
 
-    void Unlock(ID3D12GraphicsCommandList* list, ID3D12CommandQueue* queue, D3D12_RESOURCE_STATES stateAfter)
+    void Unlock(ID3D12GraphicsCommandList* list)
     {
-        if (m_Flags & CKRST_VB_DYNAMIC)
-            return;
-        list->CopyResource(DxDefaultResource.Get(), DxUploadResource.Get());
-        const auto transition = CD3DX12_RESOURCE_BARRIER::Transition(DxDefaultResource.Get(), 
-            D3D12_RESOURCE_STATE_COPY_DEST, stateAfter);
-        list->ResourceBarrier(1, &transition);
-    }
-
-    std::future<void> WaitTillReady()
-    {
-        return std::async(std::launch::async, [&]
-        {
-
-            return;
-        });
+        Buffer.Unlock(list, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
     }
 
     D3D12_VERTEX_BUFFER_VIEW DxView;
-private:
-    ComPtr<D3D12MA::Allocation> DxUploadAllocation;
-    ComPtr<ID3D12Resource> DxUploadResource;
-    ComPtr<D3D12MA::Allocation> DxDefaultAllocation;
-    ComPtr<ID3D12Resource> DxDefaultResource;
-    void *CPUAddress = nullptr;
-    ComPtr<ID3D12Device> Device;
-
+    CKDX12BufferComplex Buffer;
 } CKDX12VertexBufferDesc;
 
 typedef struct CKDX12IndexBufferDesc : public CKIndexBufferDesc
 {
-public:
-    //ComPtr<ID3D12Resource> DxResource;
-    D3D12_INDEX_BUFFER_VIEW DxView;
     CKDX12IndexBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
-    CKDX12IndexBufferDesc(const CKIndexBufferDesc &desc) : CKIndexBufferDesc(desc)
+    CKDX12IndexBufferDesc(const CKIndexBufferDesc &desc, D3D12MA::Allocator *allocator) :
+        CKIndexBufferDesc(desc), Buffer(allocator, !(desc.m_Flags & CKRST_VB_DYNAMIC), desc.m_MaxIndexCount * sizeof(CKWORD))
     {
         ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW));
-    }
-    CKDX12IndexBufferDesc(const CKIndexBufferDesc &desc, const CKDX12AllocatedResource &resource) :
-        CKIndexBufferDesc(desc)
-    {
-        ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW));
-        DxView.BufferLocation = resource.GPUAddress;
-        DxView.SizeInBytes = resource.Size;
+        DxView.BufferLocation = Buffer.GetGPUAddress();
+        DxView.SizeInBytes = desc.m_MaxIndexCount * sizeof(CKWORD);
         DxView.Format = DXGI_FORMAT_R16_UINT;
-        CPUAddress = resource.CPUAddress;
     }
-    void *CPUAddress = nullptr;
-    /*virtual CKBOOL Create(CKDX12RasterizerContext *ctx);
-    virtual void *Lock();
-    virtual void Unlock();*/
+
+    void *Lock() { return Buffer.Lock(); }
+
+    void Unlock(ID3D12GraphicsCommandList *list)
+    {
+        Buffer.Unlock(list, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+    }
+
+    D3D12_INDEX_BUFFER_VIEW DxView;
+    CKDX12BufferComplex Buffer;
 } CKDX12IndexBufferDesc;
 
-//typedef struct CKDX12ConstantBufferDesc
-//{
-//public:
-//    ComPtr<ID3D12Resource> DxResource;
-//    D3D12_CONSTANT_BUFFER_VIEW_DESC DxView;
-//    CKDX12ConstantBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
-//    virtual CKBOOL Create(CKDX12RasterizerContext *ctx, UINT size);
-//    virtual void *Lock();
-//    virtual void Unlock();
-//} CKDX12ConstantBufferDesc;
+typedef struct CKDX12ConstantBufferDesc
+{
+public:
+    CKDX12ConstantBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_CONSTANT_BUFFER_VIEW_DESC)); }
+    CKDX12ConstantBufferDesc(size_t size, D3D12MA::Allocator *allocator) :
+        Size((size + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1) &
+             ~(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1)),
+        Buffer(allocator, false,
+               (size + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1) &
+                   ~(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1))
+    {
+        ZeroMemory(&DxView, sizeof(D3D12_CONSTANT_BUFFER_VIEW_DESC));
+        DxView.BufferLocation = Buffer.GetGPUAddress();
+        DxView.SizeInBytes = Size;
+    }
+
+    void *Lock() { return Buffer.Lock(); }
+
+    void Unlock(ID3D12GraphicsCommandList *list)
+    {
+        Buffer.Unlock(list, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+    }
+    D3D12_CONSTANT_BUFFER_VIEW_DESC DxView;
+    CKDX12BufferComplex Buffer;
+    size_t Size = 0;
+} CKDX12ConstantBufferDesc;
 
 class CKDX12RasterizerContext : public CKRasterizerContext
 {
@@ -546,10 +550,13 @@ public:
     CKBOOL m_PSLightConstantBufferUpToDate = FALSE;
     CKBOOL m_PSTexCombinatorConstantBufferUpToDate = FALSE;
     
-    std::deque<CKDX12VertexBufferDesc> m_VertexBufferSubmitted;
-    size_t m_VertexBufferSubmittedCount[m_BufferedFrameCount] = {0};
-    std::deque<CKDX12IndexBufferDesc> m_IndexBufferSubmitted;
-    size_t m_IndexBufferSubmittedCount[m_BufferedFrameCount] = {0};
+    struct CKDX12BufferUsage
+    {
+        UINT64 FenceValue = 0;
+        CKDX12BufferComplex Buffer;
+    };
+
+    std::deque<CKDX12BufferUsage> m_BufferSubmitted;
 
 #if defined(DEBUG) || defined(_DEBUG)
     bool m_CmdListClosed = true;
@@ -560,5 +567,5 @@ public:
     ComPtr<ID3D12Fence> m_Fence;
     UINT64 m_FenceValues[m_BufferedFrameCount];
 
-    asio::thread_pool m_ThreadPool;
+    //asio::thread_pool m_ThreadPool;
 };

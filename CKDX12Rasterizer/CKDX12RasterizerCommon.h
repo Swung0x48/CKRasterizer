@@ -4,10 +4,9 @@
 #include <cstdlib>
 #include <format>
 #include <string>
+#include <cassert>
 
 #include <intsafe.h>
-
-#include "asio.hpp"
 
 #ifdef _DEBUG
 #define D3DCall(x)                                                                                                     \

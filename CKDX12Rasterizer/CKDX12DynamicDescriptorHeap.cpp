@@ -1,9 +1,9 @@
 #include "CKDX12DynamicDescriptorHeap.h"
 
-HRESULT CKDX12DynamicDescriptorHeap::CreateDescriptor(const CKDX12AllocatedResource &resource,
+HRESULT CKDX12DynamicDescriptorHeap::CreateDescriptor(const D3D12_CONSTANT_BUFFER_VIEW_DESC &view,
                                                       CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle)
 {
-    HRESULT hr = m_Heaps.back().CreateDescriptor(resource, gpuHandle);
+    HRESULT hr = m_Heaps.back().CreateDescriptor(view, gpuHandle);
     if (hr == E_OUTOFMEMORY)
     {
         // Create new buffer
@@ -12,7 +12,7 @@ HRESULT CKDX12DynamicDescriptorHeap::CreateDescriptor(const CKDX12AllocatedResou
         while (newSize < m_Heaps.back().GetUsedSize() + 1)
             newSize *= 2;
         m_Heaps.emplace_back(newSize, m_Type, m_Device);
-        hr = m_Heaps.back().CreateDescriptor(resource, gpuHandle);
+        hr = m_Heaps.back().CreateDescriptor(view, gpuHandle);
     } else
     {
         D3DCall(hr);
