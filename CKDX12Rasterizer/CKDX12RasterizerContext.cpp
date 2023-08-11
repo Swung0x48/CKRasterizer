@@ -1253,7 +1253,11 @@ CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     auto *desc = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!desc)
         return FALSE;
-    desc->Unlock(m_GraphicsCommandList.Get());
+    auto succeeded = desc->Unlock(m_GraphicsCommandList.Get());
+    if (!succeeded)
+    {
+        fprintf(stderr, "UnlockVertexBuffer %ld failed\n", VB);
+    }
     return TRUE;
 }
 
@@ -1274,7 +1278,11 @@ CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
     auto *desc = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return FALSE;
-    desc->Unlock(m_GraphicsCommandList.Get());
+    auto succeeded = desc->Unlock(m_GraphicsCommandList.Get());
+    if (!succeeded)
+    {
+        fprintf(stderr, "UnlockIndexBuffer %ld failed\n", IB);
+    }
     return TRUE;
 }
 

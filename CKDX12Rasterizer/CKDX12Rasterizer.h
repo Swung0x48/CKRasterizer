@@ -271,14 +271,18 @@ typedef struct CKDX12BufferComplex {
             DefaultBuffer = CKDX12Buffer(allocator, false, size);
     }
     void *Lock() { return UploadBuffer.CPUAddress; }
-    void Unlock(ID3D12GraphicsCommandList *list, D3D12_RESOURCE_STATES stateAfter)
+    bool Unlock(ID3D12GraphicsCommandList *list, D3D12_RESOURCE_STATES stateAfter)
     {
         if (!hasGPUOnlyBuffer)
-            return;
+            return true;
+        if (filled)
+            return false;
         list->CopyResource(DefaultBuffer.Resource.Get(), UploadBuffer.Resource.Get());
         const auto transition = CD3DX12_RESOURCE_BARRIER::Transition(DefaultBuffer.Resource.Get(),
                                                                      D3D12_RESOURCE_STATE_COPY_DEST, stateAfter);
         list->ResourceBarrier(1, &transition);
+        filled = true;
+        return true;
     }
     
     D3D12_GPU_VIRTUAL_ADDRESS GetGPUAddress() {
@@ -288,6 +292,7 @@ typedef struct CKDX12BufferComplex {
     CKDX12Buffer UploadBuffer;
     CKDX12Buffer DefaultBuffer;
     bool hasGPUOnlyBuffer = false;
+    bool filled = false;
 } CKDX12BufferComplex;
 
 typedef struct CKDX12VertexBufferDesc : public CKVertexBufferDesc
@@ -309,9 +314,9 @@ public:
         return Buffer.Lock();
     }
 
-    void Unlock(ID3D12GraphicsCommandList* list)
+    bool Unlock(ID3D12GraphicsCommandList* list)
     {
-        Buffer.Unlock(list, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+        return Buffer.Unlock(list, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
     }
 
     D3D12_VERTEX_BUFFER_VIEW DxView;
@@ -332,9 +337,9 @@ typedef struct CKDX12IndexBufferDesc : public CKIndexBufferDesc
 
     void *Lock() { return Buffer.Lock(); }
 
-    void Unlock(ID3D12GraphicsCommandList *list)
+    bool Unlock(ID3D12GraphicsCommandList *list)
     {
-        Buffer.Unlock(list, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+        return Buffer.Unlock(list, D3D12_RESOURCE_STATE_INDEX_BUFFER);
     }
 
     D3D12_INDEX_BUFFER_VIEW DxView;
@@ -359,9 +364,9 @@ public:
 
     void *Lock() { return Buffer.Lock(); }
 
-    void Unlock(ID3D12GraphicsCommandList *list)
+    bool Unlock(ID3D12GraphicsCommandList *list)
     {
-        Buffer.Unlock(list, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+        return Buffer.Unlock(list, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
     }
     D3D12_CONSTANT_BUFFER_VIEW_DESC DxView;
     CKDX12BufferComplex Buffer;
