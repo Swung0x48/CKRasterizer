@@ -453,7 +453,7 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     }
 
     m_VSCBVHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
-    while (!m_BufferSubmitted.empty() && m_BufferSubmitted.front().FenceValue <= completedValue)
+    while (!m_BufferSubmitted.empty() && m_BufferSubmitted.front().FenceValue < completedValue)
     {
         m_BufferSubmitted.pop_front();
     }
@@ -1121,6 +1121,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
         InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
         CKDX12ConstantBufferDesc desc(sizeof(VSConstantBufferStruct), m_Allocator.Get());
+        m_BufferSubmitted.emplace_back(m_FenceValues[m_FrameIndex], desc.Buffer);
         void *pData = desc.Lock();
         memcpy(pData, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
