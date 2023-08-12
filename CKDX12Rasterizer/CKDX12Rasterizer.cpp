@@ -75,6 +75,11 @@ XBOOL CKDX12Rasterizer::Start(WIN_HANDLE AppWnd)
             {
                 debugController1->SetEnableGPUBasedValidation(TRUE);
             }
+            ComPtr<ID3D12Debug5> debugController5;
+            if (SUCCEEDED(debugController.As(&debugController5)))
+            {
+                debugController5->SetEnableAutoName(TRUE);
+            }
         }
     }
 #endif

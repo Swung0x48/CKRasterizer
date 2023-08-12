@@ -407,16 +407,23 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
     return hr;
 }
 
-void CKDX12RasterizerContext::CreateResources()
+HRESULT CKDX12RasterizerContext::CreateResources()
 {
+    HRESULT hr;
     const size_t size = 1024;
     m_VSCBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device,
                                                            D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * size);
     m_VSCBVHeap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
-    m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
-    m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, true);
+    m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
+    m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
     m_DynamicVBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
     m_DynamicIBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
+
+    D3D12MA::ALLOCATOR_DESC desc = {};
+    desc.pDevice = m_Device.Get();
+    desc.pAdapter = static_cast<CKDX12RasterizerDriver *>(m_Driver)->m_Adapter.Get();
+    D3DCall(D3D12MA::CreateAllocator(&desc, &m_Allocator));
+    return hr;
 }
 
 HRESULT CKDX12RasterizerContext::WaitForGpu()
@@ -458,22 +465,11 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     m_IBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     //m_DynamicVBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_DynamicIBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
-
-   // assert(m_VertexBufferSubmitted.size() >= m_VertexBufferSubmittedCount[m_FrameIndex]);
-   // assert(m_IndexBufferSubmitted.size() >= m_IndexBufferSubmittedCount[m_FrameIndex]);
-   // // Release resources no longer in use.
-   //for (size_t i = 0; i < m_VertexBufferSubmittedCount[m_FrameIndex]; ++i)
-   // {
-   //     m_VertexBufferSubmitted.pop_front();
-   // }
-   // m_VertexBufferSubmittedCount[m_FrameIndex] = 0;
-
-   // for (size_t i = 0; i < m_IndexBufferSubmittedCount[m_FrameIndex]; ++i)
-   // {
-   //     m_IndexBufferSubmitted.pop_front();
-   // }
-   // m_IndexBufferSubmittedCount[m_FrameIndex] = 0;
-
+    
+    // Release resources no longer in use.
+    m_VertexBufferSubmitted[m_FrameIndex].clear();
+    m_IndexBufferSubmitted[m_FrameIndex].clear();
+    
     // Set the fence value for the next frame.
     m_FenceValues[m_FrameIndex] = currentFenceValue + 1;
     return hr;
@@ -518,7 +514,7 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(CreateRootSignature());
     PrepareShaders();
     D3DCall(CreatePSOs());
-    CreateResources();
+    D3DCall(CreateResources());
 
     D3DCall(CreateSyncObject());
     m_InCreateDestroy = FALSE;
@@ -885,16 +881,16 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
             break;
         case VX_POINTLIST:
             fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
-            break;
+            return TRUE;
         case VX_LINELIST:
             fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
-            break;
+            return TRUE;
         case VX_LINESTRIP:
             fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
-            break;
+            return TRUE;
         default:
             fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
-            break;
+            return TRUE;
     }
     CKDWORD vertexSize;
     CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
@@ -1007,16 +1003,16 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
             break;
         case VX_POINTLIST:
             fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
-            break;
+            return TRUE;
         case VX_LINELIST:
             fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
-            break;
+            return TRUE;
         case VX_LINESTRIP:
             fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
-            break;
+            return TRUE;
         default:
             fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
-            break;
+            return TRUE;
     }
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
@@ -1087,16 +1083,16 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
             break;
         case VX_POINTLIST:
             fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
-            break;
+            return TRUE;
         case VX_LINELIST:
             fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
-            break;
+            return TRUE;
         case VX_LINESTRIP:
             fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
-            break;
+            return TRUE;
         default:
             fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
-            break;
+            return TRUE;
     }
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!vbo)
@@ -1118,10 +1114,8 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
 //    MultiByteToWideChar(CP_ACP, 0, buf, strlen(buf), wstr, 100);
 //    ibo->DxResource->SetName(wstr);
 //#endif
-    /*m_VertexBufferSubmitted.emplace_back(*vbo);
-    ++m_VertexBufferSubmittedCount[m_FrameIndex];
-    m_IndexBufferSubmitted.emplace_back(*ibo);
-    ++m_IndexBufferSubmittedCount[m_FrameIndex];*/
+    m_VertexBufferSubmitted[m_FrameIndex].emplace_back(*vbo);
+    m_IndexBufferSubmitted[m_FrameIndex].emplace_back(*ibo);
     m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
@@ -1260,6 +1254,9 @@ void *CKDX12RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
     auto *desc = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
 
     assert(StartVertex + VertexCount <= desc->m_MaxVertexCount);
+    desc->LockStart = StartVertex;
+    desc->LockCount = VertexCount;
+    desc->LockFlags = Lock;
     return desc->CPUAddress;
 }
 
@@ -1269,8 +1266,31 @@ CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     auto *desc = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!desc)
         return FALSE;
+    if (desc->m_Flags & CKRST_VB_DYNAMIC)
+        return TRUE;
+    if (desc->Filled)
+        return TRUE;
+
+    // We can do a UPLOAD_HEAP -> DEFAULT_HEAP copy here.
     // We won't actually unlock here.
     // It's okay to leave resources locked in D3D12
+    HRESULT hr;
+    auto resDesc = CD3DX12_RESOURCE_DESC::Buffer(desc->m_VertexSize * desc->m_MaxVertexCount);
+    D3D12MA::ALLOCATION_DESC allocDesc = {};
+    allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+    D3DCall(m_Allocator->CreateResource(&allocDesc, &resDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                desc->Allocation.ReleaseAndGetAddressOf(),
+                                IID_NULL, nullptr));
+    desc->DefaultResource.Reset();
+    desc->DefaultResource = desc->Allocation->GetResource();
+    // Do the copy ("locking")
+    //if (desc->LockFlags & CKRST_LOCK_DISCARD)
+        m_CommandList->CopyBufferRegion(desc->DefaultResource.Get(), 0, desc->UploadResource.pBuffer.Get(),
+                                        desc->UploadResource.Offset, desc->m_VertexSize * desc->m_MaxVertexCount);
+    const auto transition = CD3DX12_RESOURCE_BARRIER::Transition(desc->DefaultResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+                                                 D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+    m_CommandList->ResourceBarrier(1, &transition);
+    desc->DxView.BufferLocation = desc->DefaultResource->GetGPUVirtualAddress();
     return TRUE;
 }
 
@@ -1281,6 +1301,9 @@ void *CKDX12RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, C
     auto *desc = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return nullptr;
+    desc->LockStart = StartIndex;
+    desc->LockCount = IndexCount;
+    desc->LockFlags = Lock;
     return desc->CPUAddress;
 }
 
@@ -1291,8 +1314,31 @@ CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
     auto *desc = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return FALSE;
+    if (desc->m_Flags & CKRST_VB_DYNAMIC)
+        return TRUE;
+    if (desc->Filled)
+        return TRUE;
+
+    // We can do a UPLOAD_HEAP -> DEFAULT_HEAP copy here.
     // We won't actually unlock here.
     // It's okay to leave resources locked in D3D12
+    HRESULT hr;
+    auto resDesc = CD3DX12_RESOURCE_DESC::Buffer(desc->m_MaxIndexCount * sizeof(CKWORD));
+    D3D12MA::ALLOCATION_DESC allocDesc = {};
+    allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+    D3DCall(m_Allocator->CreateResource(&allocDesc, &resDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                        desc->Allocation.ReleaseAndGetAddressOf(), IID_NULL, nullptr));
+    desc->DefaultResource.Reset();
+    desc->DefaultResource = desc->Allocation->GetResource();
+
+    m_CommandList->CopyBufferRegion(desc->DefaultResource.Get(), 0, desc->UploadResource.pBuffer.Get(),
+                                    desc->UploadResource.Offset, desc->m_MaxIndexCount * sizeof(CKWORD));
+    const auto transition =
+        CD3DX12_RESOURCE_BARRIER::Transition(desc->DefaultResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+                                             D3D12_RESOURCE_STATE_INDEX_BUFFER);
+    m_CommandList->ResourceBarrier(1, &transition);
+    desc->DxView.BufferLocation = desc->DefaultResource->GetGPUVirtualAddress();
+
     return TRUE;
 }
 

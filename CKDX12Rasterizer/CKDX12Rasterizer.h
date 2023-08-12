@@ -250,12 +250,13 @@ public:
     //ComPtr<ID3D12Resource> DxResource;
     D3D12_VERTEX_BUFFER_VIEW DxView;
     CKDX12VertexBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW)); }
-    CKDX12VertexBufferDesc(const CKVertexBufferDesc& desc): CKVertexBufferDesc(desc)
+    CKDX12VertexBufferDesc(const CKVertexBufferDesc& desc):
+        CKVertexBufferDesc(desc)
     {
         ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW));
     }
     CKDX12VertexBufferDesc(const CKVertexBufferDesc &desc, const CKDX12AllocatedResource& resource):
-        CKVertexBufferDesc(desc)
+        CKVertexBufferDesc(desc), UploadResource(resource)
     {
         ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW));
         DxView.BufferLocation = resource.GPUAddress;
@@ -264,6 +265,13 @@ public:
         CPUAddress = resource.CPUAddress;
     }
     void *CPUAddress = nullptr;
+    ComPtr<D3D12MA::Allocation> Allocation;
+    CKDX12AllocatedResource UploadResource = {nullptr, 0, 0};
+    ComPtr<ID3D12Resource> DefaultResource;
+    CKDWORD LockStart = 0;
+    CKDWORD LockCount = 0;
+    CKRST_LOCKFLAGS LockFlags = CKRST_LOCK_DEFAULT;
+    bool Filled = false;
     /*virtual CKBOOL Create(CKDX12RasterizerContext *ctx);
     virtual void *Lock();
     virtual void Unlock();*/
@@ -280,7 +288,7 @@ public:
         ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW));
     }
     CKDX12IndexBufferDesc(const CKIndexBufferDesc &desc, const CKDX12AllocatedResource &resource) :
-        CKIndexBufferDesc(desc)
+        CKIndexBufferDesc(desc), UploadResource(resource)
     {
         ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW));
         DxView.BufferLocation = resource.GPUAddress;
@@ -289,6 +297,13 @@ public:
         CPUAddress = resource.CPUAddress;
     }
     void *CPUAddress = nullptr;
+    ComPtr<D3D12MA::Allocation> Allocation;
+    CKDX12AllocatedResource UploadResource = {nullptr, 0, 0};
+    ComPtr<ID3D12Resource> DefaultResource;
+    CKDWORD LockStart = 0;
+    CKDWORD LockCount = 0;
+    CKRST_LOCKFLAGS LockFlags = CKRST_LOCK_DEFAULT;
+    bool Filled = false;
     /*virtual CKBOOL Create(CKDX12RasterizerContext *ctx);
     virtual void *Lock();
     virtual void Unlock();*/
@@ -410,7 +425,7 @@ protected:
     HRESULT CreateRootSignature();
     void PrepareShaders();
     HRESULT CreatePSOs();
-    void CreateResources();
+    HRESULT CreateResources();
 
     HRESULT WaitForGpu();
     HRESULT MoveToNextFrame();
@@ -464,6 +479,7 @@ public:
     std::unique_ptr<CKDX12DynamicUploadHeap> m_IBHeap;
     std::unique_ptr<CKDX12DynamicUploadHeap> m_DynamicVBHeap;
     std::unique_ptr<CKDX12DynamicUploadHeap> m_DynamicIBHeap;
+    ComPtr<D3D12MA::Allocator> m_Allocator;
 
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
@@ -490,10 +506,8 @@ public:
     CKBOOL m_PSLightConstantBufferUpToDate = FALSE;
     CKBOOL m_PSTexCombinatorConstantBufferUpToDate = FALSE;
     
-    std::deque<CKDX12VertexBufferDesc> m_VertexBufferSubmitted;
-    size_t m_VertexBufferSubmittedCount[m_BufferedFrameCount] = {0};
-    std::deque<CKDX12IndexBufferDesc> m_IndexBufferSubmitted;
-    size_t m_IndexBufferSubmittedCount[m_BufferedFrameCount] = {0};
+    std::vector<CKDX12VertexBufferDesc> m_VertexBufferSubmitted[m_BufferedFrameCount];
+    std::vector<CKDX12IndexBufferDesc> m_IndexBufferSubmitted[m_BufferedFrameCount];
 
 #if defined(DEBUG) || defined(_DEBUG)
     bool m_CmdListClosed = true;
