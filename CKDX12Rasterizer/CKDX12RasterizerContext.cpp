@@ -1277,8 +1277,16 @@ CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     desc->m_Flags = CKRST_VB_VALID;
     if (desc->m_Flags & CKRST_VB_DYNAMIC)
         return TRUE;
-    /*if (desc->Filled)
-        return TRUE;*/
+    if (desc->Filled)
+    {
+        fprintf(stderr, "UnlockVertexBuffer %lu is filled.\n", VB);
+        return TRUE;
+    }
+    if (desc->LockCount == 0)
+    {
+        // Skip locking a 0-sized lock.
+        return TRUE;
+    }
 
     // We can do a UPLOAD_HEAP -> DEFAULT_HEAP copy here.
     // We won't actually unlock here.
@@ -1292,9 +1300,11 @@ CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
                                 IID_NULL, nullptr));
     desc->DefaultResource.Reset();
     desc->DefaultResource = desc->Allocation->GetResource();
+    CKDWORD offset = desc->LockStart * desc->m_VertexSize;
+    CKDWORD size = desc->LockCount * desc->m_VertexSize;
     // Do the copy ("locking")
-        m_CommandList->CopyBufferRegion(desc->DefaultResource.Get(), 0, desc->UploadResource.pBuffer.Get(),
-                                        desc->UploadResource.Offset, desc->m_VertexSize * desc->m_MaxVertexCount);
+    m_CommandList->CopyBufferRegion(desc->DefaultResource.Get(), offset, desc->UploadResource.pBuffer.Get(),
+                                    desc->UploadResource.Offset + offset, size);
 
     const auto transition = CD3DX12_RESOURCE_BARRIER::Transition(desc->DefaultResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                                                  D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
@@ -1328,8 +1338,11 @@ CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
         return TRUE;
 
     desc->m_Flags = CKRST_VB_VALID;
-    /*if (desc->Filled)
-        return TRUE;*/
+    if (desc->LockCount == 0)
+    {
+        // Skip locking a 0-sized lock.
+        return TRUE;
+    }
 
     // We can do a UPLOAD_HEAP -> DEFAULT_HEAP copy here.
     // We won't actually unlock here.
@@ -1342,9 +1355,10 @@ CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
                                         desc->Allocation.ReleaseAndGetAddressOf(), IID_NULL, nullptr));
     desc->DefaultResource.Reset();
     desc->DefaultResource = desc->Allocation->GetResource();
-
-    m_CommandList->CopyBufferRegion(desc->DefaultResource.Get(), 0, desc->UploadResource.pBuffer.Get(),
-                                    desc->UploadResource.Offset, desc->m_MaxIndexCount * sizeof(CKWORD));
+    CKDWORD offset = desc->LockStart * sizeof(CKWORD);
+    CKDWORD size = desc->LockCount * sizeof(CKWORD);
+    m_CommandList->CopyBufferRegion(desc->DefaultResource.Get(), offset, desc->UploadResource.pBuffer.Get(),
+                                    desc->UploadResource.Offset + offset, size);
     const auto transition =
         CD3DX12_RESOURCE_BARRIER::Transition(desc->DefaultResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                                              D3D12_RESOURCE_STATE_INDEX_BUFFER);
