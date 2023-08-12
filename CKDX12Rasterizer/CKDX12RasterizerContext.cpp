@@ -1140,6 +1140,12 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
+#if defined(DEBUG) || defined(_DEBUG)
+    WCHAR *stats = nullptr;
+    m_Allocator->BuildStatsString(&stats, TRUE);
+    fprintf(stdout, "%ls\n", stats);
+    m_Allocator->FreeStatsString(stats);
+#endif
     m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
     return TRUE;
 }
@@ -1257,6 +1263,7 @@ void *CKDX12RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
     desc->LockStart = StartVertex;
     desc->LockCount = VertexCount;
     desc->LockFlags = Lock;
+
     return desc->CPUAddress;
 }
 
@@ -1266,10 +1273,12 @@ CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     auto *desc = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!desc)
         return FALSE;
+
+    desc->m_Flags = CKRST_VB_VALID;
     if (desc->m_Flags & CKRST_VB_DYNAMIC)
         return TRUE;
-    if (desc->Filled)
-        return TRUE;
+    /*if (desc->Filled)
+        return TRUE;*/
 
     // We can do a UPLOAD_HEAP -> DEFAULT_HEAP copy here.
     // We won't actually unlock here.
@@ -1284,9 +1293,9 @@ CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     desc->DefaultResource.Reset();
     desc->DefaultResource = desc->Allocation->GetResource();
     // Do the copy ("locking")
-    //if (desc->LockFlags & CKRST_LOCK_DISCARD)
         m_CommandList->CopyBufferRegion(desc->DefaultResource.Get(), 0, desc->UploadResource.pBuffer.Get(),
                                         desc->UploadResource.Offset, desc->m_VertexSize * desc->m_MaxVertexCount);
+
     const auto transition = CD3DX12_RESOURCE_BARRIER::Transition(desc->DefaultResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                                                  D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
     m_CommandList->ResourceBarrier(1, &transition);
@@ -1304,6 +1313,7 @@ void *CKDX12RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, C
     desc->LockStart = StartIndex;
     desc->LockCount = IndexCount;
     desc->LockFlags = Lock;
+
     return desc->CPUAddress;
 }
 
@@ -1316,8 +1326,10 @@ CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
         return FALSE;
     if (desc->m_Flags & CKRST_VB_DYNAMIC)
         return TRUE;
-    if (desc->Filled)
-        return TRUE;
+
+    desc->m_Flags = CKRST_VB_VALID;
+    /*if (desc->Filled)
+        return TRUE;*/
 
     // We can do a UPLOAD_HEAP -> DEFAULT_HEAP copy here.
     // We won't actually unlock here.
