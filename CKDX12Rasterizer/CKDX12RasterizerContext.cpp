@@ -879,6 +879,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
                 TriangleFanToList(voffset, indexcount, ib);
             }
             break;
+#if defined(DEBUG) || defined(_DEBUG)
         case VX_POINTLIST:
             fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
             return TRUE;
@@ -888,8 +889,11 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         case VX_LINESTRIP:
             fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
             return TRUE;
+#endif
         default:
+#if defined(DEBUG) || defined(_DEBUG)
             fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
+#endif
             return TRUE;
     }
     CKDWORD vertexSize;
@@ -1001,6 +1005,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
                 TriangleFanToList(voffset, indexcount, ib);
             }
             break;
+#if defined(DEBUG) || defined(_DEBUG)
         case VX_POINTLIST:
             fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
             return TRUE;
@@ -1010,8 +1015,11 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
         case VX_LINESTRIP:
             fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
             return TRUE;
+#endif
         default:
+#if defined(DEBUG) || defined(_DEBUG)
             fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
+#endif
             return TRUE;
     }
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
@@ -1081,6 +1089,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
             break;
         case VX_TRIANGLEFAN:
             break;
+#if defined(DEBUG) || defined(_DEBUG)
         case VX_POINTLIST:
             fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
             return TRUE;
@@ -1090,8 +1099,11 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         case VX_LINESTRIP:
             fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
             return TRUE;
+#endif
         default:
+#if defined (DEBUG) || defined(_DEBUG)
             fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
+#endif
             return TRUE;
     }
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
