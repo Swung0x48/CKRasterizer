@@ -281,7 +281,6 @@ typedef struct CKDX12IndexBufferDesc : public CKIndexBufferDesc
 {
 public:
     //ComPtr<ID3D12Resource> DxResource;
-    D3D12_INDEX_BUFFER_VIEW DxView;
     CKDX12IndexBufferDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
     CKDX12IndexBufferDesc(const CKIndexBufferDesc &desc) : CKIndexBufferDesc(desc)
     {
@@ -296,6 +295,7 @@ public:
         DxView.Format = DXGI_FORMAT_R16_UINT;
         CPUAddress = resource.CPUAddress;
     }
+    D3D12_INDEX_BUFFER_VIEW DxView;
     void *CPUAddress = nullptr;
     ComPtr<D3D12MA::Allocation> Allocation;
     CKDX12AllocatedResource UploadResource = {nullptr, 0, 0};
@@ -319,6 +319,35 @@ public:
 //    virtual void *Lock();
 //    virtual void Unlock();
 //} CKDX12ConstantBufferDesc;
+
+static size_t align(size_t size, size_t alignment)
+{
+    const size_t mask = alignment - 1;
+    // Assert that it's a power of two.
+    assert((mask & alignment) == 0);
+    // Align the allocation
+    const size_t aligned_size = (size + mask) & ~mask;
+    return aligned_size;
+}
+
+typedef struct CKDX12TextureDesc: public CKTextureDesc {
+    CKDX12TextureDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
+    CKDX12TextureDesc(const CKTextureDesc &desc) : CKTextureDesc(desc)
+    {
+        ZeroMemory(&DxView, sizeof(D3D12_SHADER_RESOURCE_VIEW_DESC));
+
+        D3D12_SUBRESOURCE_FOOTPRINT pitchedDesc = {};
+        pitchedDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        pitchedDesc.Width = desc.Format.Width;
+        pitchedDesc.Height = desc.Format.Height;
+        pitchedDesc.Depth = 1;
+        pitchedDesc.RowPitch = align(pitchedDesc.Width * sizeof(DWORD), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+
+    }
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC DxView;
+
+} CKDX12TextureDesc;
 
 class CKDX12RasterizerContext : public CKRasterizerContext
 {
@@ -442,15 +471,7 @@ protected:
 #endif
     
 public:
-    // We overload the meaning of FrameCount to mean both the maximum
-    // number of frames that will be queued to the GPU at a time, as well as the number
-    // of back buffers in the DXGI swap chain. For the majority of applications, this
-    // is convenient and works well. However, there will be certain cases where an
-    // application may want to queue up more frames than there are back buffers
-    // available.
-    // It should be noted that excessive buffering of frames dependent on user input
-    // may result in noticeable latency in your app.
-    static const UINT m_BufferedFrameCount = 2;
+    static const UINT m_FrameInFlightCount = 2;
     static const UINT m_BackBufferCount = 2;
 
     VxDirectXData m_DirectXData;
@@ -484,7 +505,7 @@ public:
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
     ComPtr<ID3D12RootSignature> m_RootSignature;
-    ComPtr<ID3D12CommandAllocator> m_CommandAllocators[m_BufferedFrameCount];
+    ComPtr<ID3D12CommandAllocator> m_CommandAllocators[m_FrameInFlightCount];
     ComPtr<ID3D12GraphicsCommandList> m_CommandList;
     std::vector<ID3D12CommandList *> m_PendingCommandList;
     
@@ -506,8 +527,8 @@ public:
     CKBOOL m_PSLightConstantBufferUpToDate = FALSE;
     CKBOOL m_PSTexCombinatorConstantBufferUpToDate = FALSE;
     
-    std::vector<CKDX12VertexBufferDesc> m_VertexBufferSubmitted[m_BufferedFrameCount];
-    std::vector<CKDX12IndexBufferDesc> m_IndexBufferSubmitted[m_BufferedFrameCount];
+    std::vector<CKDX12VertexBufferDesc> m_VertexBufferSubmitted[m_FrameInFlightCount];
+    std::vector<CKDX12IndexBufferDesc> m_IndexBufferSubmitted[m_FrameInFlightCount];
 
 #if defined(DEBUG) || defined(_DEBUG)
     bool m_CmdListClosed = true;
@@ -516,7 +537,7 @@ public:
     UINT m_FrameIndex = 0;
     HANDLE m_FenceEvent;
     ComPtr<ID3D12Fence> m_Fence;
-    UINT64 m_FenceValues[m_BufferedFrameCount];
+    UINT64 m_FenceValues[m_FrameInFlightCount];
 
     asio::thread_pool m_ThreadPool;
 };

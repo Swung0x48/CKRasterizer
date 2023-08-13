@@ -212,7 +212,7 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
     }
 
     // and a command allocator...
-    for (UINT i = 0; i < m_BufferedFrameCount; i++)
+    for (UINT i = 0; i < m_FrameInFlightCount; i++)
     {
         D3DCall(m_Device->CreateCommandAllocator(
             D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -463,7 +463,7 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     m_VSCBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_VBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_IBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
-    //m_DynamicVBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
+    m_DynamicVBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_DynamicIBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     
     // Release resources no longer in use.
@@ -517,7 +517,13 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(CreateResources());
 
     D3DCall(CreateSyncObject());
+    
+    SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, 1);
+    SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
+    SetRenderState(VXRENDERSTATE_COLORVERTEX, 0);
+
     m_InCreateDestroy = FALSE;
+    m_Inited = TRUE;
     return SUCCEEDED(hr);
 }
 
@@ -546,7 +552,6 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
     if (Flags & CKRST_CTXCLEAR_COLOR)
     {
         VxColor c(Ccol);
-        //const float color[] = {0.0f, 0.2f, 0.5f, 1.0f};
         m_CommandList->ClearRenderTargetView(rtvHandle, (const float*)&c, 0, nullptr);
     }
     CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
@@ -651,11 +656,34 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
     return SUCCEEDED(hr);
 }
 
-CKBOOL CKDX12RasterizerContext::SetLight(CKDWORD Light, CKLightData *data) { return TRUE; }
+CKBOOL CKDX12RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
+{
+    if (Light >= MAX_ACTIVE_LIGHTS)
+        return FALSE;
+    m_PSLightConstantBufferUpToDate = FALSE;
+    m_CurrentLightData[Light] = *data;
+    bool enabled = (m_PSLightCBuffer.Lights[Light].type & LFLG_LIGHTEN);
+    m_PSLightCBuffer.Lights[Light] = *data;
+    flag_toggle(&m_PSLightCBuffer.Lights[Light].type, LFLG_LIGHTEN, enabled);
+    return TRUE;
+}
 
-CKBOOL CKDX12RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable) { return TRUE; }
+CKBOOL CKDX12RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
+{
+    if (Light >= MAX_ACTIVE_LIGHTS)
+        return FALSE;
+    m_PSLightConstantBufferUpToDate = FALSE;
+    flag_toggle(&m_PSLightCBuffer.Lights[Light].type, LFLG_LIGHTEN, Enable);
+    return TRUE;
+}
 
-CKBOOL CKDX12RasterizerContext::SetMaterial(CKMaterialData *mat) { return TRUE; }
+CKBOOL CKDX12RasterizerContext::SetMaterial(CKMaterialData *mat)
+{
+    m_CurrentMaterialData = *mat;
+    m_PSConstantBufferUpToDate = FALSE;
+    m_PSCBuffer.Material = *mat;
+    return TRUE;
+}
 
 CKBOOL CKDX12RasterizerContext::SetViewport(CKViewportData *data) {
 #if LOGGING
