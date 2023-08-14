@@ -304,9 +304,6 @@ public:
     CKDWORD LockCount = 0;
     CKRST_LOCKFLAGS LockFlags = CKRST_LOCK_DEFAULT;
     bool Filled = false;
-    /*virtual CKBOOL Create(CKDX12RasterizerContext *ctx);
-    virtual void *Lock();
-    virtual void Unlock();*/
 } CKDX12IndexBufferDesc;
 
 //typedef struct CKDX12ConstantBufferDesc
@@ -331,20 +328,19 @@ static size_t align(size_t size, size_t alignment)
 }
 
 typedef struct CKDX12TextureDesc: public CKTextureDesc {
-    CKDX12TextureDesc() { ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW)); }
+    CKDX12TextureDesc() { ZeroMemory(&DxView, sizeof(D3D12_SHADER_RESOURCE_VIEW_DESC)); }
     CKDX12TextureDesc(const CKTextureDesc &desc) : CKTextureDesc(desc)
     {
         ZeroMemory(&DxView, sizeof(D3D12_SHADER_RESOURCE_VIEW_DESC));
-
-        D3D12_SUBRESOURCE_FOOTPRINT pitchedDesc = {};
-        pitchedDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-        pitchedDesc.Width = desc.Format.Width;
-        pitchedDesc.Height = desc.Format.Height;
-        pitchedDesc.Depth = 1;
-        pitchedDesc.RowPitch = align(pitchedDesc.Width * sizeof(DWORD), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-
     }
-
+    CKDX12TextureDesc(const CKTextureDesc &desc, const CKDX12AllocatedResource &resource) :
+        CKTextureDesc(desc), UploadResource(resource)
+    {
+        ZeroMemory(&DxView, sizeof(D3D12_RESOURCE_DESC));
+    }
+    ComPtr<D3D12MA::Allocation> Allocation;
+    CKDX12AllocatedResource UploadResource = {nullptr, 0, 0};
+    ComPtr<ID3D12Resource> DefaultResource;
     D3D12_SHADER_RESOURCE_VIEW_DESC DxView;
 
 } CKDX12TextureDesc;
@@ -498,6 +494,7 @@ public:
 
     std::unique_ptr<CKDX12DynamicUploadHeap> m_VBHeap;
     std::unique_ptr<CKDX12DynamicUploadHeap> m_IBHeap;
+    std::unique_ptr<CKDX12DynamicUploadHeap> m_TextureHeap;
     std::unique_ptr<CKDX12DynamicUploadHeap> m_DynamicVBHeap;
     std::unique_ptr<CKDX12DynamicUploadHeap> m_DynamicIBHeap;
     ComPtr<D3D12MA::Allocator> m_Allocator;

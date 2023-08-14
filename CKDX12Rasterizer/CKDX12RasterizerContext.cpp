@@ -416,6 +416,7 @@ HRESULT CKDX12RasterizerContext::CreateResources()
     m_VSCBVHeap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
     m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
     m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
+    m_TextureHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
     m_DynamicVBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
     m_DynamicIBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
 
@@ -463,6 +464,7 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     m_VSCBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_VBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_IBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
+    m_TextureHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_DynamicVBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_DynamicIBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     
@@ -1223,6 +1225,50 @@ CKBOOL CKDX12RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE 
 
 CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
 {
+    if (Texture >= m_Textures.Size())
+        return FALSE;
+    /*auto *desc = static_cast<CKDX12TextureDesc *>(m_Textures[Texture]);
+    if (!desc)
+        return FALSE;*/
+    auto *desc = m_Textures[Texture];
+    VxImageDescEx dst;
+    dst.Size = sizeof(VxImageDescEx);
+    ZeroMemory(&dst.Flags, sizeof(VxImageDescEx) - sizeof(dst.Size));
+    dst.Width = SurfDesc.Width;
+    dst.Height = SurfDesc.Height;
+    dst.BitsPerPixel = 32;
+    dst.BytesPerLine = 4 * SurfDesc.Width;
+    dst.AlphaMask = 0xFF000000;
+    dst.RedMask = 0x0000FF;
+    dst.GreenMask = 0x00FF00;
+    dst.BlueMask = 0xFF0000;
+    dst.Image = new uint8_t[dst.Width * dst.Height * (dst.BitsPerPixel / 8)];
+    VxDoBlit(SurfDesc, dst);
+    if (!(SurfDesc.AlphaMask || SurfDesc.Flags >= _DXT1))
+        VxDoAlphaBlit(dst, 255);
+
+    // TODO: create texture and SRV here...
+    /*D3D12_RESOURCE_DESC textureDesc = {};
+    textureDesc.MipLevels = 1;
+    textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    textureDesc.Width = desc->Format.Width;
+    textureDesc.Height = desc->Format.Height;
+    textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+    textureDesc.DepthOrArraySize = 1;
+    textureDesc.SampleDesc.Count = 1;
+    textureDesc.SampleDesc.Quality = 0;
+    textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    D3D12MA::ALLOCATION_DESC allocDesc = {};
+    allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+    D3DCall(m_Allocator->CreateResource(&allocDesc, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                        desc->Allocation.ReleaseAndGetAddressOf(), IID_NULL, nullptr));
+    desc->DefaultResource.Reset();
+    desc->DefaultResource = desc->Allocation->GetResource();
+    const UINT64 uploadBufferSize = GetRequiredIntermediateSize(desc->DefaultResource.Get(), 0, 1);
+    auto res = m_TextureHeap->Allocate(uploadBufferSize);
+    auto* texture = new CKDX12TextureDesc(*desc, res);*/
+
+    delete dst.Image;
     return TRUE;
 }
 
