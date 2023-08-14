@@ -489,7 +489,7 @@ public:
     UINT m_RTVDescriptorSize;
     ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
     UINT m_DSVDescriptorSize;
-    std::unique_ptr<CKDX12DynamicDescriptorHeap> m_VSCBVHeap;
+    std::unique_ptr<CKDX12DynamicDescriptorHeap> m_CBV_SRV_Heap;
     std::unique_ptr<CKDX12DynamicUploadHeap> m_VSCBHeap;
 
     std::unique_ptr<CKDX12DynamicUploadHeap> m_VBHeap;

@@ -272,11 +272,13 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
     {
         featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
     }
-    CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
-    CD3DX12_ROOT_PARAMETER1 rootParameters[1];
+    CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
+    CD3DX12_ROOT_PARAMETER1 rootParameters[2];
 
     ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
     rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
+    ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
     // Allow input layout and deny uneccessary access to certain pipeline stages.
     D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
@@ -284,12 +286,31 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 
+    D3D12_STATIC_SAMPLER_DESC sampler = {};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    sampler.MipLODBias = 0;
+    sampler.MaxAnisotropy = 0;
+    sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+    sampler.MinLOD = 0.0f;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
+    sampler.ShaderRegister = 0;
+    sampler.RegisterSpace = 0;
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-    rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+    rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, rootSignatureFlags);
     ComPtr<ID3DBlob> signature;
     ComPtr<ID3DBlob> error;
-    D3DCall(
-        D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+    
+    hr = D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error);
+    if (hr == E_INVALIDARG)
+        fprintf(stderr, "%s\n", error->GetBufferPointer());
+    else
+        D3DCall(hr);
     D3DCall(m_Device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
                                                 IID_PPV_ARGS(&m_RootSignature)));
 
@@ -413,7 +434,7 @@ HRESULT CKDX12RasterizerContext::CreateResources()
     const size_t size = 1024;
     m_VSCBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device,
                                                            D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * size);
-    m_VSCBVHeap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
+    m_CBV_SRV_Heap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
     m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
     m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
     m_TextureHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
@@ -460,7 +481,7 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
         WaitForSingleObjectEx(m_FenceEvent, INFINITE, FALSE);
     }
 
-    m_VSCBVHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
+    m_CBV_SRV_Heap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_VSCBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_VBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
     m_IBHeap->FinishFrame(m_FenceValues[m_FrameIndex] + 1, completedValue);
@@ -618,10 +639,10 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
                                             m_DSVDescriptorSize);
     m_CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
     m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
-    std::vector<ID3D12DescriptorHeap *> ppHeaps(m_VSCBVHeap->m_Heaps.size(), nullptr);
-    for (auto i = 0; i < m_VSCBVHeap->m_Heaps.size(); ++i)
+    std::vector<ID3D12DescriptorHeap *> ppHeaps;
+    for (auto i = 0; i < m_CBV_SRV_Heap->m_Heaps.size(); ++i)
     {
-        ppHeaps[i] = m_VSCBVHeap->m_Heaps[i].m_Heap.Get();
+        ppHeaps.emplace_back(m_CBV_SRV_Heap->m_Heaps[i].m_Heap.Get());
     }
     m_CommandList->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
     return TRUE;
@@ -945,7 +966,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         HRESULT hr;
-        D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
+        D3DCall(m_CBV_SRV_Heap->CreateDescriptor(res, handle));
         m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
@@ -1072,7 +1093,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
         memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         HRESULT hr;
-        D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
+        D3DCall(m_CBV_SRV_Heap->CreateDescriptor(res, handle));
         m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
@@ -1178,7 +1199,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         HRESULT hr;
-        D3DCall(m_VSCBVHeap->CreateDescriptor(res, handle));
+        D3DCall(m_CBV_SRV_Heap->CreateDescriptor(res, handle));
         m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
@@ -1227,10 +1248,10 @@ CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
 {
     if (Texture >= m_Textures.Size())
         return FALSE;
-    /*auto *desc = static_cast<CKDX12TextureDesc *>(m_Textures[Texture]);
+    auto *desc = static_cast<CKDX12TextureDesc *>(m_Textures[Texture]);
     if (!desc)
-        return FALSE;*/
-    auto *desc = m_Textures[Texture];
+        return FALSE;
+    //auto *desc = m_Textures[Texture];
     VxImageDescEx dst;
     dst.Size = sizeof(VxImageDescEx);
     ZeroMemory(&dst.Flags, sizeof(VxImageDescEx) - sizeof(dst.Size));
@@ -1248,7 +1269,8 @@ CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
         VxDoAlphaBlit(dst, 255);
 
     // TODO: create texture and SRV here...
-    /*D3D12_RESOURCE_DESC textureDesc = {};
+    HRESULT hr;
+    D3D12_RESOURCE_DESC textureDesc = {};
     textureDesc.MipLevels = 1;
     textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     textureDesc.Width = desc->Format.Width;
@@ -1266,9 +1288,30 @@ CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
     desc->DefaultResource = desc->Allocation->GetResource();
     const UINT64 uploadBufferSize = GetRequiredIntermediateSize(desc->DefaultResource.Get(), 0, 1);
     auto res = m_TextureHeap->Allocate(uploadBufferSize);
-    auto* texture = new CKDX12TextureDesc(*desc, res);*/
-
+    desc->UploadResource = res;
+    D3D12_SUBRESOURCE_DATA textureData = {};
+    textureData.pData = dst.Image;
+    textureData.RowPitch = desc->Format.Width * (dst.BitsPerPixel / 8);
+    textureData.SlicePitch = textureData.RowPitch * desc->Format.Height;
+    UpdateSubresources(m_CommandList.Get(), desc->DefaultResource.Get(), res.pBuffer.Get(), res.Offset,
+        0, 1, &textureData);
     delete dst.Image;
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = textureDesc.Format;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+    CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+    CKDX12AllocatedResource defaultRes{desc->DefaultResource, 0, (size_t)uploadBufferSize};
+    D3DCall(m_CBV_SRV_Heap->CreateDescriptor(defaultRes, handle));
+    //m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
+    //m_Device->CreateShaderResourceView(desc->DefaultResource.Get(), &srvDesc,
+    //                                   m_SRVHeap->GetCPUDescriptorHandleForHeapStart());
+    auto transition = CD3DX12_RESOURCE_BARRIER::Transition(desc->DefaultResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+                                                           D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    m_CommandList->ResourceBarrier(1, &transition);
+
     return TRUE;
 }
 
