@@ -17,7 +17,9 @@ public:
     CKDX12DescriptorRing &operator=(CKDX12DescriptorRing &&that) = default;
     ~CKDX12DescriptorRing() = default;
 
-    HRESULT CreateDescriptor(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
+    HRESULT CreateConstantBufferView(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
+    HRESULT CreateShaderResourceView(ID3D12Resource *pResource, const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc,
+                                     CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
 
 public:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_Heap;

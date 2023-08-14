@@ -966,7 +966,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         HRESULT hr;
-        D3DCall(m_CBV_SRV_Heap->CreateDescriptor(res, handle));
+        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
         m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
@@ -1093,7 +1093,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
         memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         HRESULT hr;
-        D3DCall(m_CBV_SRV_Heap->CreateDescriptor(res, handle));
+        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
         m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
@@ -1199,7 +1199,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         HRESULT hr;
-        D3DCall(m_CBV_SRV_Heap->CreateDescriptor(res, handle));
+        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
         m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
@@ -1304,10 +1304,8 @@ CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
     srvDesc.Texture2D.MipLevels = 1;
     CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
     CKDX12AllocatedResource defaultRes{desc->DefaultResource, 0, (size_t)uploadBufferSize};
-    D3DCall(m_CBV_SRV_Heap->CreateDescriptor(defaultRes, handle));
-    //m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
-    //m_Device->CreateShaderResourceView(desc->DefaultResource.Get(), &srvDesc,
-    //                                   m_SRVHeap->GetCPUDescriptorHandleForHeapStart());
+    D3DCall(m_CBV_SRV_Heap->CreateShaderResourceView(desc->DefaultResource.Get(), &srvDesc, handle));
+    m_CommandList->SetGraphicsRootDescriptorTable(1, handle);
     auto transition = CD3DX12_RESOURCE_BARRIER::Transition(desc->DefaultResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                                                            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     m_CommandList->ResourceBarrier(1, &transition);

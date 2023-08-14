@@ -18,7 +18,7 @@ CKDX12DescriptorRing::CKDX12DescriptorRing(size_t size, D3D12_DESCRIPTOR_HEAP_TY
     m_TailHandle = m_HeadHandle;*/
 }
 
-HRESULT CKDX12DescriptorRing::CreateDescriptor(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE& gpuHandle)
+HRESULT CKDX12DescriptorRing::CreateConstantBufferView(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE& gpuHandle)
 {
     auto offset = CKDX12RingBufferBase::Allocate(1);
     if (offset == InvalidOffset)
@@ -31,4 +31,19 @@ HRESULT CKDX12DescriptorRing::CreateDescriptor(const CKDX12AllocatedResource &re
     m_Device->CreateConstantBufferView(&desc, cpuHandle);
     gpuHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(m_Heap->GetGPUDescriptorHandleForHeapStart(), offset, m_IncrementSize);
     return S_OK;
+}
+
+HRESULT CKDX12DescriptorRing::CreateShaderResourceView(ID3D12Resource *pResource,
+                                                       const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc,
+                                                       CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle)
+{
+    HRESULT hr = S_OK;
+    auto offset = CKDX12RingBufferBase::Allocate(1);
+    if (offset == InvalidOffset)
+        return E_OUTOFMEMORY;
+    auto cpuHandle =
+        CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Heap->GetCPUDescriptorHandleForHeapStart(), offset, m_IncrementSize);
+    m_Device->CreateShaderResourceView(pResource, pDesc, cpuHandle);
+    gpuHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(m_Heap->GetGPUDescriptorHandleForHeapStart(), offset, m_IncrementSize);
+    return hr;
 }

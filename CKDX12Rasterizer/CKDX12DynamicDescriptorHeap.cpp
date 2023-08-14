@@ -1,9 +1,9 @@
 #include "CKDX12DynamicDescriptorHeap.h"
 
-HRESULT CKDX12DynamicDescriptorHeap::CreateDescriptor(const CKDX12AllocatedResource &resource,
+HRESULT CKDX12DynamicDescriptorHeap::CreateConstantBufferView(const CKDX12AllocatedResource &resource,
                                                       CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle)
 {
-    HRESULT hr = m_Heaps.back().CreateDescriptor(resource, gpuHandle);
+    HRESULT hr = m_Heaps.back().CreateConstantBufferView(resource, gpuHandle);
     if (hr == E_OUTOFMEMORY)
     {
         // Create new buffer
@@ -12,8 +12,30 @@ HRESULT CKDX12DynamicDescriptorHeap::CreateDescriptor(const CKDX12AllocatedResou
         while (newSize < m_Heaps.back().GetUsedSize() + 1)
             newSize *= 2;
         m_Heaps.emplace_back(newSize, m_Type, m_Device);
-        hr = m_Heaps.back().CreateDescriptor(resource, gpuHandle);
+        hr = m_Heaps.back().CreateConstantBufferView(resource, gpuHandle);
     } else
+    {
+        D3DCall(hr);
+    }
+    return hr;
+}
+
+HRESULT CKDX12DynamicDescriptorHeap::CreateShaderResourceView(ID3D12Resource *pResource,
+                                                              const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc,
+                                                              CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle)
+{
+    HRESULT hr = m_Heaps.back().CreateShaderResourceView(pResource, pDesc, gpuHandle);
+    if (hr == E_OUTOFMEMORY)
+    {
+        // Create new buffer
+        auto newSize = m_Heaps.back().GetMaxSize() * 2;
+        // Make sure the buffer is large enough for the requested chunk
+        while (newSize < m_Heaps.back().GetUsedSize() + 1)
+            newSize *= 2;
+        m_Heaps.emplace_back(newSize, m_Type, m_Device);
+        hr = m_Heaps.back().CreateShaderResourceView(pResource, pDesc, gpuHandle);
+    }
+    else
     {
         D3DCall(hr);
     }

@@ -21,7 +21,9 @@ public:
     CKDX12DynamicDescriptorHeap &operator=(const CKDX12DynamicDescriptorHeap &) = delete;
     CKDX12DynamicDescriptorHeap &operator=(CKDX12DynamicDescriptorHeap &&) = default;
 
-    HRESULT CreateDescriptor(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
+    HRESULT CreateConstantBufferView(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
+    HRESULT CreateShaderResourceView(ID3D12Resource *pResource, const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc,
+                             CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
     void FinishFrame(UINT64 nextFenceValue, UINT64 lastCompletedFenceValue);
 
 public:
