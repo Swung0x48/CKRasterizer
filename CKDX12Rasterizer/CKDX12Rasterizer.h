@@ -447,6 +447,9 @@ protected:
     HRESULT CreateDescriptorHeap();
     HRESULT CreateFrameResources();
     HRESULT CreateSyncObject();
+    UINT m_TextureBaseIndex = 0;
+    UINT m_VSCBVBaseIndex = 0;
+    UINT m_PSCBVBaseIndex = 0;
     HRESULT CreateRootSignature();
     void PrepareShaders();
     HRESULT CreatePSOs();
