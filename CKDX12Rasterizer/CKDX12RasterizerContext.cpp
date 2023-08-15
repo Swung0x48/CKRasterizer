@@ -860,6 +860,8 @@ CKBOOL CKDX12RasterizerContext::SetTexture(CKDWORD Texture, int Stage) {
     }
     m_PSCBuffer.NullTextureMask &= ~(1 << Stage);
     m_PSConstantBufferUpToDate = FALSE;
+    HRESULT hr;
+    D3DCall(m_CBV_SRV_Heap->CreateShaderResourceView(desc->DefaultResource.Get(), &desc->DxView, desc->GPUHandle));
     m_CommandList->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + Stage, desc->GPUHandle);
 
     return TRUE;
@@ -1340,12 +1342,10 @@ CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
         0, 1, &textureData);
     delete dst.Image;
 
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.Format = textureDesc.Format;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = 1;
-    D3DCall(m_CBV_SRV_Heap->CreateShaderResourceView(desc->DefaultResource.Get(), &srvDesc, desc->GPUHandle));
+    desc->DxView.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    desc->DxView.Format = textureDesc.Format;
+    desc->DxView.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    desc->DxView.Texture2D.MipLevels = 1;
     auto transition = CD3DX12_RESOURCE_BARRIER::Transition(desc->DefaultResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                                                            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     m_CommandList->ResourceBarrier(1, &transition);
