@@ -822,7 +822,23 @@ CKBOOL CKDX12RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD 
 {
     return CKRasterizerContext::GetRenderState(State, Value);
 }
-CKBOOL CKDX12RasterizerContext::SetTexture(CKDWORD Texture, int Stage) { return TRUE; }
+CKBOOL CKDX12RasterizerContext::SetTexture(CKDWORD Texture, int Stage) {
+    if (Texture >= m_Textures.Size())
+        return FALSE;
+    auto *desc = static_cast<CKDX12TextureDesc *>(m_Textures[Texture]);
+    if (!desc)
+    {
+        m_PSCBuffer.NullTextureMask |= (1 << Stage);
+        m_PSConstantBufferUpToDate = FALSE;
+        return TRUE;
+    }
+    m_PSCBuffer.NullTextureMask &= ~(1 << Stage);
+    m_PSConstantBufferUpToDate = FALSE;
+    // TODO: check root signature slot
+    m_CommandList->SetGraphicsRootDescriptorTable(1, desc->GPUHandle);
+
+    return TRUE;
+}
 
 CKBOOL CKDX12RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
@@ -1302,10 +1318,7 @@ CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
     srvDesc.Format = textureDesc.Format;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
-    CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
-    CKDX12AllocatedResource defaultRes{desc->DefaultResource, 0, (size_t)uploadBufferSize};
-    D3DCall(m_CBV_SRV_Heap->CreateShaderResourceView(desc->DefaultResource.Get(), &srvDesc, handle));
-    m_CommandList->SetGraphicsRootDescriptorTable(1, handle);
+    D3DCall(m_CBV_SRV_Heap->CreateShaderResourceView(desc->DefaultResource.Get(), &srvDesc, desc->GPUHandle));
     auto transition = CD3DX12_RESOURCE_BARRIER::Transition(desc->DefaultResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                                                            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     m_CommandList->ResourceBarrier(1, &transition);

@@ -342,7 +342,7 @@ typedef struct CKDX12TextureDesc: public CKTextureDesc {
     CKDX12AllocatedResource UploadResource = {nullptr, 0, 0};
     ComPtr<ID3D12Resource> DefaultResource;
     D3D12_SHADER_RESOURCE_VIEW_DESC DxView;
-
+    CD3DX12_GPU_DESCRIPTOR_HANDLE GPUHandle;
 } CKDX12TextureDesc;
 
 class CKDX12RasterizerContext : public CKRasterizerContext
