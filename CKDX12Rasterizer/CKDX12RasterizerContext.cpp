@@ -272,12 +272,26 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
     {
         featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
     }
+
+    /*
+    * // VERTEX
+        VSCBuf: register(b0)
+    * // PIXEL
+        PSCBuf: register(b0)
+        PSLightCBuf : register(b1)
+        PSTexCombinatorCBuf : register(b2)
+        Texture2D texture0 : register(t0)
+        SamplerState sampler0 : register(s0)
+        Texture2D texture1 : register(t1)
+        SamplerState sampler1 : register(s1)
+    */
     CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
     CD3DX12_ROOT_PARAMETER1 rootParameters[2];
 
-    ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE,
+                   D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
     rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
-    ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
     rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
     // Allow input layout and deny uneccessary access to certain pipeline stages.
     D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
