@@ -505,7 +505,7 @@ public:
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
     CD3DX12_DESCRIPTOR_RANGE1 m_RootParamRanges[6] = {};
     CD3DX12_ROOT_PARAMETER1 m_RootParameters[6] = {};
-    D3D12_STATIC_SAMPLER_DESC m_Samplers[2];
+    D3D12_STATIC_SAMPLER_DESC m_SamplerDesc[2];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
     ComPtr<ID3D12RootSignature> m_RootSignature;
     ComPtr<ID3D12CommandAllocator> m_CommandAllocators[m_FrameInFlightCount];

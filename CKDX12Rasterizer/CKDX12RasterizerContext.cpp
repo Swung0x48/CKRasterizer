@@ -321,13 +321,13 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
     sampler.RegisterSpace = 0;
     sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    m_Samplers[0] = sampler;
-    m_Samplers[1] = sampler;
-    m_Samplers[1].ShaderRegister = 1;
+    m_SamplerDesc[0] = sampler;
+    m_SamplerDesc[1] = sampler;
+    m_SamplerDesc[1].ShaderRegister = 1;
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
     rootSignatureDesc.Init_1_1(_countof(m_RootParameters), m_RootParameters,
-        2, m_Samplers, rootSignatureFlags);
+        2, m_SamplerDesc, rootSignatureFlags);
     ComPtr<ID3DBlob> signature;
     ComPtr<ID3DBlob> error;
     
@@ -868,13 +868,200 @@ CKBOOL CKDX12RasterizerContext::SetTexture(CKDWORD Texture, int Stage) {
     return TRUE;
 }
 
+D3D12_TEXTURE_ADDRESS_MODE Vx2D3DTextureAddressMode(VXTEXTURE_ADDRESSMODE mode)
+{
+    switch (mode)
+    {
+        case VXTEXTURE_ADDRESSWRAP:
+            return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        case VXTEXTURE_ADDRESSMIRROR:
+            return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+        case VXTEXTURE_ADDRESSCLAMP:
+            return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        case VXTEXTURE_ADDRESSBORDER:
+            return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+        case VXTEXTURE_ADDRESSMIRRORONCE:
+            return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
+        default:
+            break;
+    }
+    return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+}
+
 CKBOOL CKDX12RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
     switch (Tss)
     {
+        case CKRST_TSS_ADDRESS:
+            {
+                m_SamplerStateUpToDate[Stage] = FALSE;
+                auto mode = Vx2D3DTextureAddressMode((VXTEXTURE_ADDRESSMODE)Value);
+                m_SamplerDesc[Stage].AddressU = mode;
+                m_SamplerDesc[Stage].AddressV = mode;
+                m_SamplerDesc[Stage].AddressW = mode;
+                return TRUE;
+            }
+        case CKRST_TSS_ADDRESSU:
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            m_SamplerDesc[Stage].AddressU = Vx2D3DTextureAddressMode((VXTEXTURE_ADDRESSMODE)Value);
+            return TRUE;
+        case CKRST_TSS_ADDRESSV:
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            m_SamplerDesc[Stage].AddressV = Vx2D3DTextureAddressMode((VXTEXTURE_ADDRESSMODE)Value);
+            return TRUE;
+        case CKRST_TSS_BORDERCOLOR:
+            {
+                m_SamplerStateUpToDate[Stage] = FALSE;
+                VxColor c(Value);
+                auto col = c.GetRGB();
+                auto colA = c.GetRGBA();
+                if (col == 0)
+                    if (colA == 0)
+                        m_SamplerDesc[Stage].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
+                    else
+                        m_SamplerDesc[Stage].BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+                else
+                    m_SamplerDesc[Stage].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
 
+                return TRUE;
+            }
+        case CKRST_TSS_MINFILTER:
+        case CKRST_TSS_MAGFILTER:
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            return TRUE; // m_Filter[Stage].SetFilterMode(Tss, static_cast<VXTEXTURE_FILTERMODE>(Value));
+        case CKRST_TSS_MIPMAPLODBIAS:
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            m_SamplerDesc[Stage].MipLODBias = Value;
+            return TRUE;
+        case CKRST_TSS_MAXANISOTROPY:
+            m_SamplerStateUpToDate[Stage] = FALSE;
+            m_SamplerDesc[Stage].MaxAnisotropy = Value;
+            return TRUE;
+        case CKRST_TSS_STAGEBLEND:
+            {
+                CKDX12TexCombinatorConstant tc = m_PSTexCombinatorCBuffer.TexCombinator[Stage];
+                bool valid = true;
+                switch (Value)
+                {
+                    case STAGEBLEND(VXBLEND_ZERO, VXBLEND_SRCCOLOR):
+                    case STAGEBLEND(VXBLEND_DESTCOLOR, VXBLEND_ZERO):
+                        tc = CKDX12TexCombinatorConstant::make(
+                            TexOp::modulate, TexArg::texture, TexArg::current, TexArg::current, TexOp::select1,
+                            TexArg::current, TexArg::current, TexArg::current, tc.dest(), tc.constant);
+                        break;
+                    case STAGEBLEND(VXBLEND_ONE, VXBLEND_ONE):
+                        tc = CKDX12TexCombinatorConstant::make(
+                            TexOp::add, TexArg::current, TexArg::current, TexArg::current, TexOp::select1,
+                            TexArg::current, TexArg::current, TexArg::current, tc.dest(), tc.constant);
+                        break;
+                    default:
+                        valid = false;
+                }
+                if (valid)
+                {
+                    m_PSTexCombinatorCBuffer.TexCombinator[Stage] = tc;
+                    m_PSTexCombinatorConstantBufferUpToDate = FALSE;
+                }
+                return valid;
+            }
+        case CKRST_TSS_TEXTUREMAPBLEND:
+            {
+                CKDX12TexCombinatorConstant tc = m_PSTexCombinatorCBuffer.TexCombinator[Stage];
+                bool valid = true;
+                switch (Value)
+                {
+                    case VXTEXTUREBLEND_DECAL:
+                    case VXTEXTUREBLEND_COPY:
+                        tc.set_color_op(TexOp::select1);
+                        tc.set_color_arg1(TexArg::texture);
+                        tc.set_alpha_op(TexOp::select1);
+                        tc.set_alpha_arg1(TexArg::texture);
+                        break;
+                    case VXTEXTUREBLEND_MODULATE:
+                    case VXTEXTUREBLEND_MODULATEALPHA:
+                    case VXTEXTUREBLEND_MODULATEMASK:
+                        tc = CKDX12TexCombinatorConstant::make(
+                            TexOp::modulate, TexArg::texture, TexArg::current, TexArg::current, TexOp::modulate,
+                            TexArg::texture, TexArg::current, TexArg::current, tc.dest(), tc.constant);
+                        break;
+                    case VXTEXTUREBLEND_DECALALPHA:
+                    case VXTEXTUREBLEND_DECALMASK:
+                        tc.set_color_op(TexOp::mixtexalp);
+                        tc.set_color_arg1(TexArg::texture);
+                        tc.set_alpha_arg2(TexArg::current);
+                        tc.set_alpha_op(TexOp::select1);
+                        tc.set_alpha_arg1(TexArg::diffuse);
+                        break;
+                    case VXTEXTUREBLEND_ADD:
+                        tc.set_color_op(TexOp::add);
+                        tc.set_color_arg1(TexArg::texture);
+                        tc.set_alpha_arg2(TexArg::current);
+                        tc.set_alpha_op(TexOp::select1);
+                        tc.set_alpha_arg1(TexArg::current);
+                        break;
+                    default:
+                        valid = false;
+                }
+                if (valid)
+                {
+                    m_PSTexCombinatorCBuffer.TexCombinator[Stage] = tc;
+                    m_PSTexCombinatorConstantBufferUpToDate = FALSE;
+                }
+                return valid;
+            }
+        case CKRST_TSS_TEXTURETRANSFORMFLAGS:
+            {
+                CKDWORD tvp = m_VSCBuffer.TextureTransformFlags[Stage];
+                if (!Value)
+                    tvp &= ~0U ^ TVP_TC_TRANSF;
+                else
+                    tvp |= TVP_TC_TRANSF;
+                if (Value & CKRST_TTF_PROJECTED)
+                    tvp |= TVP_TC_PROJECTED;
+                else
+                    tvp &= ~0U ^ TVP_TC_PROJECTED;
+                if (tvp != m_VSCBuffer.TextureTransformFlags[Stage])
+                {
+                    m_VSCBuffer.TextureTransformFlags[Stage] = tvp;
+                    m_VSConstantBufferUpToDate = FALSE;
+                }
+                return TRUE;
+            }
+        case CKRST_TSS_TEXCOORDINDEX:
+            {
+                // we currently ignore the texture coords index encoded in Value...
+                // because we simply don't have that in our frag shader...
+                // we only care about automatic texture coords generation for now.
+                CKDWORD tvp = m_VSCBuffer.TextureTransformFlags[Stage] & (~0U ^ 0x07000000U);
+                switch (Value >> 16)
+                {
+                    case 0:
+                        break;
+                    case 1:
+                        tvp |= TVP_TC_CSNORM;
+                        break;
+                    case 2:
+                        tvp |= TVP_TC_CSVECP;
+                        break;
+                    case 3:
+                        tvp |= TVP_TC_CSREFV;
+                        break;
+                    default:
+                        return FALSE;
+                }
+                if (tvp != m_VSCBuffer.TextureTransformFlags[Stage])
+                {
+                    m_VSCBuffer.TextureTransformFlags[Stage] = tvp;
+                    m_VSConstantBufferUpToDate = FALSE;
+                }
+                return TRUE;
+            }
+        default:
+#if UNHANDLED_TEXSTATE
+            fprintf(stderr, "unhandled texture stage state %s -> %d\n", tstytostr(Tss), Value);
+#endif
+            return FALSE;
     }
-    return TRUE;
 }
 CKBOOL CKDX12RasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
 {
