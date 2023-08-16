@@ -285,21 +285,18 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
         Texture2D texture1 : register(t1)
         SamplerState sampler1 : register(s1)
     */
-    CD3DX12_DESCRIPTOR_RANGE1 ranges[6] = {};
-    CD3DX12_ROOT_PARAMETER1 rootParameters[6] = {};
-
-    ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-    ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-    ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-    ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 2, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-    ranges[4].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-    ranges[5].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-    rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
-    rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
-    rootParameters[2].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_PIXEL);
-    rootParameters[3].InitAsDescriptorTable(1, &ranges[3], D3D12_SHADER_VISIBILITY_PIXEL);
-    rootParameters[4].InitAsDescriptorTable(1, &ranges[4], D3D12_SHADER_VISIBILITY_PIXEL);
-    rootParameters[5].InitAsDescriptorTable(1, &ranges[5], D3D12_SHADER_VISIBILITY_PIXEL);
+    m_RootParamRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    m_RootParamRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    m_RootParamRanges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    m_RootParamRanges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 2, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    m_RootParamRanges[4].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    m_RootParamRanges[5].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    m_RootParameters[0].InitAsDescriptorTable(1, &m_RootParamRanges[0], D3D12_SHADER_VISIBILITY_VERTEX);
+    m_RootParameters[1].InitAsDescriptorTable(1, &m_RootParamRanges[1], D3D12_SHADER_VISIBILITY_PIXEL);
+    m_RootParameters[2].InitAsDescriptorTable(1, &m_RootParamRanges[2], D3D12_SHADER_VISIBILITY_PIXEL);
+    m_RootParameters[3].InitAsDescriptorTable(1, &m_RootParamRanges[3], D3D12_SHADER_VISIBILITY_PIXEL);
+    m_RootParameters[4].InitAsDescriptorTable(1, &m_RootParamRanges[4], D3D12_SHADER_VISIBILITY_PIXEL);
+    m_RootParameters[5].InitAsDescriptorTable(1, &m_RootParamRanges[5], D3D12_SHADER_VISIBILITY_PIXEL);
     m_VSCBVBaseIndex = 0;
     m_PSCBVBaseIndex = 1;
     m_TextureBaseIndex = 4;
@@ -324,11 +321,13 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
     sampler.RegisterSpace = 0;
     sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    D3D12_STATIC_SAMPLER_DESC samplers[2] = {sampler, sampler};
-    samplers[1].ShaderRegister = 1;
+    m_Samplers[0] = sampler;
+    m_Samplers[1] = sampler;
+    m_Samplers[1].ShaderRegister = 1;
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-    rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 2, samplers, rootSignatureFlags);
+    rootSignatureDesc.Init_1_1(_countof(m_RootParameters), m_RootParameters,
+        2, m_Samplers, rootSignatureFlags);
     ComPtr<ID3DBlob> signature;
     ComPtr<ID3DBlob> error;
     
@@ -871,6 +870,10 @@ CKBOOL CKDX12RasterizerContext::SetTexture(CKDWORD Texture, int Stage) {
 
 CKBOOL CKDX12RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
+    switch (Tss)
+    {
+
+    }
     return TRUE;
 }
 CKBOOL CKDX12RasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
