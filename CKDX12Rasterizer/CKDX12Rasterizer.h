@@ -6,6 +6,7 @@
 #include "CKDX12RasterizerCommon.h"
 #include "CKDX12DynamicUploadHeap.h"
 #include "CKDX12DynamicDescriptorHeap.h"
+#include "CKDX12TextureFilter.h"
 
 #include <vector>
 #include <deque>
@@ -534,6 +535,7 @@ public:
     std::vector<CKDX12IndexBufferDesc> m_IndexBufferSubmitted[m_FrameInFlightCount];
 
     CKBOOL m_SamplerStateUpToDate[D3D12_COMMONSHADER_SAMPLER_SLOT_COUNT];
+    CKDX12TextureFilter m_Filter[D3D12_COMMONSHADER_SAMPLER_SLOT_COUNT];
 
 #if defined(DEBUG) || defined(_DEBUG)
     bool m_CmdListClosed = true;

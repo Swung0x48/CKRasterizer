@@ -913,13 +913,12 @@ CKBOOL CKDX12RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
             {
                 m_SamplerStateUpToDate[Stage] = FALSE;
                 VxColor c(Value);
-                auto col = c.GetRGB();
-                auto colA = c.GetRGBA();
-                if (col == 0)
-                    if (colA == 0)
-                        m_SamplerDesc[Stage].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
-                    else
+                auto col = c.GetRGBA();
+                if ((col & (~A_MASK)) == 0)
+                    if (col == 0)
                         m_SamplerDesc[Stage].BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+                    else
+                        m_SamplerDesc[Stage].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
                 else
                     m_SamplerDesc[Stage].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
 
@@ -928,7 +927,7 @@ CKBOOL CKDX12RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
         case CKRST_TSS_MINFILTER:
         case CKRST_TSS_MAGFILTER:
             m_SamplerStateUpToDate[Stage] = FALSE;
-            return TRUE; // m_Filter[Stage].SetFilterMode(Tss, static_cast<VXTEXTURE_FILTERMODE>(Value));
+            return m_Filter[Stage].SetFilterMode(Tss, static_cast<VXTEXTURE_FILTERMODE>(Value));
         case CKRST_TSS_MIPMAPLODBIAS:
             m_SamplerStateUpToDate[Stage] = FALSE;
             m_SamplerDesc[Stage].MipLODBias = Value;
