@@ -1398,19 +1398,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     auto *ibo = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!ibo)
         return FALSE;
-//#if defined(DEBUG) || defined(_DEBUG)
-//    static char buf[50];
-//    sprintf(buf, "VB %u\0", VB);
-//    WCHAR wstr[100];
-//    memset(wstr, 0, sizeof(wstr));
-//    MultiByteToWideChar(CP_ACP, 0, buf, strlen(buf), wstr, 100);
-//    vbo->DxResource->SetName(wstr);
-//
-//    sprintf(buf, "IB %u\0", IB);
-//    memset(wstr, 0, sizeof(wstr));
-//    MultiByteToWideChar(CP_ACP, 0, buf, strlen(buf), wstr, 100);
-//    ibo->DxResource->SetName(wstr);
-//#endif
     m_VertexBufferSubmitted[m_FrameIndex].emplace_back(*vbo);
     m_IndexBufferSubmitted[m_FrameIndex].emplace_back(*ibo);
     m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
