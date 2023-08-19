@@ -539,9 +539,6 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     while (m_OriginalTitle.back() == '\0')
         m_OriginalTitle.pop_back();
 
-    
-    memset(m_FenceValues, 0, sizeof(m_FenceValues));
-
     HRESULT hr;
     m_Window = Window;
     m_PosX = PosX;
@@ -552,6 +549,9 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     m_RefreshRate = RefreshRate;
     m_ZBpp = Zbpp;
     m_StencilBpp = StencilBpp;
+
+    LONG style = GetWindowLong((HWND)m_Window, GWL_STYLE);
+    SetWindowLong((HWND)m_Window, GWL_STYLE, style | WS_CAPTION);
 
     auto *driver = static_cast<CKDX12RasterizerDriver *>(m_Driver);
     D3DCall(D3D12CreateDevice(driver->m_Adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_Device)));

@@ -544,7 +544,7 @@ public:
     UINT m_FrameIndex = 0;
     HANDLE m_FenceEvent;
     ComPtr<ID3D12Fence> m_Fence;
-    UINT64 m_FenceValues[m_FrameInFlightCount];
+    UINT64 m_FenceValues[m_FrameInFlightCount] = {};
 
     asio::thread_pool m_ThreadPool;
 };
