@@ -7,15 +7,13 @@ CKDX12DescriptorRing::CKDX12DescriptorRing(size_t size, D3D12_DESCRIPTOR_HEAP_TY
     m_IncrementSize(m_Device->GetDescriptorHandleIncrementSize(type))
 {
     HRESULT hr;
-    // currently only supporting cbv
+    // currently only supporting CBV/SRV/UAV
     assert(type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     m_HeapDesc.NumDescriptors = size;
     m_HeapDesc.Type = type;
     m_HeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     m_HeapDesc.NodeMask = 0; // We're not supporting multi-GPU
     D3DCall(device->CreateDescriptorHeap(&m_HeapDesc, IID_PPV_ARGS(&m_Heap)));
-    /*m_HeadHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Heap->GetCPUDescriptorHandleForHeapStart());
-    m_TailHandle = m_HeadHandle;*/
 }
 
 HRESULT CKDX12DescriptorRing::CreateConstantBufferView(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE& gpuHandle)

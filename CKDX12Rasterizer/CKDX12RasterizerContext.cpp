@@ -285,6 +285,10 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
         Texture2D texture1 : register(t1)
         SamplerState sampler1 : register(s1)
     */
+    m_VSCBVBaseIndex = 0;
+    m_PSCBVBaseIndex = 1;
+    m_TextureBaseIndex = 4;
+
     m_RootParamRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
     m_RootParamRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
     m_RootParamRanges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
@@ -297,9 +301,7 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
     m_RootParameters[3].InitAsDescriptorTable(1, &m_RootParamRanges[3], D3D12_SHADER_VISIBILITY_PIXEL);
     m_RootParameters[4].InitAsDescriptorTable(1, &m_RootParamRanges[4], D3D12_SHADER_VISIBILITY_PIXEL);
     m_RootParameters[5].InitAsDescriptorTable(1, &m_RootParamRanges[5], D3D12_SHADER_VISIBILITY_PIXEL);
-    m_VSCBVBaseIndex = 0;
-    m_PSCBVBaseIndex = 1;
-    m_TextureBaseIndex = 4;
+    
     // Allow input layout and deny uneccessary access to certain pipeline stages.
     D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
@@ -864,7 +866,7 @@ CKBOOL CKDX12RasterizerContext::SetTexture(CKDWORD Texture, int Stage) {
     HRESULT hr;
     D3DCall(m_CBV_SRV_Heap->CreateShaderResourceView(desc->DefaultResource.Get(), &desc->DxView, desc->GPUHandle));
     m_CommandList->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + Stage, desc->GPUHandle);
-
+    
     return TRUE;
 }
 
@@ -1131,6 +1133,70 @@ CKDWORD CKDX12RasterizerContext::GetDynamicIndexBuffer(CKDWORD IndexCount, CKDWO
     return ib_idx++;
 }
 
+HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
+{/*
+    * // VERTEX
+        VSCBuf: register(b0)
+    * // PIXEL
+        PSCBuf: register(b0)
+        PSLightCBuf : register(b1)
+        PSTexCombinatorCBuf : register(b2)
+        Texture2D texture0 : register(t0)
+        SamplerState sampler0 : register(s0)
+        Texture2D texture1 : register(t1)
+        SamplerState sampler1 : register(s1)
+    */
+    HRESULT hr = S_OK;
+    if (!m_VSConstantBufferUpToDate)
+    {
+        UpdateMatrices(WORLD_TRANSFORM);
+        UpdateMatrices(VIEW_TRANSFORM);
+        Vx3DTransposeMatrix(m_VSCBuffer.WorldMatrix, m_WorldMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.ViewMatrix, m_ViewMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
+        Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
+        InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
+        InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
+        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
+        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
+        m_CommandList->SetGraphicsRootDescriptorTable(m_VSCBVBaseIndex, handle);
+        m_VSConstantBufferUpToDate = TRUE;
+    }
+    if (!m_PSConstantBufferUpToDate)
+    {
+        VxMatrix mat;
+        Vx3DInverseMatrix(mat, m_ViewMatrix);
+        m_PSCBuffer.ViewPosition = VxVector(mat[3][0], mat[3][1], mat[3][2]);
+        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        memcpy(res.CPUAddress, &m_PSCBuffer, sizeof(PSConstantBufferStruct));
+        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
+        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex, handle);
+        m_PSConstantBufferUpToDate = TRUE;
+    }
+    if (!m_PSLightConstantBufferUpToDate)
+    {
+        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        memcpy(res.CPUAddress, &m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
+        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
+        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 1, handle);
+        m_PSLightConstantBufferUpToDate = TRUE;
+    }
+    if (!m_PSTexCombinatorConstantBufferUpToDate)
+    {
+        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        memcpy(res.CPUAddress, &m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));
+        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
+        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 2, handle);
+        m_PSTexCombinatorConstantBufferUpToDate = TRUE;
+    }
+    return hr;
+}
+
 CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
                                               VxDrawPrimitiveData *data)
 {
@@ -1185,25 +1251,8 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
     m_CommandList->SetPipelineState(m_PipelineState[vertexFormat].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    if (!m_VSConstantBufferUpToDate)
-    {
-        UpdateMatrices(WORLD_TRANSFORM);
-        UpdateMatrices(VIEW_TRANSFORM);
-        Vx3DTransposeMatrix(m_VSCBuffer.WorldMatrix, m_WorldMatrix);
-        Vx3DTransposeMatrix(m_VSCBuffer.ViewMatrix, m_ViewMatrix);
-        Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
-        Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
-        InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
-        InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
-        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
-        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
-        HRESULT hr;
-        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
-        m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
-        m_VSConstantBufferUpToDate = TRUE;
-    }
+    
+    D3DCall(UpdateConstantBuffer());
 
     CKBOOL clip = FALSE;
     if ((data->Flags & CKRST_DP_DOCLIP))
@@ -1313,24 +1362,8 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
     m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    if (!m_VSConstantBufferUpToDate)
-    {
-        UpdateMatrices(WORLD_TRANSFORM);
-        UpdateMatrices(VIEW_TRANSFORM);
-        Vx3DTransposeMatrix(m_VSCBuffer.WorldMatrix, m_WorldMatrix);
-        Vx3DTransposeMatrix(m_VSCBuffer.ViewMatrix, m_ViewMatrix);
-        Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
-        Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
-        InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
-        InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
-        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
-        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
-        HRESULT hr;
-        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
-        m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
-        m_VSConstantBufferUpToDate = TRUE;
-    }
+    HRESULT hr;
+    D3DCall(UpdateConstantBuffer());
 
     int ibcount = (pType == VX_TRIANGLEFAN) ? ib.size() : indexcount;
     assert(ibcount > 0);
@@ -1405,25 +1438,8 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
     m_CommandList->IASetIndexBuffer(&ibo->DxView);
 
-    if (!m_VSConstantBufferUpToDate)
-    {
-        UpdateMatrices(WORLD_TRANSFORM);
-        UpdateMatrices(VIEW_TRANSFORM);
-        Vx3DTransposeMatrix(m_VSCBuffer.WorldMatrix, m_WorldMatrix);
-        Vx3DTransposeMatrix(m_VSCBuffer.ViewMatrix, m_ViewMatrix);
-        Vx3DTransposeMatrix(m_VSCBuffer.ProjectionMatrix, m_ProjectionMatrix);
-        Vx3DTransposeMatrix(m_VSCBuffer.TotalMatrix, m_TotalMatrix);
-        InverseMatrix(m_VSCBuffer.TransposedInvWorldMatrix, m_WorldMatrix);
-        InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
-        auto res = 
-            m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-        memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
-        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
-        HRESULT hr;
-        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
-        m_CommandList->SetGraphicsRootDescriptorTable(0, handle);
-        m_VSConstantBufferUpToDate = TRUE;
-    }
+    HRESULT hr;
+    D3DCall(UpdateConstantBuffer());
 #if defined(DEBUG) || defined(_DEBUG)
     WCHAR *stats = nullptr;
     m_Allocator->BuildStatsString(&stats, TRUE);
@@ -1469,6 +1485,13 @@ CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
 {
     if (Texture >= m_Textures.Size())
         return FALSE;
+#if defined(DEBUG) || defined(_DEBUG)
+    fprintf(stderr, "Live textures: ");
+    for (CKDWORD i = 0; i < m_Textures.Size(); ++i)
+        if (m_Textures[i] != nullptr)
+            fprintf(stderr, "%lu ", i);
+    fprintf(stderr, "\n");
+#endif
     auto *desc = static_cast<CKDX12TextureDesc *>(m_Textures[Texture]);
     if (!desc)
         return FALSE;

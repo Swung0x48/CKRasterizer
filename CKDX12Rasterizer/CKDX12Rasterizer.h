@@ -463,7 +463,8 @@ protected:
     CKBOOL TriangleFanToList(CKWORD *indices, int count, std::vector<CKWORD> &strip_index);
 
     CKDWORD GetDynamicIndexBuffer(CKDWORD IndexCount, CKDWORD AddKey);
-    
+    HRESULT UpdateConstantBuffer();
+
     CKBOOL InternalDrawPrimitive();
     CKBOOL InternalDrawPrimitiveIndexed();
 #ifdef _NOD3DX
