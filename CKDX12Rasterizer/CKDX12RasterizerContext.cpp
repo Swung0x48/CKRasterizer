@@ -418,7 +418,7 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
         psoDesc.InputLayout = { item.second.input_layout.data(), item.second.input_layout.size() };
         psoDesc.pRootSignature = m_RootSignature.Get();
         psoDesc.VS = item.second.shader;
-        psoDesc.PS = {g_PShaderSimple, sizeof(g_PShaderSimple)};
+        psoDesc.PS = {g_PShader, sizeof(g_PShader)};
         psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
         psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
         psoDesc.DepthStencilState.DepthEnable = TRUE;
