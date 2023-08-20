@@ -1178,7 +1178,8 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
     }
     if (!m_PSLightConstantBufferUpToDate)
     {
-        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        auto res =
+            m_VSCBHeap->Allocate(sizeof(PSLightConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
         memcpy(res.CPUAddress, &m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
@@ -1187,7 +1188,8 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
     }
     if (!m_PSTexCombinatorConstantBufferUpToDate)
     {
-        auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        auto res = m_VSCBHeap->Allocate(sizeof(PSTexCombinatorConstantBufferStruct),
+                                        D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
         memcpy(res.CPUAddress, &m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));
         CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));

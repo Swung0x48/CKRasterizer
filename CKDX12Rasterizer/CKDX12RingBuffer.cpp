@@ -46,7 +46,8 @@ CKDX12RingBuffer::CKDX12RingBuffer(size_t MaxSize, Microsoft::WRL::ComPtr<ID3D12
 
     if (AllowCPUAccess)
     {
-        D3DCall(m_pBuffer->Map(0, nullptr, &m_CpuVirtualAddress));
+        const CD3DX12_RANGE readRange(0, 0);
+        D3DCall(m_pBuffer->Map(0, &readRange, &m_CpuVirtualAddress));
     }
 }
 
