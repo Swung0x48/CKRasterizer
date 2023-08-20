@@ -336,7 +336,7 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
     hr = D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error);
 #if defined DEBUG || defined _DEBUG
     if (hr == E_INVALIDARG)
-        fprintf(stderr, "%s\n", error->GetBufferPointer());
+        fprintf(stderr, "%s\n", static_cast<char *>(error->GetBufferPointer()));
     else
 #endif
         D3DCall(hr);
@@ -521,6 +521,7 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     // Release resources no longer in use.
     m_VertexBufferSubmitted[m_FrameIndex].clear();
     m_IndexBufferSubmitted[m_FrameIndex].clear();
+    m_TextureSubmitted[m_FrameIndex].clear();
     
     // Set the fence value for the next frame.
     m_FenceValues[m_FrameIndex] = currentFenceValue + 1;
@@ -865,7 +866,9 @@ CKBOOL CKDX12RasterizerContext::SetTexture(CKDWORD Texture, int Stage) {
     m_PSConstantBufferUpToDate = FALSE;
     HRESULT hr;
     D3DCall(m_CBV_SRV_Heap->CreateShaderResourceView(desc->DefaultResource.Get(), &desc->DxView, desc->GPUHandle));
-    m_CommandList->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + Stage, desc->GPUHandle);
+    m_TextureSubmitted[m_FrameIndex].emplace_back(*desc);
+    m_CommandList->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + Stage,
+                                                  m_TextureSubmitted[m_FrameIndex].back().GPUHandle);
     
     return TRUE;
 }
@@ -1186,8 +1189,8 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 1, handle);
         m_PSLightConstantBufferUpToDate = TRUE;
     }
-    if (!m_PSTexCombinatorConstantBufferUpToDate)
-    {
+    /*if (!m_PSTexCombinatorConstantBufferUpToDate)
+    {*/
         auto res = m_VSCBHeap->Allocate(sizeof(PSTexCombinatorConstantBufferStruct),
                                         D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
         memcpy(res.CPUAddress, &m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));
@@ -1195,7 +1198,7 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
         m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 2, handle);
         m_PSTexCombinatorConstantBufferUpToDate = TRUE;
-    }
+    /*}*/
     return hr;
 }
 
