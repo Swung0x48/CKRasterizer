@@ -268,7 +268,7 @@ public:
     void *CPUAddress = nullptr;
     ComPtr<D3D12MA::Allocation> Allocation;
     CKDX12AllocatedResource UploadResource = {nullptr, 0, 0};
-    ComPtr<ID3D12Resource> DefaultResource;
+    ComPtr<ID3D12Resource> DefaultResource = nullptr;
     CKDWORD LockStart = 0;
     CKDWORD LockCount = 0;
     CKRST_LOCKFLAGS LockFlags = CKRST_LOCK_DEFAULT;
