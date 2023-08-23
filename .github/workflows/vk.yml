@@ -1,0 +1,57 @@
+name: CKVkRasterizer
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'CKVkRasterizer/**'
+      - '.github/**'
+      - 'buildsystems/**'
+      - 'vendor/**'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'CKVkRasterizer/**'
+      - '.github/**'
+      - 'buildsystems/**'
+      - 'vendor/**'
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+  CMAKE_ARGS: -DVIRTOOLS_SDK_FETCH_FROM_GIT=ON -DTRACY_ENABLE=OFF -A Win32
+
+jobs:
+  build-vk:
+    runs-on: windows-latest
+    env:
+      PROJECT_ROOT: ${{github.workspace}}
+      VENDOR_ROOT: ${{github.workspace}}/vendor
+      PROJECT_NAME: CKVkRasterizer
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: lukka/get-cmake@latest
+
+      - name: Fetch git submodules
+        run: git submodule update --init --recursive --remote
+        
+      # Setup MSVC command prompt environment vars
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure CMake
+        run: cmake -B ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build -S ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ${{env.CMAKE_ARGS}}
+
+      - name: Build
+        working-directory: ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build
+        run: cmake --build ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build --config ${{env.BUILD_TYPE}}
+
+      - name: Test
+        working-directory: ${{env.PROJECT_ROOT}}
+        run: ctest -C ${{env.BUILD_TYPE}}
+
+      - name: Release Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{env.PROJECT_NAME}}
+          path: ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build/${{env.BUILD_TYPE}}
