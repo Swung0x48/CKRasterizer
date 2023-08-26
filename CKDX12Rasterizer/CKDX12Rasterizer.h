@@ -465,8 +465,8 @@ protected:
     CKDWORD GetDynamicIndexBuffer(CKDWORD IndexCount, CKDWORD AddKey);
     HRESULT UpdateConstantBuffer();
 
-    CKBOOL InternalDrawPrimitive();
-    CKBOOL InternalDrawPrimitiveIndexed();
+    CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKDX12VertexBufferDesc *vbo, CKDWORD StartVertex,
+                                 CKDWORD VertexCount, CKWORD *indices, int indexcount);
 #ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 #endif
