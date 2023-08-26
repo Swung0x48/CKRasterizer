@@ -28,6 +28,8 @@
     #define LOCKIB 1
     #define UNLOCKIB 1
     #define SETRESOURCES 1
+    #define CREATEVB 1
+    #define CREATEIB 1
 #endif
 
 #if LOGGING || CONSOLE
@@ -1324,6 +1326,13 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         else if (pType == VX_TRIANGLEFAN)
             memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
         assert(ibo.DxView.BufferLocation != 0);
+#if CREATEIB
+        static char name[256];
+        static WCHAR wname[512];
+        sprintf(name, "Transient IB DrawDirect");
+        MultiByteToWideChar(CP_ACP, 0, name, strlen(name) + 1, wname, std::size(wname));
+        res.pBuffer->SetName(wname);
+#endif
         m_CommandList->IASetIndexBuffer(&ibo.DxView);
         m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, vbase, 0);
     } else
@@ -1408,6 +1417,13 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
         else if (pType == VX_TRIANGLEFAN)
             memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
         assert(ibo.DxView.BufferLocation != 0);
+#if CREATEIB
+        static char name[256];
+        static WCHAR wname[512];
+        sprintf(name, "Transient IB DrawVB");
+        MultiByteToWideChar(CP_ACP, 0, name, strlen(name) + 1, wname, std::size(wname));
+        res.pBuffer->SetName(wname);
+#endif
         m_CommandList->IASetIndexBuffer(&ibo.DxView);
         m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, StartVIndex, 0);
     }
@@ -1465,9 +1481,9 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     fprintf(stderr, "Set VB: %d\n", VB);
     fprintf(stderr, "Set IB: %d\n", IB);
 #endif
-    m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
     assert(ibo->DxView.BufferLocation != 0);
     m_CommandList->IASetIndexBuffer(&ibo->DxView);
+    m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
 
     HRESULT hr;
     D3DCall(UpdateConstantBuffer());
@@ -1705,6 +1721,13 @@ CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
                                 IID_NULL, nullptr));
     desc->DefaultResource.Reset();
     desc->DefaultResource = desc->Allocation->GetResource();
+#if CREATEVB
+    static char name[256];
+    static WCHAR wname[512];
+    sprintf(name, "VB %d", VB);
+    MultiByteToWideChar(CP_ACP, 0, name, strlen(name) + 1, wname, std::size(wname));
+    desc->DefaultResource->SetName(wname);
+#endif
     CKDWORD offset = desc->LockStart * desc->m_VertexSize;
     CKDWORD size = desc->LockCount * desc->m_VertexSize;
     // Do the copy ("locking")
@@ -1766,6 +1789,13 @@ CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
                                         desc->Allocation.ReleaseAndGetAddressOf(), IID_NULL, nullptr));
     desc->DefaultResource.Reset();
     desc->DefaultResource = desc->Allocation->GetResource();
+#if CREATEIB
+    static char name[256];
+    static WCHAR wname[512];
+    sprintf(name, "IB %d", IB);
+    MultiByteToWideChar(CP_ACP, 0, name, strlen(name) + 1, wname, std::size(wname));
+    desc->DefaultResource->SetName(wname);
+#endif
     CKDWORD offset = desc->LockStart * sizeof(CKWORD);
     CKDWORD size = desc->LockCount * sizeof(CKWORD);
     m_CommandList->CopyBufferRegion(desc->DefaultResource.Get(), offset, desc->UploadResource.pBuffer.Get(),
@@ -1845,6 +1875,13 @@ CKBOOL CKDX12RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDes
     else
         heap = m_VBHeap.get();
     auto res = heap->Allocate(DesiredFormat->m_VertexSize * DesiredFormat->m_MaxVertexCount);
+#if CREATEVB
+    static char name[256];
+    static WCHAR wname[512];
+    sprintf(name, "VB Upload Buffer %d", VB);
+    MultiByteToWideChar(CP_ACP, 0, name, strlen(name) + 1, wname, std::size(wname));
+    res.pBuffer->SetName(wname);
+#endif
     auto *desc = new CKDX12VertexBufferDesc(*DesiredFormat, res);
     delete m_VertexBuffers[VB];
     
@@ -1863,6 +1900,13 @@ CKBOOL CKDX12RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc 
         return FALSE;
 
     auto res = m_IBHeap->Allocate(DesiredFormat->m_MaxIndexCount * sizeof(CKWORD));
+#if CREATEIB
+    static char name[256];
+    static WCHAR wname[512];
+    sprintf(name, "IB Upload Buffer %d", IB);
+    MultiByteToWideChar(CP_ACP, 0, name, strlen(name) + 1, wname, std::size(wname));
+    res.pBuffer->SetName(wname);
+#endif
     auto *desc = new CKDX12IndexBufferDesc(*DesiredFormat, res);
     delete m_IndexBuffers[IB];
 
