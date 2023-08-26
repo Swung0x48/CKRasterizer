@@ -230,13 +230,13 @@ CKBOOL CKDX12RasterizerDriver::InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapte
             CKRST_SPECIFICCAPS_GLATTENUATIONMODEL | 
             CKRST_SPECIFICCAPS_HARDWARETL | 
             CKRST_SPECIFICCAPS_DX8);
-    m_3DCaps.MaxNumberTextureStage = 1; // MAX_TEX_STAGES; // D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; //We do 2 for now.
+    m_3DCaps.MaxNumberTextureStage = 2; // MAX_TEX_STAGES; // D3D12_COMMONSHADER_SAMPLER_SLOT_COUNT; //We do 2 for now.
     m_3DCaps.MaxNumberBlendStage = 8; // fake it until we make it
     m_3DCaps.MaxActiveLights = MAX_ACTIVE_LIGHTS; // this is a lie (at least for now)
     m_3DCaps.MinTextureWidth = 1; // we are using texture of width 1 for blank textures
     m_3DCaps.MinTextureHeight = 1; // so we know it must work... or do we?
-    m_3DCaps.MaxTextureWidth = 1024; // we know OpenGL guarantees this to be at least 1024...
-    m_3DCaps.MaxTextureHeight = 1024; // and I'm too lazy to create a context here...
+    m_3DCaps.MaxTextureWidth = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION; // d3d have given us a convenient macro
+    m_3DCaps.MaxTextureHeight = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION; // ditto
     m_3DCaps.VertexCaps |= CKRST_VTXCAPS_DIRECTIONALLIGHTS;
     m_3DCaps.VertexCaps |= CKRST_VTXCAPS_TEXGEN;
     m_3DCaps.AlphaCmpCaps = 0xff; // we have TECHNOLOGY

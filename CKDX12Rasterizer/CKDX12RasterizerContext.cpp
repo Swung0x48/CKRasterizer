@@ -27,6 +27,7 @@
     #define UNLOCKVB 1
     #define LOCKIB 1
     #define UNLOCKIB 1
+    #define SETRESOURCES 1
 #endif
 
 #if LOGGING || CONSOLE
@@ -1300,7 +1301,9 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     }
     
     CKRSTLoadVertexBuffer((CKBYTE *)pData, vertexFormat, vertexSize, data);
-
+#if SETRESOURCES
+    fprintf(stderr, "Set VB: %d\n", VB);
+#endif
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
 
     int ibcount = (pType == VX_TRIANGLEFAN) ? ib.size() : indexcount;
@@ -1311,7 +1314,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         CKIndexBufferDesc desc;
         desc.m_MaxIndexCount = indexcount;
         desc.m_CurrentICount = 0;
-        desc.m_Flags = 0;
+        desc.m_Flags = CKRST_VB_DYNAMIC;
         CKDX12IndexBufferDesc ibo(desc, res);
         //m_IndexBufferSubmitted.emplace_back(desc, res);
         //++m_IndexBufferSubmittedCount[m_FrameIndex];
@@ -1320,6 +1323,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
             memcpy(ibo.CPUAddress, indices, indexcount * sizeof(CKWORD));
         else if (pType == VX_TRIANGLEFAN)
             memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
+        assert(ibo.DxView.BufferLocation != 0);
         m_CommandList->IASetIndexBuffer(&ibo.DxView);
         m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, vbase, 0);
     } else
@@ -1374,6 +1378,9 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
 #endif
             return TRUE;
     }
+#if SETRESOURCES
+    fprintf(stderr, "Set VB: %d\n", VB);
+#endif
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
 
@@ -1391,7 +1398,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
         CKIndexBufferDesc desc;
         desc.m_MaxIndexCount = indexcount;
         desc.m_CurrentICount = 0;
-        desc.m_Flags = 0;
+        desc.m_Flags = CKRST_VB_DYNAMIC;
         CKDX12IndexBufferDesc ibo(desc, res);
         // m_IndexBufferSubmitted.emplace_back(desc, res);
         //++m_IndexBufferSubmittedCount[m_FrameIndex];
@@ -1400,6 +1407,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
             memcpy(ibo.CPUAddress, indices, indexcount * sizeof(CKWORD));
         else if (pType == VX_TRIANGLEFAN)
             memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
+        assert(ibo.DxView.BufferLocation != 0);
         m_CommandList->IASetIndexBuffer(&ibo.DxView);
         m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, StartVIndex, 0);
     }
@@ -1453,7 +1461,12 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     m_IndexBufferSubmitted[m_FrameIndex].emplace_back(*ibo);
     m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+#if SETRESOURCES
+    fprintf(stderr, "Set VB: %d\n", VB);
+    fprintf(stderr, "Set IB: %d\n", IB);
+#endif
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
+    assert(ibo->DxView.BufferLocation != 0);
     m_CommandList->IASetIndexBuffer(&ibo->DxView);
 
     HRESULT hr;
