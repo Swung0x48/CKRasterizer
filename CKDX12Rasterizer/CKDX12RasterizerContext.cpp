@@ -23,6 +23,10 @@
     //#define LOGGING 1
     #define CONSOLE 1
     #define CMDLIST 0
+    #define LOCKVB 1
+    #define UNLOCKVB 1
+    #define LOCKIB 1
+    #define UNLOCKIB 1
 #endif
 
 #if LOGGING || CONSOLE
@@ -410,7 +414,7 @@ void CKDX12RasterizerContext::PrepareShaders() {
 }
 
 HRESULT CKDX12RasterizerContext::CreatePSOs() {
-    HRESULT hr;
+    HRESULT hr = S_OK;
     assert(!m_FVFResources.empty());
     for (auto &item : m_FVFResources)
     {
@@ -1499,7 +1503,7 @@ CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
 {
     if (Texture >= m_Textures.Size())
         return FALSE;
-#if defined(DEBUG) || defined(_DEBUG)
+#if defined(DEBUG) || defined(_DEBUG) && (LIVETEXTURES)
     fprintf(stderr, "Live textures: ");
     for (CKDWORD i = 0; i < m_Textures.Size(); ++i)
         if (m_Textures[i] != nullptr)
@@ -1639,6 +1643,9 @@ void *CKDX12RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
 {
     if (VB > m_VertexBuffers.Size())
         return nullptr;
+#if defined(DEBUG) || defined(_DEBUG) && (LOCKVB)
+    fprintf(stderr, "Lock VB: %d\n", VB);
+#endif
     auto *desc = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
 
     assert(StartVertex + VertexCount <= desc->m_MaxVertexCount);
@@ -1652,6 +1659,9 @@ void *CKDX12RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
 CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     if (VB > m_VertexBuffers.Size())
         return FALSE;
+#if defined(DEBUG) || defined(_DEBUG) && (UNLOCKVB)
+    fprintf(stderr, "Unlock VB: %d\n", VB);
+#endif
     auto *desc = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!desc)
         return FALSE;
@@ -1699,6 +1709,9 @@ void *CKDX12RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, C
 {
     if (IB > m_IndexBuffers.Size())
         return nullptr;
+#if defined(DEBUG) || defined(_DEBUG) && (LOCKIB)
+    fprintf(stderr, "Lock IB: %d\n", IB);
+#endif
     auto *desc = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return nullptr;
@@ -1713,6 +1726,9 @@ CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
     if (IB > m_IndexBuffers.Size())
         return FALSE;
+#if defined(DEBUG) || defined(_DEBUG) && (UNLOCKIB)
+    fprintf(stderr, "Unlock IB: %d\n", IB);
+#endif
     auto *desc = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!desc)
         return FALSE;
