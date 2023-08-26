@@ -260,7 +260,7 @@ public:
         CKVertexBufferDesc(desc), UploadResource(resource)
     {
         ZeroMemory(&DxView, sizeof(D3D12_VERTEX_BUFFER_VIEW));
-        DxView.BufferLocation = resource.GPUAddress;
+        DxView.BufferLocation = (m_Flags & CKRST_VB_DYNAMIC) ? resource.GPUAddress : 0;
         DxView.SizeInBytes = desc.m_VertexSize * desc.m_MaxVertexCount;
         DxView.StrideInBytes = desc.m_VertexSize;
         CPUAddress = resource.CPUAddress;
@@ -291,7 +291,7 @@ public:
         CKIndexBufferDesc(desc), UploadResource(resource)
     {
         ZeroMemory(&DxView, sizeof(D3D12_INDEX_BUFFER_VIEW));
-        DxView.BufferLocation = resource.GPUAddress;
+        DxView.BufferLocation = (m_Flags & CKRST_VB_DYNAMIC) ? resource.GPUAddress : 0;
         DxView.SizeInBytes = resource.Size;
         DxView.Format = DXGI_FORMAT_R16_UINT;
         CPUAddress = resource.CPUAddress;
