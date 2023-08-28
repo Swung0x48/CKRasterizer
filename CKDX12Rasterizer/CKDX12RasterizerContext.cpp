@@ -1326,21 +1326,18 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         SetRenderState(VXRENDERSTATE_CLIPPING, 0);
     }
     
-    CKDWORD VB = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
+    CKDWORD VB = GetDynamicVertexBuffer(
+        vertexFormat, (data->VertexCount + 128 > 32768) ? data->VertexCount + 128 : 32768, vertexSize, clip);
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
+#if CREATEVB
+    static char name[256];
+    static WCHAR wname[512];
+    sprintf(name, "VB %d Dynamic\n", VB);
+    MultiByteToWideChar(CP_ACP, 0, name, strlen(name) + 1, wname, std::size(wname));
+    vbo->UploadResource.pBuffer->SetName(wname);
+#endif
     CKBYTE *pData = nullptr;
     CKDWORD vbase = 0;
-    if (vbo && (vbo->m_MaxVertexCount < data->VertexCount || vertexSize != vbo->m_VertexSize))
-    {
-        delete vbo;
-        m_VertexBuffers[VB] = nullptr;
-        vbo = nullptr;
-    }
-    if (!vbo)
-    {
-        VB = GetDynamicVertexBuffer(
-            vertexFormat, (data->VertexCount + 100 > DEFAULT_VB_SIZE) ? data->VertexCount + 100 : DEFAULT_VB_SIZE, vertexSize, clip);
-    }
     vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
 
     if (vbo->m_CurrentVCount + data->VertexCount <= vbo->m_MaxVertexCount)
@@ -1359,6 +1356,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 #if SETRESOURCES
     fprintf(stderr, "Set VB: %d\n", VB);
 #endif
+    
 
     return InternalDrawPrimitive(pType, vbo, vbase, data->VertexCount, indices, indexcount);
     /*asio::post(m_ThreadPool,
