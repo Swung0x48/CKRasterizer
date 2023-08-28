@@ -1341,7 +1341,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         VB = GetDynamicVertexBuffer(
             vertexFormat, (data->VertexCount + 100 > DEFAULT_VB_SIZE) ? data->VertexCount + 100 : DEFAULT_VB_SIZE, vertexSize, clip);
     }
-    m_VertexBuffers[VB] = vbo;
+    vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
 
     if (vbo->m_CurrentVCount + data->VertexCount <= vbo->m_MaxVertexCount)
     {
