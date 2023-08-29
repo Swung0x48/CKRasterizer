@@ -1326,7 +1326,10 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         SetRenderState(VXRENDERSTATE_CLIPPING, 0);
     }
     
-    CKDWORD VB = GetDynamicVertexBuffer(
+    auto vb = m_DynamicVBHeap->Allocate(data->VertexCount * vertexSize);
+    void* pData = (CKBYTE*)vb.CPUAddress;
+
+    /*CKDWORD VB = GetDynamicVertexBuffer(
         vertexFormat, (data->VertexCount + 128 > 32768) ? data->VertexCount + 128 : 32768, vertexSize, clip);
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
 #if CREATEVB
@@ -1350,15 +1353,89 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         pData = (CKBYTE *)vbo->CPUAddress;
         vbase = 0;
         vbo->m_CurrentVCount = data->VertexCount;
-    }
+    }*/
     
     CKRSTLoadVertexBuffer((CKBYTE *)pData, vertexFormat, vertexSize, data);
-#if SETRESOURCES
-    fprintf(stderr, "Set VB: %d\n", VB);
-#endif
-    
+//#if SETRESOURCES
+//    fprintf(stderr, "Set VB: %d\n", VB);
+//#endif
 
-    return InternalDrawPrimitive(pType, vbo, vbase, data->VertexCount, indices, indexcount);
+    std::vector<CKWORD> ib;
+    switch (pType)
+    {
+        case VX_TRIANGLELIST:
+            /*if (indices)
+            {
+                ib.resize(indexcount);
+                memcpy(ib.data(), indices, sizeof(CKWORD) * indexcount);
+            }*/
+            break;
+        case VX_TRIANGLEFAN:
+            if (indices)
+                TriangleFanToList(indices, indexcount, ib);
+            else
+            {
+                CKWORD voffset = 0;
+                TriangleFanToList(voffset, indexcount, ib);
+            }
+            break;
+#if defined(DEBUG) || defined(_DEBUG)
+        case VX_POINTLIST:
+            fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
+            return TRUE;
+        case VX_LINELIST:
+            fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
+            return TRUE;
+        case VX_LINESTRIP:
+            fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
+            return TRUE;
+#endif
+        default:
+#if defined(DEBUG) || defined(_DEBUG)
+            fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
+#endif
+            return TRUE;
+    }
+    D3D12_VERTEX_BUFFER_VIEW view;
+    view.BufferLocation = vb.GPUAddress;
+    view.SizeInBytes = data->VertexCount * vertexSize;
+    view.StrideInBytes = vertexSize;
+    m_CommandList->IASetVertexBuffers(0, 1, &view);
+
+    int ibcount = (pType == VX_TRIANGLEFAN) ? ib.size() : indexcount;
+    assert(ibcount > 0);
+    if (indices || pType == VX_TRIANGLEFAN)
+    {
+        auto res = m_DynamicIBHeap->Allocate(ibcount * sizeof(CKWORD));
+        CKIndexBufferDesc desc;
+        desc.m_MaxIndexCount = indexcount;
+        desc.m_CurrentICount = 0;
+        desc.m_Flags = CKRST_VB_DYNAMIC;
+        CKDX12IndexBufferDesc ibo(desc, res);
+        // m_IndexBufferSubmitted.emplace_back(desc, res);
+        //++m_IndexBufferSubmittedCount[m_FrameIndex];
+        assert(pType == VX_TRIANGLELIST || pType == VX_TRIANGLEFAN);
+        if (pType == VX_TRIANGLELIST)
+            memcpy(ibo.CPUAddress, indices, indexcount * sizeof(CKWORD));
+        else if (pType == VX_TRIANGLEFAN)
+            memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
+        assert(ibo.DxView.BufferLocation != 0);
+#if CREATEIB
+        static char name[256];
+        static WCHAR wname[512];
+        sprintf(name, "Transient IB DrawDirect");
+        MultiByteToWideChar(CP_ACP, 0, name, strlen(name) + 1, wname, std::size(wname));
+        res.pBuffer->SetName(wname);
+#endif
+        m_CommandList->IASetIndexBuffer(&ibo.DxView);
+        m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, 0, 0);
+    }
+    else
+    {
+        m_CommandList->DrawInstanced(data->VertexCount, 1, 0, 0);
+    }
+
+    //return InternalDrawPrimitive(pType, vbo, vbase, data->VertexCount, indices, indexcount);
     /*asio::post(m_ThreadPool,
                [this, index_vec, vb = std::move(vb)]() 
     {
