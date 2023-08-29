@@ -464,6 +464,7 @@ protected:
 
     CKDWORD GetDynamicIndexBuffer(CKDWORD IndexCount, CKDWORD AddKey);
     HRESULT UpdateConstantBuffer();
+    HRESULT UpdatePipelineState(DWORD fvf);
 
     CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKDX12VertexBufferDesc *vbo, CKDWORD StartVertex,
                                  CKDWORD VertexCount, CKWORD *indices, int indexcount);
@@ -516,6 +517,9 @@ public:
     
     std::unordered_map<DWORD, FVFResource> m_FVFResources;
     std::unordered_map<DWORD, ComPtr<ID3D12PipelineState>> m_PipelineState;
+    std::unordered_map<DWORD, D3D12_GRAPHICS_PIPELINE_STATE_DESC> m_PipelineStateDescriptions;
+    std::unordered_map<DWORD, bool> m_PipelineStateUpToDate;
+    
     CD3DX12_VIEWPORT m_Viewport;
     CD3DX12_RECT m_ScissorRect;
 
@@ -538,6 +542,10 @@ public:
 
     CKBOOL m_SamplerStateUpToDate[D3D12_COMMONSHADER_SAMPLER_SLOT_COUNT];
     CKDX12TextureFilter m_Filter[D3D12_COMMONSHADER_SAMPLER_SLOT_COUNT];
+
+    D3D12_RASTERIZER_DESC m_RasterizerDesc = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    D3D12_DEPTH_STENCIL_DESC m_DepthStencilDesc = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+    D3D12_BLEND_DESC m_BlendDesc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 
 #if defined(DEBUG) || defined(_DEBUG)
     bool m_CmdListClosed = true;

@@ -23,13 +23,14 @@
     //#define LOGGING 1
     #define CONSOLE 1
     #define CMDLIST 0
-    #define LOCKVB 1
-    #define UNLOCKVB 1
-    #define LOCKIB 1
-    #define UNLOCKIB 1
-    #define SETRESOURCES 1
-    #define CREATEVB 1
-    #define CREATEIB 1
+    #define LOCKVB 0
+    #define UNLOCKVB 0
+    #define LOCKIB 0
+    #define UNLOCKIB 0
+    #define SETRESOURCES 0
+    #define CREATEVB 0
+    #define CREATEIB 0
+    #define RENDERSTATE 1
 #endif
 
 #if LOGGING || CONSOLE
@@ -419,6 +420,7 @@ void CKDX12RasterizerContext::PrepareShaders() {
 HRESULT CKDX12RasterizerContext::CreatePSOs() {
     HRESULT hr = S_OK;
     assert(!m_FVFResources.empty());
+
     for (auto &item : m_FVFResources)
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -468,6 +470,8 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
         D3DCall(m_Device->CreateGraphicsPipelineState(&psoDesc, 
             IID_PPV_ARGS(&state)));
         m_PipelineState[item.first] = state;
+        m_PipelineStateDescriptions[item.first] = psoDesc;
+        m_PipelineStateUpToDate[item.first] = true;
     }
 
     return hr;
@@ -846,7 +850,7 @@ CKBOOL CKDX12RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD 
         return TRUE;
     }
 
-#if LOGGING && LOG_RENDERSTATE
+#if RENDERSTATE
     if (State == VXRENDERSTATE_SRCBLEND || State == VXRENDERSTATE_DESTBLEND)
     fprintf(stderr, "set render state %s -> %x, currently %x %s\n", rstytostr(State), Value,
             m_StateCache[State].Valid ? m_StateCache[State].Value : m_StateCache[State].DefaultValue,
@@ -862,12 +866,546 @@ CKBOOL CKDX12RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD 
     return InternalSetRenderState(State, Value);
 }
 
-CKBOOL CKDX12RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, CKDWORD Value) { return TRUE; }
+CKBOOL CKDX12RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, CKDWORD Value) {
+    bool psoUpToDate = true;
+    switch (State)
+    {
+        case VXRENDERSTATE_ANTIALIAS:
+            psoUpToDate = FALSE;
+            m_RasterizerDesc.MultisampleEnable = Value;
+            break;
+        case VXRENDERSTATE_TEXTUREPERSPECTIVE:
+            return FALSE;
+        case VXRENDERSTATE_ZENABLE:
+            psoUpToDate = FALSE;
+            // m_DepthStencilDesc.DepthEnable = (BOOL)Value;
+            m_DepthStencilDesc.DepthEnable = TRUE;
+            break;
+        case VXRENDERSTATE_FILLMODE:
+            psoUpToDate = FALSE;
+            switch ((VXFILL_MODE)Value)
+            {
+                case VXFILL_POINT:
+                    // not supported.
+                    return FALSE;
+                case VXFILL_WIREFRAME:
+                    m_RasterizerDesc.FillMode = D3D12_FILL_MODE_WIREFRAME;
+                    break;
+                case VXFILL_SOLID:
+                    m_RasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+                    break;
+            }
+            break;
+        case VXRENDERSTATE_SHADEMODE:
+            return FALSE;
+        case VXRENDERSTATE_LINEPATTERN:
+            break;
+        case VXRENDERSTATE_ZWRITEENABLE:
+            psoUpToDate = FALSE;
+            m_DepthStencilDesc.DepthWriteMask = Value ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+            break;
+        case VXRENDERSTATE_ALPHATESTENABLE:
+            m_PSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_PSCBuffer.AlphaFlags, AFLG_ALPHATESTEN, Value);
+            break;
+        case VXRENDERSTATE_SRCBLEND:
+            psoUpToDate = FALSE;
+            switch ((VXBLEND_MODE)Value)
+            {
+                case VXBLEND_ZERO:
+                    m_BlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ZERO;
+                    m_BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ZERO;
+                    break;
+                case VXBLEND_ONE:
+                    m_BlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+                    m_BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+                    break;
+                case VXBLEND_SRCCOLOR:
+                    m_BlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_COLOR;
+                    m_BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_SRC_ALPHA;
+                    break;
+                case VXBLEND_INVSRCCOLOR:
+                    m_BlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_INV_SRC_COLOR;
+                    m_BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+                    break;
+                case VXBLEND_SRCALPHA:
+                    m_BlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+                    m_BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_SRC_ALPHA;
+                    break;
+                case VXBLEND_INVSRCALPHA:
+                    m_BlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_INV_SRC_ALPHA;
+                    m_BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+                    break;
+                case VXBLEND_SRCALPHASAT:
+                    m_BlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA_SAT;
+                    m_BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_SRC_ALPHA_SAT;
+                    break;
+                case VXBLEND_DESTALPHA:
+                    m_BlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_DEST_ALPHA;
+                    m_BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_DEST_ALPHA;
+                    break;
+                case VXBLEND_INVDESTALPHA:
+                    m_BlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_INV_DEST_ALPHA;
+                    m_BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_DEST_ALPHA;
+                    break;
+                case VXBLEND_DESTCOLOR:
+                    m_BlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_DEST_COLOR;
+                    m_BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_DEST_ALPHA;
+                    break;
+                case VXBLEND_INVDESTCOLOR:
+                    m_BlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_INV_DEST_COLOR;
+                    m_BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_DEST_ALPHA;
+                    break;
+                default:
+                    return FALSE;
+            }
+            break;
+        case VXRENDERSTATE_DESTBLEND:
+            psoUpToDate = FALSE;
+            switch ((VXBLEND_MODE)Value)
+            {
+                case VXBLEND_ZERO:
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+                    m_BlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+                    break;
+                case VXBLEND_ONE:
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+                    m_BlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+                    break;
+                case VXBLEND_SRCCOLOR:
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_SRC_COLOR;
+                    m_BlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+                    break;
+                case VXBLEND_INVSRCCOLOR:
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_COLOR;
+                    m_BlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+                    break;
+                case VXBLEND_SRCALPHA:
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_SRC_ALPHA;
+                    m_BlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_SRC_ALPHA;
+                    break;
+                case VXBLEND_INVSRCALPHA:
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+                    m_BlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+                    break;
+                case VXBLEND_DESTALPHA:
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_DEST_ALPHA;
+                    m_BlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_DEST_ALPHA;
+                    break;
+                case VXBLEND_INVDESTALPHA:
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_DEST_ALPHA;
+                    m_BlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_DEST_ALPHA;
+                    break;
+                case VXBLEND_DESTCOLOR:
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_DEST_COLOR;
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_DEST_ALPHA;
+                    break;
+                case VXBLEND_INVDESTCOLOR:
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_DEST_COLOR;
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_DEST_ALPHA;
+                    break;
+                case VXBLEND_SRCALPHASAT:
+                    m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_SRC_ALPHA_SAT;
+                    m_BlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_SRC_ALPHA_SAT;
+                    break;
+                    //     case VXBLEND_BOTHSRCALPHA:
+                    //         m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_SRC1_ALPHA;
+                    //         // m_BlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_SRC1_ALPHA;
+                    //         break;
+                    //     case VXBLEND_BOTHINVSRCALPHA:
+                    //         m_BlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC1_ALPHA;
+                    //         // m_BlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC1_ALPHA;
+                    //         break;
+                default:
+                    return FALSE;
+            }
+            break;
+        case VXRENDERSTATE_CULLMODE:
+            psoUpToDate = FALSE;
+            switch ((VXCULL)Value)
+            {
+                case VXCULL_NONE:
+                    m_RasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+                    break;
+                case VXCULL_CW:
+                    m_RasterizerDesc.CullMode = D3D12_CULL_MODE_FRONT;
+                    break;
+                case VXCULL_CCW:
+                    m_RasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
+                    break;
+                default:
+                    return FALSE;
+            }
+            break;
+        case VXRENDERSTATE_ZFUNC:
+            psoUpToDate = FALSE;
+            switch ((VXCMPFUNC)Value)
+            {
+                case VXCMP_NEVER:
+                    m_DepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_NEVER;
+                    break;
+                case VXCMP_LESS:
+                    m_DepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+                    break;
+                case VXCMP_EQUAL:
+                    m_DepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_EQUAL;
+                    break;
+                case VXCMP_LESSEQUAL:
+                    m_DepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+                    break;
+                case VXCMP_GREATER:
+                    m_DepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
+                    break;
+                case VXCMP_NOTEQUAL:
+                    m_DepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_NOT_EQUAL;
+                    break;
+                case VXCMP_GREATEREQUAL:
+                    m_DepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+                    break;
+                case VXCMP_ALWAYS:
+                    m_DepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+                    break;
+                default:
+                    return FALSE;
+            }
+            break;
+        case VXRENDERSTATE_ALPHAREF:
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.AlphaThreshold = Value / 255.;
+            break;
+        case VXRENDERSTATE_ALPHAFUNC:
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.AlphaFlags &= ~VXCMP_MASK;
+            m_PSCBuffer.AlphaFlags |= (Value & VXCMP_MASK);
+            break;
+        case VXRENDERSTATE_DITHERENABLE:
+            return FALSE;
+        case VXRENDERSTATE_ALPHABLENDENABLE:
+            psoUpToDate = FALSE;
+            m_BlendDesc.RenderTarget[0].BlendEnable = Value;
+            break;
+        case VXRENDERSTATE_FOGENABLE:
+            // if ((bool)Value == (bool)(m_PSCBuffer.FogFlags & FFLG_FOGEN))
+            //     break;
+            m_PSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_PSCBuffer.FogFlags, FFLG_FOGEN, Value);
+            break;
+        case VXRENDERSTATE_FOGCOLOR:
+            {
+                m_PSConstantBufferUpToDate = FALSE;
+                VxColor col(Value);
+                m_PSCBuffer.FogColor = col;
+                break;
+            }
+        case VXRENDERSTATE_FOGPIXELMODE:
+            if ((m_PSCBuffer.FogFlags & ~FFLG_FOGEN) == Value)
+                break;
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.FogFlags = (m_PSCBuffer.FogFlags & FFLG_FOGEN) | Value;
+            break;
+        case VXRENDERSTATE_FOGSTART:
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.FogStart = reinterpret_cast<float &>(Value);
+            break;
+        case VXRENDERSTATE_FOGEND:
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.FogEnd = reinterpret_cast<float &>(Value);
+            break;
+        case VXRENDERSTATE_FOGDENSITY:
+            m_PSConstantBufferUpToDate = FALSE;
+            m_PSCBuffer.FogDensity = reinterpret_cast<float &>(Value);
+            break;
+        case VXRENDERSTATE_EDGEANTIALIAS:
+            break;
+        case VXRENDERSTATE_ZBIAS:
+            break;
+        case VXRENDERSTATE_RANGEFOGENABLE:
+            break;
+        case VXRENDERSTATE_STENCILENABLE:
+            psoUpToDate = FALSE;
+            m_DepthStencilDesc.StencilEnable = Value;
+            break;
+        case VXRENDERSTATE_STENCILFAIL:
+            psoUpToDate = FALSE;
+            switch ((VXSTENCILOP)Value)
+            {
+                case VXSTENCILOP_KEEP:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+                    break;
+                case VXSTENCILOP_ZERO:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_ZERO;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_ZERO;
+                    break;
+                case VXSTENCILOP_REPLACE:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_REPLACE;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_REPLACE;
+                    break;
+                case VXSTENCILOP_INCRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_INCR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_INCR_SAT;
+                    break;
+                case VXSTENCILOP_DECRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_DECR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_DECR_SAT;
+                    break;
+                case VXSTENCILOP_INVERT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_INVERT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_INVERT;
+                    break;
+                case VXSTENCILOP_INCR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_INCR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_INCR;
+                    break;
+                case VXSTENCILOP_DECR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_DECR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_DECR;
+                    break;
+                default:
+                    return FALSE;
+            }
+            break;
+        case VXRENDERSTATE_STENCILZFAIL:
+            psoUpToDate = FALSE;
+            switch ((VXSTENCILOP)Value)
+            {
+                case VXSTENCILOP_KEEP:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+                    break;
+                case VXSTENCILOP_ZERO:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_ZERO;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_ZERO;
+                    break;
+                case VXSTENCILOP_REPLACE:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_REPLACE;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_REPLACE;
+                    break;
+                case VXSTENCILOP_INCRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_INCR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_INCR_SAT;
+                    break;
+                case VXSTENCILOP_DECRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_DECR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_DECR_SAT;
+                    break;
+                case VXSTENCILOP_INVERT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_INVERT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_INVERT;
+                    break;
+                case VXSTENCILOP_INCR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_INCR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_INCR;
+                    break;
+                case VXSTENCILOP_DECR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_DECR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_DECR;
+                    break;
+                default:
+                    return FALSE;
+            }
+            break;
+        case VXRENDERSTATE_STENCILPASS:
+            psoUpToDate = FALSE;
+            switch ((VXSTENCILOP)Value)
+            {
+                case VXSTENCILOP_KEEP:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+                    break;
+                case VXSTENCILOP_ZERO:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_ZERO;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_ZERO;
+                    break;
+                case VXSTENCILOP_REPLACE:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_REPLACE;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_REPLACE;
+                    break;
+                case VXSTENCILOP_INCRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_INCR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_INCR_SAT;
+                    break;
+                case VXSTENCILOP_DECRSAT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_DECR_SAT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_DECR_SAT;
+                    break;
+                case VXSTENCILOP_INVERT:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_INVERT;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_INVERT;
+                    break;
+                case VXSTENCILOP_INCR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_INCR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_INCR;
+                    break;
+                case VXSTENCILOP_DECR:
+                    m_DepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_DECR;
+                    m_DepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_DECR;
+                    break;
+                default:
+                    return FALSE;
+            }
+            break;
+        case VXRENDERSTATE_STENCILFUNC:
+            psoUpToDate = FALSE;
+            switch ((VXCMPFUNC)Value)
+            {
+                case VXCMP_NEVER:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
+                    break;
+                case VXCMP_LESS:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_LESS;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_LESS;
+                    break;
+                case VXCMP_EQUAL:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+                    break;
+                case VXCMP_LESSEQUAL:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+                    break;
+                case VXCMP_GREATER:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_GREATER;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_GREATER;
+                    break;
+                case VXCMP_NOTEQUAL:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NOT_EQUAL;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NOT_EQUAL;
+                    break;
+                case VXCMP_GREATEREQUAL:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+                    break;
+                case VXCMP_ALWAYS:
+                    m_DepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+                    m_DepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+                    break;
+                default:
+                    return FALSE;
+            }
+            break;
+        case VXRENDERSTATE_STENCILREF:
+            break;
+        case VXRENDERSTATE_STENCILMASK:
+            psoUpToDate = FALSE;
+            m_DepthStencilDesc.StencilReadMask = Value;
+            break;
+        case VXRENDERSTATE_STENCILWRITEMASK:
+            psoUpToDate = FALSE;
+            m_DepthStencilDesc.StencilWriteMask = Value;
+            break;
+        case VXRENDERSTATE_TEXTUREFACTOR:
+            break;
+        // case VXRENDERSTATE_WRAP0:
+        //     switch ((VXWRAP_MODE) Value)
+        //     {
+        //         case VXWRAP_U:
+        //             m_SamplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_WRAP;
+        //             break;
+        //         case VXWRAP_V:
+        //             m_SamplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_WRAP;
+        //             break;
+        //         case VXWRAP_S:
+        //             m_SamplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_WRAP;
+        //             break;
+        //         case VXWRAP_T:
+        //         default:
+        //             return FALSE;
+        //     }
+        //     break;
+        // case VXRENDERSTATE_WRAP1:
+        //     break;
+        // case VXRENDERSTATE_WRAP2:
+        //     break;
+        // case VXRENDERSTATE_WRAP3:
+        //     break;
+        // case VXRENDERSTATE_WRAP4:
+        //     break;
+        // case VXRENDERSTATE_WRAP5:
+        //     break;
+        // case VXRENDERSTATE_WRAP6:
+        //     break;
+        // case VXRENDERSTATE_WRAP7:
+        //     break;
+        case VXRENDERSTATE_CLIPPING:
+            return FALSE;
+        case VXRENDERSTATE_LIGHTING:
+            m_PSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_PSCBuffer.GlobalLightSwitches, LSW_LIGHTINGEN, Value);
+            break;
+        case VXRENDERSTATE_SPECULARENABLE:
+            m_PSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_PSCBuffer.GlobalLightSwitches, LSW_SPECULAREN, Value);
+            break;
+        case VXRENDERSTATE_AMBIENT:
+            return FALSE;
+        case VXRENDERSTATE_FOGVERTEXMODE:
+            break;
+        case VXRENDERSTATE_COLORVERTEX:
+            m_PSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_PSCBuffer.GlobalLightSwitches, LSW_VRTCOLOREN, Value);
+            break;
+        case VXRENDERSTATE_LOCALVIEWER:
+            break;
+        case VXRENDERSTATE_NORMALIZENORMALS:
+            return FALSE;
+        case VXRENDERSTATE_VERTEXBLEND:
+            break;
+        case VXRENDERSTATE_SOFTWAREVPROCESSING:
+            return FALSE;
+        case VXRENDERSTATE_CLIPPLANEENABLE:
+            break;
+        case VXRENDERSTATE_INDEXVBLENDENABLE:
+            break;
+        case VXRENDERSTATE_BLENDOP:
+            psoUpToDate = FALSE;
+            switch ((VXBLENDOP)Value)
+            {
+                case VXBLENDOP_ADD:
+                    m_BlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+                    break;
+                case VXBLENDOP_SUBTRACT:
+                    m_BlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_SUBTRACT;
+                    break;
+                case VXBLENDOP_REVSUBTRACT:
+                    m_BlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
+                    break;
+                case VXBLENDOP_MIN:
+                    m_BlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_MIN;
+                    break;
+                case VXBLENDOP_MAX:
+                    m_BlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_MAX;
+                    break;
+                default:
+                    return FALSE;
+            }
+            break;
+        case VXRENDERSTATE_TEXTURETARGET:
+            break;
+        case VXRENDERSTATE_INVERSEWINDING:
+            psoUpToDate = FALSE;
+            m_InverseWinding = (Value != 0);
+            m_RasterizerDesc.FrontCounterClockwise = m_InverseWinding;
+            break;
+        default:
+            return FALSE;
+    }
+    if (!psoUpToDate)
+    {
+        for (auto &[fvf, uptodate] : m_PipelineStateUpToDate)
+        {
+            uptodate = false;
+        }
+    }
+    return TRUE;
+}
 
 CKBOOL CKDX12RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *Value)
 {
     return CKRasterizerContext::GetRenderState(State, Value);
 }
+
 CKBOOL CKDX12RasterizerContext::SetTexture(CKDWORD Texture, int Stage) {
     if (Texture >= m_Textures.Size())
         return FALSE;
@@ -1218,6 +1756,25 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
     return hr;
 }
 
+HRESULT CKDX12RasterizerContext::UpdatePipelineState(DWORD fvf) {
+    HRESULT hr = S_OK;
+    if (m_PipelineStateUpToDate[fvf])
+        return hr;
+
+    auto &psoDesc = m_PipelineStateDescriptions[fvf];
+    psoDesc.RasterizerState = m_RasterizerDesc;
+    psoDesc.BlendState = m_BlendDesc;
+    psoDesc.DepthStencilState = m_DepthStencilDesc;
+
+    psoDesc.SampleMask = UINT_MAX;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    D3DCall(m_Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(m_PipelineState[fvf].ReleaseAndGetAddressOf())));
+    m_PipelineStateUpToDate[fvf] = true;
+
+    m_CommandList->SetPipelineState(m_PipelineState[fvf].Get());
+    return hr;
+}
+
 CKBOOL CKDX12RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKDX12VertexBufferDesc *vbo,
                                                       CKDWORD StartVertex, CKDWORD VertexCount, CKWORD *indices,
                                                       int indexcount)
@@ -1310,7 +1867,8 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     
     CKDWORD vertexSize;
     CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
-    m_CommandList->SetPipelineState(m_PipelineState[vertexFormat].Get());
+    D3DCall(UpdatePipelineState(vertexFormat));
+    //m_CommandList->SetPipelineState(m_PipelineState[vertexFormat].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     
     D3DCall(UpdateConstantBuffer());
@@ -1489,11 +2047,12 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
 #endif
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     /*m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);*/
-
-    m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
+    
+    HRESULT hr;
+    D3DCall(UpdatePipelineState(vbo->m_VertexFormat));
+    //m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    HRESULT hr;
     D3DCall(UpdateConstantBuffer());
 
     return InternalDrawPrimitive(pType, vbo, StartVIndex, VertexCount, indices, indexcount);
@@ -1573,7 +2132,9 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         return FALSE;
     m_VertexBufferSubmitted[m_FrameIndex].emplace_back(*vbo);
     m_IndexBufferSubmitted[m_FrameIndex].emplace_back(*ibo);
-    m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
+    HRESULT hr;
+    D3DCall(UpdatePipelineState(vbo->m_VertexFormat));
+    //m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 #if SETRESOURCES
     fprintf(stderr, "Set VB: %d\n", VB);
@@ -1583,7 +2144,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     m_CommandList->IASetIndexBuffer(&ibo->DxView);
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
 
-    HRESULT hr;
     D3DCall(UpdateConstantBuffer());
 #if defined(DEBUG) || defined(_DEBUG)
     WCHAR *stats = nullptr;
