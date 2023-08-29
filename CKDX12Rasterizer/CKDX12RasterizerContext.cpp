@@ -542,6 +542,7 @@ HRESULT CKDX12RasterizerContext::MoveToNextFrame()
     m_VertexBufferSubmitted[m_FrameIndex].clear();
     m_IndexBufferSubmitted[m_FrameIndex].clear();
     m_TextureSubmitted[m_FrameIndex].clear();
+    m_PipelineStateSubmitted[m_FrameIndex].clear();
     
     // Set the fence value for the next frame.
     m_FenceValues[m_FrameIndex] = currentFenceValue + 1;
@@ -1704,7 +1705,7 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         SamplerState sampler1 : register(s1)
     */
     HRESULT hr = S_OK;
-    if (!m_VSConstantBufferUpToDate)
+    //if (!m_VSConstantBufferUpToDate)
     {
         UpdateMatrices(WORLD_TRANSFORM);
         UpdateMatrices(VIEW_TRANSFORM);
@@ -1721,7 +1722,7 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         m_CommandList->SetGraphicsRootDescriptorTable(m_VSCBVBaseIndex, handle);
         m_VSConstantBufferUpToDate = TRUE;
     }
-    if (!m_PSConstantBufferUpToDate)
+    //if (!m_PSConstantBufferUpToDate)
     {
         VxMatrix mat;
         Vx3DInverseMatrix(mat, m_ViewMatrix);
@@ -1733,7 +1734,7 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex, handle);
         m_PSConstantBufferUpToDate = TRUE;
     }
-    if (!m_PSLightConstantBufferUpToDate)
+    //if (!m_PSLightConstantBufferUpToDate)
     {
         auto res =
             m_VSCBHeap->Allocate(sizeof(PSLightConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
@@ -1758,18 +1759,17 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
 
 HRESULT CKDX12RasterizerContext::UpdatePipelineState(DWORD fvf) {
     HRESULT hr = S_OK;
-    if (m_PipelineStateUpToDate[fvf])
-        return hr;
+    if (!m_PipelineStateUpToDate[fvf])
+    {
+        auto &psoDesc = m_PipelineStateDescriptions[fvf];
+        psoDesc.RasterizerState = m_RasterizerDesc;
+        psoDesc.BlendState = m_BlendDesc;
+        psoDesc.DepthStencilState = m_DepthStencilDesc;
 
-    auto &psoDesc = m_PipelineStateDescriptions[fvf];
-    psoDesc.RasterizerState = m_RasterizerDesc;
-    psoDesc.BlendState = m_BlendDesc;
-    psoDesc.DepthStencilState = m_DepthStencilDesc;
-
-    psoDesc.SampleMask = UINT_MAX;
-    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    D3DCall(m_Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(m_PipelineState[fvf].ReleaseAndGetAddressOf())));
-    m_PipelineStateUpToDate[fvf] = true;
+        m_PipelineStateSubmitted[m_FrameIndex].emplace_back(m_PipelineState[fvf]);
+        D3DCall(m_Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(m_PipelineState[fvf].ReleaseAndGetAddressOf())));
+        m_PipelineStateUpToDate[fvf] = true;
+    }
 
     m_CommandList->SetPipelineState(m_PipelineState[fvf].Get());
     return hr;

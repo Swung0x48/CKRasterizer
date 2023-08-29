@@ -539,6 +539,7 @@ public:
     std::vector<CKDX12VertexBufferDesc> m_VertexBufferSubmitted[m_FrameInFlightCount];
     std::vector<CKDX12IndexBufferDesc> m_IndexBufferSubmitted[m_FrameInFlightCount];
     std::vector<CKDX12TextureDesc> m_TextureSubmitted[m_FrameInFlightCount];
+    std::vector<ComPtr<ID3D12PipelineState>> m_PipelineStateSubmitted[m_FrameInFlightCount];
 
     CKBOOL m_SamplerStateUpToDate[D3D12_COMMONSHADER_SAMPLER_SLOT_COUNT];
     CKDX12TextureFilter m_Filter[D3D12_COMMONSHADER_SAMPLER_SLOT_COUNT];
