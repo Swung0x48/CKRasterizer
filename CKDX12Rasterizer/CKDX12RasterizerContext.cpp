@@ -333,6 +333,9 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
 
     m_SamplerDesc[0] = sampler;
     m_SamplerDesc[1] = sampler;
+    m_SamplerDesc[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    m_SamplerDesc[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    m_SamplerDesc[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     m_SamplerDesc[1].ShaderRegister = 1;
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
