@@ -1670,30 +1670,6 @@ CKBOOL CKDX12RasterizerContext::TriangleFanToList(CKWORD *indices, int count,
     return !strip_index.empty();
 }
 
-static CKDWORD ib_idx = 0;
-CKDWORD CKDX12RasterizerContext::GetDynamicIndexBuffer(CKDWORD IndexCount, CKDWORD AddKey)
-{
-    ib_idx %= m_IndexBuffers.Size();
-    CKIndexBufferDesc *ib = m_IndexBuffers[ib_idx];
-    if (!ib || ib->m_MaxIndexCount < IndexCount)
-    {
-        if (ib)
-        {
-            delete ib;
-            m_IndexBuffers[ib_idx] = NULL;
-        }
-
-        CKIndexBufferDesc nib;
-        nib.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
-        nib.m_MaxIndexCount = IndexCount;
-        nib.m_CurrentICount = 0;
-        if (AddKey != 0)
-            nib.m_Flags |= CKRST_VB_SHARED;
-        CreateObject(ib_idx, CKRST_OBJ_INDEXBUFFER, &nib);
-    }
-    return ib_idx++;
-}
-
 HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
 {/*
     * // VERTEX
