@@ -1870,7 +1870,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     D3DCall(UpdatePipelineState(vertexFormat));
     //m_CommandList->SetPipelineState(m_PipelineState[vertexFormat].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    
+    m_PSCBuffer.FVF = vertexFormat;
     D3DCall(UpdateConstantBuffer());
 
     CKBOOL clip = FALSE;
@@ -2052,7 +2052,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
     D3DCall(UpdatePipelineState(vbo->m_VertexFormat));
     //m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
+    m_PSCBuffer.FVF = vbo->m_VertexFormat;
     D3DCall(UpdateConstantBuffer());
 
     return InternalDrawPrimitive(pType, vbo, StartVIndex, VertexCount, indices, indexcount);
@@ -2143,7 +2143,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     assert(ibo->DxView.BufferLocation != 0);
     m_CommandList->IASetIndexBuffer(&ibo->DxView);
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
-
+    m_PSCBuffer.FVF = vbo->m_VertexFormat;
     D3DCall(UpdateConstantBuffer());
 #if defined(DEBUG) || defined(_DEBUG)
     WCHAR *stats = nullptr;
