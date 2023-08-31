@@ -2225,7 +2225,7 @@ CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
     textureData.SlicePitch = textureData.RowPitch * desc->Format.Height;
     UpdateSubresources(m_CommandList.Get(), desc->DefaultResource.Get(), res.pBuffer.Get(), res.Offset,
         0, 1, &textureData);
-    delete dst.Image;
+    delete[] dst.Image;
 
     desc->DxView.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     desc->DxView.Format = textureDesc.Format;
