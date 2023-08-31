@@ -518,6 +518,7 @@ public:
     std::unordered_map<DWORD, ComPtr<ID3D12PipelineState>> m_PipelineState;
     std::unordered_map<DWORD, D3D12_GRAPHICS_PIPELINE_STATE_DESC> m_PipelineStateDescriptions;
     std::unordered_map<DWORD, bool> m_PipelineStateUpToDate;
+    std::unordered_map<DWORD, ComPtr<ID3D12PipelineState>> m_CachedPipelineState;
     
     CD3DX12_VIEWPORT m_Viewport;
     CD3DX12_RECT m_ScissorRect;
@@ -556,5 +557,5 @@ public:
     ComPtr<ID3D12Fence> m_Fence;
     UINT64 m_FenceValues[m_FrameInFlightCount] = {};
 
-    asio::thread_pool m_ThreadPool;
+    //asio::thread_pool m_ThreadPool;
 };

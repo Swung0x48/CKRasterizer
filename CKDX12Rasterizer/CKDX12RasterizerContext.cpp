@@ -475,6 +475,9 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
         m_PipelineState[item.first] = state;
         m_PipelineStateDescriptions[item.first] = psoDesc;
         m_PipelineStateUpToDate[item.first] = true;
+
+        auto hash = CKComputeDataCRC((char *)&psoDesc, sizeof(psoDesc));
+        m_CachedPipelineState[hash] = state;
     }
 
     return hr;
@@ -1744,9 +1747,21 @@ HRESULT CKDX12RasterizerContext::UpdatePipelineState(DWORD fvf) {
         psoDesc.RasterizerState = m_RasterizerDesc;
         psoDesc.BlendState = m_BlendDesc;
         psoDesc.DepthStencilState = m_DepthStencilDesc;
-
-        m_PipelineStateSubmitted[m_FrameIndex].emplace_back(m_PipelineState[fvf]);
-        D3DCall(m_Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(m_PipelineState[fvf].ReleaseAndGetAddressOf())));
+        
+        auto hash = CKComputeDataCRC((char*) &psoDesc, sizeof(psoDesc));
+        if (m_CachedPipelineState.find(hash) != m_CachedPipelineState.end())
+        {
+            m_PipelineState[fvf] = m_CachedPipelineState[hash];
+        }
+        else
+        {
+            m_PipelineStateSubmitted[m_FrameIndex].emplace_back(m_PipelineState[fvf]);
+            D3DCall(m_Device->CreateGraphicsPipelineState(&psoDesc,
+                                                          IID_PPV_ARGS(m_PipelineState[fvf].ReleaseAndGetAddressOf())));
+            auto before = m_CachedPipelineState.size();
+            m_CachedPipelineState[hash] = m_PipelineState[fvf];
+            assert(before < m_CachedPipelineState.size());
+        }
         m_PipelineStateUpToDate[fvf] = true;
     }
 
