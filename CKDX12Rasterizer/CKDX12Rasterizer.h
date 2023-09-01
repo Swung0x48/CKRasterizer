@@ -130,10 +130,10 @@ enum TexArg // for CKDX12TexCombinatorConstant::cargs / aargs
 
 struct CKDX12TexCombinatorConstant
 {
-    CKDWORD op; // bit 0-3: color op, bit 4-7: alpha op, bit 31: dest
-    CKDWORD cargs; // bit 0-7: arg1, bit 8-15: arg2, bit 16-23: arg3
-    CKDWORD aargs; // ditto
-    CKDWORD constant;
+    CKDWORD op = 0; // bit 0-3: color op, bit 4-7: alpha op, bit 31: dest
+    CKDWORD cargs = 0; // bit 0-7: arg1, bit 8-15: arg2, bit 16-23: arg3
+    CKDWORD aargs = 0; // ditto
+    CKDWORD constant = 0;
 
     void set_color_op(TexOp o)
     {
@@ -530,7 +530,7 @@ public:
     VSConstantBufferStruct m_VSCBuffer;
     PSConstantBufferStruct m_PSCBuffer;
     PSLightConstantBufferStruct m_PSLightCBuffer;
-    PSTexCombinatorConstantBufferStruct m_PSTexCombinatorCBuffer;
+    PSTexCombinatorConstantBufferStruct m_PSTexCombinatorCBuffer = {};
     CKBOOL m_VSConstantBufferUpToDate = FALSE;
     CKBOOL m_PSConstantBufferUpToDate = FALSE;
     CKBOOL m_PSLightConstantBufferUpToDate = FALSE;

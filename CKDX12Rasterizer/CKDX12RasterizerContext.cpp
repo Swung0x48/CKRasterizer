@@ -30,7 +30,8 @@
     #define SETRESOURCES 0
     #define CREATEVB 0
     #define CREATEIB 0
-    #define RENDERSTATE 1
+    #define RENDERSTATE 0
+    #define LIVETEXTURES 1
 #endif
 
 #if LOGGING || CONSOLE
@@ -236,7 +237,7 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
     }
 
     // ...also, a command list for each of them
-    for (UINT i = 0; i < m_BackBufferCount; ++i)
+    for (UINT i = 0; i < m_FrameInFlightCount; ++i)
     {
         D3DCall(m_Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
                                             m_CommandAllocators[i].Get(), nullptr, 
