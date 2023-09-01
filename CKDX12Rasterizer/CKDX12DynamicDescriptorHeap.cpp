@@ -6,6 +6,7 @@ HRESULT CKDX12DynamicDescriptorHeap::CreateConstantBufferView(const CKDX12Alloca
     HRESULT hr = m_Heaps.back().CreateConstantBufferView(resource, gpuHandle);
     if (hr == E_OUTOFMEMORY)
     {
+        // TODO: Should re-set corresponding descriptor heap!
         // Create new buffer
         auto newSize = m_Heaps.back().GetMaxSize() * 2;
         // Make sure the buffer is large enough for the requested chunk
@@ -27,6 +28,7 @@ HRESULT CKDX12DynamicDescriptorHeap::CreateShaderResourceView(ID3D12Resource *pR
     HRESULT hr = m_Heaps.back().CreateShaderResourceView(pResource, pDesc, gpuHandle);
     if (hr == E_OUTOFMEMORY)
     {
+        // TODO: Should re-set corresponding descriptor heap!
         // Create new buffer
         auto newSize = m_Heaps.back().GetMaxSize() * 2;
         // Make sure the buffer is large enough for the requested chunk

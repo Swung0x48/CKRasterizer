@@ -58,7 +58,7 @@ XBOOL CKDX12Rasterizer::Start(WIN_HANDLE AppWnd)
     m_MainWindow = AppWnd;
 
     UINT dxgiFactoryFlags = 0;
-#if defined(_DEBUG)
+#if defined(_DEBUG) || defined(DEBUG)
     // Enable the debug layer (requires the Graphics Tools "optional feature").
     // NOTE: Enabling the debug layer after device creation will invalidate the active device.
     {

@@ -487,7 +487,7 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
 HRESULT CKDX12RasterizerContext::CreateResources()
 {
     HRESULT hr;
-    const size_t size = 1024;
+    const size_t size = 4096;
     m_VSCBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device,
                                                            D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * size);
     m_CBV_SRV_Heap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
