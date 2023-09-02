@@ -28,8 +28,8 @@
     #define LOCKIB 0
     #define UNLOCKIB 0
     #define SETRESOURCES 0
-    #define CREATEVB 0
-    #define CREATEIB 0
+    #define CREATEVB 1
+    #define CREATEIB 1
     #define RENDERSTATE 0
     #define LIVETEXTURES 1
 #endif
@@ -1882,32 +1882,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     auto vb = m_DynamicVBHeap->Allocate(data->VertexCount * vertexSize);
     void* pData = (CKBYTE*)vb.CPUAddress;
 
-    /*CKDWORD VB = GetDynamicVertexBuffer(
-        vertexFormat, (data->VertexCount + 128 > 32768) ? data->VertexCount + 128 : 32768, vertexSize, clip);
-    auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
-#if CREATEVB
-    static char name[256];
-    static WCHAR wname[512];
-    sprintf(name, "VB %d Dynamic\n", VB);
-    MultiByteToWideChar(CP_ACP, 0, name, strlen(name) + 1, wname, std::size(wname));
-    vbo->UploadResource.pBuffer->SetName(wname);
-#endif
-    CKBYTE *pData = nullptr;
-    CKDWORD vbase = 0;
-    vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
-
-    if (vbo->m_CurrentVCount + data->VertexCount <= vbo->m_MaxVertexCount)
-    {
-        pData = (CKBYTE *)vbo->CPUAddress + vertexSize * vbo->m_CurrentVCount;
-        vbase = vbo->m_CurrentVCount;
-        vbo->m_CurrentVCount += data->VertexCount;
-    } else
-    {
-        pData = (CKBYTE *)vbo->CPUAddress;
-        vbase = 0;
-        vbo->m_CurrentVCount = data->VertexCount;
-    }*/
-    
     CKRSTLoadVertexBuffer((CKBYTE *)pData, vertexFormat, vertexSize, data);
 //#if SETRESOURCES
 //    fprintf(stderr, "Set VB: %d\n", VB);
@@ -2006,37 +1980,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
 #if LOGGING
     fprintf(stderr, "DrawPrimitiveVB\n");
 #endif
-    /*std::vector<CKWORD> ib;
-    switch (pType)
-    {
-        case VX_TRIANGLELIST:
-            break;
-        case VX_TRIANGLEFAN:
-            if (indices)
-                TriangleFanToList(indices, indexcount, ib);
-            else
-            {
-                CKWORD voffset = 0;
-                TriangleFanToList(voffset, indexcount, ib);
-            }
-            break;
-#if defined(DEBUG) || defined(_DEBUG)
-        case VX_POINTLIST:
-            fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
-            return TRUE;
-        case VX_LINELIST:
-            fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
-            return TRUE;
-        case VX_LINESTRIP:
-            fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
-            return TRUE;
-#endif
-        default:
-#if defined(DEBUG) || defined(_DEBUG)
-            fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
-#endif
-            return TRUE;
-    }*/
 #if SETRESOURCES
     fprintf(stderr, "Set VB: %d\n", VB);
 #endif
@@ -2051,38 +1994,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
     D3DCall(UpdateConstantBuffer());
 
     return InternalDrawPrimitive(pType, vbo, StartVIndex, VertexCount, indices, indexcount);
-        //    int ibcount = (pType == VX_TRIANGLEFAN) ? ib.size() : indexcount;
-//    assert(ibcount > 0);
-//    if (indices || pType == VX_TRIANGLEFAN)
-//    {
-//        auto res = m_DynamicIBHeap->Allocate(ibcount * sizeof(CKWORD));
-//        CKIndexBufferDesc desc;
-//        desc.m_MaxIndexCount = indexcount;
-//        desc.m_CurrentICount = 0;
-//        desc.m_Flags = CKRST_VB_DYNAMIC;
-//        CKDX12IndexBufferDesc ibo(desc, res);
-//        // m_IndexBufferSubmitted.emplace_back(desc, res);
-//        //++m_IndexBufferSubmittedCount[m_FrameIndex];
-//        assert(pType == VX_TRIANGLELIST || pType == VX_TRIANGLEFAN);
-//        if (pType == VX_TRIANGLELIST)
-//            memcpy(ibo.CPUAddress, indices, indexcount * sizeof(CKWORD));
-//        else if (pType == VX_TRIANGLEFAN)
-//            memcpy(ibo.CPUAddress, ib.data(), ib.size() * sizeof(CKWORD));
-//        assert(ibo.DxView.BufferLocation != 0);
-//#if CREATEIB
-//        static char name[256];
-//        static WCHAR wname[512];
-//        sprintf(name, "Transient IB DrawVB");
-//        MultiByteToWideChar(CP_ACP, 0, name, strlen(name) + 1, wname, std::size(wname));
-//        res.pBuffer->SetName(wname);
-//#endif
-//        m_CommandList->IASetIndexBuffer(&ibo.DxView);
-//        m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, StartVIndex, 0);
-//    }
-//    else
-//    {
-//        m_CommandList->DrawInstanced(VertexCount, 1, StartVIndex, 0);
-//    }
     return TRUE;
 }
 
@@ -2335,7 +2246,7 @@ void *CKDX12RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
     desc->LockCount = VertexCount;
     desc->LockFlags = Lock;
 
-    return desc->CPUAddress;
+    return (uint8_t*)desc->CPUAddress + desc->LockStart * desc->m_VertexSize;
 }
 
 CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
