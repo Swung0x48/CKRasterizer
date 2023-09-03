@@ -2277,7 +2277,7 @@ CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
     // We won't actually unlock here.
     // It's okay to leave resources locked in D3D12
     HRESULT hr;
-    auto resDesc = CD3DX12_RESOURCE_DESC::Buffer(desc->m_VertexSize * desc->m_MaxVertexCount);
+    auto resDesc = CD3DX12_RESOURCE_DESC::Buffer((UINT64)desc->m_VertexSize * (UINT64)desc->m_MaxVertexCount);
     D3D12MA::ALLOCATION_DESC allocDesc = {};
     allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
     D3DCall(m_Allocator->CreateResource(&allocDesc, &resDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,

@@ -30,7 +30,7 @@ CKDX12RingBuffer::CKDX12RingBuffer(size_t MaxSize, Microsoft::WRL::ComPtr<ID3D12
     D3DCall(pDevice->CreateCommittedResource(&HeapProps, D3D12_HEAP_FLAG_NONE, &ResourceDesc, DefaultUsage, nullptr,
                                      IID_PPV_ARGS(&m_pBuffer)));
 
-#if defined DEBUG || _DEBUG
+#if defined (DEBUG) || defined (_DEBUG)
     if (AllowCPUAccess)
     {
         D3DCall(m_pBuffer->SetName(L"Upload Ring Buffer"));
