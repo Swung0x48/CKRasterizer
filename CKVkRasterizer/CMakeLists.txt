@@ -32,6 +32,8 @@ if ((NOT IS_ABSOLUTE "${VULKAN_SDK_PATH}") OR (NOT IS_DIRECTORY "${VULKAN_SDK_PA
 message(FATAL_ERROR "Vulkan SDK not found. Please add -DVULKAN_SDK_PATH= to the cmake command")
 endif()
 
+message(STATUS "Found VULKAN_SDK_PATH=${VULKAN_SDK_PATH}")
+
 set(shader_i_list "")
 
 function(compile_glsl GLSL_SRC)
