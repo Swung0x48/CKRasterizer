@@ -723,6 +723,16 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
     HRESULT hr;
     D3DCall(m_CommandAllocators[m_FrameIndex]->Reset());
     D3DCall(m_CommandList->Reset(m_CommandAllocators[m_FrameIndex].Get(), nullptr));
+
+    for (size_t i = 0; i < m_MTCommandAllocators[m_FrameIndex].size(); ++i)
+    {
+        D3DCall(m_MTCommandAllocators[m_FrameIndex][i]->Reset());
+    }
+    for (size_t i = 0; i < m_MTCommandLists.size(); ++i)
+    {
+        D3DCall(m_MTCommandLists[i]->Reset(m_MTCommandAllocators[m_FrameIndex][i].Get(), nullptr));
+    }
+    
 #if CMDLIST
     fprintf(stderr, "m_CommandList->Reset() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
 #if defined DEBUG || defined _DEBUG
@@ -761,6 +771,11 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
         m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     m_CommandList->ResourceBarrier(1, &transitionToPresent);
     D3DCall(m_CommandList->Close());
+    m_ThreadPool.wait();
+    for (size_t i = 0; i < m_MTCommandLists.size(); ++i)
+    {
+        D3DCall(m_MTCommandLists[i]->Close());
+    }
 #if CMDLIST
     fprintf(stderr, "m_CommandList->Close() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
 #if defined DEBUG || defined _DEBUG
@@ -770,9 +785,12 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
     assert(m_CmdListClosed);
     ID3D12CommandList *list = m_CommandList.Get();
     m_CommandQueue->ExecuteCommandLists(1, &list);
-    //m_PendingCommandList.emplace_back(m_CommandList.Get());
-    //m_CommandQueue->ExecuteCommandLists(m_PendingCommandList.size(), m_PendingCommandList.data());
-    //m_PendingCommandList.clear();
+    for (size_t i = 0; i < m_MTCommandLists.size(); ++i)
+    {
+        m_PendingCommandList.emplace_back(m_MTCommandLists[i].Get());
+    }
+    m_CommandQueue->ExecuteCommandLists(m_PendingCommandList.size(), m_PendingCommandList.data());
+    m_PendingCommandList.clear();
 
     m_SceneBegined = FALSE;
     return SUCCEEDED(hr);
