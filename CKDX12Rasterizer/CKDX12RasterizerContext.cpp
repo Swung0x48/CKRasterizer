@@ -241,10 +241,47 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
     {
         D3DCall(m_Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
                                             m_CommandAllocators[i].Get(), nullptr, 
-            IID_PPV_ARGS(&m_CommandList)));
+                                            IID_PPV_ARGS(&m_CommandList)));
         
 
         D3DCall(m_CommandList->Close());
+    }
+
+    m_MTCommandLists.resize(m_ThreadCount);
+    for (UINT i = 0; i < m_FrameInFlightCount; ++i)
+    {
+        m_MTCommandAllocators[i].resize(m_ThreadCount);
+    }
+
+    for (UINT i = 0; i < m_FrameInFlightCount; ++i)
+    {
+        for (size_t j = 0; j < m_ThreadCount; ++j)
+        {
+            D3DCall(m_Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+                IID_PPV_ARGS(m_MTCommandAllocators[i][j].ReleaseAndGetAddressOf())));
+#if defined(DEBUG) || defined(_DEBUG)
+            static char buf[50];
+            sprintf(buf, "MTCmdAllocator%u %u", i, j);
+            WCHAR wstr[100];
+            memset(wstr, 0, sizeof(wstr));
+            MultiByteToWideChar(CP_ACP, 0, buf, strlen(buf), wstr, 100);
+            m_MTCommandAllocators[i][j]->SetName(wstr);
+#endif
+        }
+    }
+
+    for (UINT i = 0; i < m_FrameInFlightCount; ++i)
+    {
+        for (size_t j = 0; j < m_ThreadCount; ++j)
+        {
+            D3DCall(m_Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
+                                                m_MTCommandAllocators[i][j].Get(),
+                                                nullptr,
+                                                IID_PPV_ARGS(&m_MTCommandLists[j])));
+
+
+            D3DCall(m_MTCommandLists[j]->Close());
+        }
     }
 
     return hr;
@@ -598,7 +635,7 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(CreateResources());
 
     D3DCall(CreateSyncObject());
-    for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i)
+    for (size_t i = 0; i < m_ThreadCount; ++i)
     {
         m_Strands.emplace_back(m_ThreadPool.get_executor());
     }
