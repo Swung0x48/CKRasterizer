@@ -557,5 +557,6 @@ public:
     ComPtr<ID3D12Fence> m_Fence;
     UINT64 m_FenceValues[m_FrameInFlightCount] = {};
 
-    //asio::thread_pool m_ThreadPool;
+    asio::thread_pool m_ThreadPool = std::thread::hardware_concurrency();
+    std::vector<asio::strand<asio::thread_pool::executor_type>> m_Strands;
 };

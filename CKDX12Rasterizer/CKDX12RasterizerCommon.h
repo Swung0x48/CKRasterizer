@@ -7,7 +7,7 @@
 
 #include <intsafe.h>
 
-//#include "asio.hpp"
+#include "asio.hpp"
 #include <CKGlobals.h>
 
 #ifdef _DEBUG

@@ -598,6 +598,10 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(CreateResources());
 
     D3DCall(CreateSyncObject());
+    for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i)
+    {
+        m_Strands.emplace_back(m_ThreadPool.get_executor());
+    }
     
     SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, 1);
     SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
