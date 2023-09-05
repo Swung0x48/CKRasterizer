@@ -462,6 +462,7 @@ protected:
     CKBOOL TriangleFanToList(CKWORD VOffset, CKDWORD VCount, std::vector<CKWORD> &strip_index);
     CKBOOL TriangleFanToList(CKWORD *indices, int count, std::vector<CKWORD> &strip_index);
 
+    HRESULT CreateConstantBufferHandle(UINT index, CD3DX12_GPU_DESCRIPTOR_HANDLE** handle);
     HRESULT UpdateConstantBuffer();
     HRESULT UpdatePipelineState(DWORD fvf);
 

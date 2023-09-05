@@ -1733,6 +1733,24 @@ CKBOOL CKDX12RasterizerContext::TriangleFanToList(CKWORD *indices, int count,
     return !strip_index.empty();
 }
 
+HRESULT CKDX12RasterizerContext::CreateConstantBufferHandle(UINT index, CD3DX12_GPU_DESCRIPTOR_HANDLE **handle)
+{/*
+    * // VERTEX
+        VSCBuf: register(b0)
+    * // PIXEL
+        PSCBuf: register(b0)
+        PSLightCBuf : register(b1)
+        PSTexCombinatorCBuf : register(b2)
+        Texture2D texture0 : register(t0)
+        SamplerState sampler0 : register(s0)
+        Texture2D texture1 : register(t1)
+        SamplerState sampler1 : register(s1)
+    */
+    HRESULT hr = S_OK;
+
+    return E_NOTIMPL;
+}
+
 HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
 {/*
     * // VERTEX
@@ -2117,6 +2135,12 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     m_Allocator->FreeStatsString(stats);
 #endif
     m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
+    
+    /*size_t thridx = vbibbat % m_ThreadCount;
+    asio::post(m_Strands[thridx],
+               [this, thridx, Indexcount, StartIndex, MinVIndex, ibo, vbo, ]() {
+
+    });*/
     return TRUE;
 }
 CKBOOL CKDX12RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)

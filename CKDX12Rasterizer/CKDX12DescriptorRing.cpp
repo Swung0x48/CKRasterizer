@@ -9,11 +9,12 @@ CKDX12DescriptorRing::CKDX12DescriptorRing(size_t size, D3D12_DESCRIPTOR_HEAP_TY
     HRESULT hr;
     // currently only supporting CBV/SRV/UAV
     assert(type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    m_HeapDesc.NumDescriptors = size;
-    m_HeapDesc.Type = type;
-    m_HeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    m_HeapDesc.NodeMask = 0; // We're not supporting multi-GPU
-    D3DCall(device->CreateDescriptorHeap(&m_HeapDesc, IID_PPV_ARGS(&m_Heap)));
+    D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
+    heapDesc.NumDescriptors = size;
+    heapDesc.Type = type;
+    heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    heapDesc.NodeMask = 0; // We're not supporting multi-GPU
+    D3DCall(device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_Heap)));
 }
 
 HRESULT CKDX12DescriptorRing::CreateConstantBufferView(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE& gpuHandle)
@@ -24,7 +25,6 @@ HRESULT CKDX12DescriptorRing::CreateConstantBufferView(const CKDX12AllocatedReso
     D3D12_CONSTANT_BUFFER_VIEW_DESC desc;
     desc.BufferLocation = resource.GPUAddress;
     desc.SizeInBytes = resource.Size;
-    assert(m_HeapDesc.Type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     auto cpuHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Heap->GetCPUDescriptorHandleForHeapStart(), offset, m_IncrementSize);
     m_Device->CreateConstantBufferView(&desc, cpuHandle);
     gpuHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(m_Heap->GetGPUDescriptorHandleForHeapStart(), offset, m_IncrementSize);
