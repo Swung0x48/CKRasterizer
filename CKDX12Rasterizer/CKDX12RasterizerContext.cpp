@@ -28,10 +28,10 @@
     #define LOCKIB 0
     #define UNLOCKIB 0
     #define SETRESOURCES 0
-    #define CREATEVB 1
-    #define CREATEIB 1
+    #define CREATEVB 0
+    #define CREATEIB 0
     #define RENDERSTATE 0
-    #define LIVETEXTURES 1
+    #define LIVETEXTURES 0
 #endif
 
 #if LOGGING || CONSOLE
@@ -639,7 +639,7 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     {
         m_Strands.emplace_back(m_ThreadPool.get_executor());
     }
-    
+
     SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, 1);
     SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
     SetRenderState(VXRENDERSTATE_COLORVERTEX, 0);
@@ -771,7 +771,6 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
         m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     m_CommandList->ResourceBarrier(1, &transitionToPresent);
     D3DCall(m_CommandList->Close());
-    m_ThreadPool.wait();
     for (size_t i = 0; i < m_MTCommandLists.size(); ++i)
     {
         D3DCall(m_MTCommandLists[i]->Close());
@@ -1759,9 +1758,9 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         InverseMatrix(m_VSCBuffer.TransposedInvWorldViewMatrix, m_ModelViewMatrix);
         auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
         memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
-        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
-        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
-        m_CommandList->SetGraphicsRootDescriptorTable(m_VSCBVBaseIndex, handle);
+        //CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, m_VSConstantBufferHandle));
+        m_CommandList->SetGraphicsRootDescriptorTable(m_VSCBVBaseIndex, m_VSConstantBufferHandle);
         m_VSConstantBufferUpToDate = TRUE;
     }
     //if (!m_PSConstantBufferUpToDate)
@@ -1771,9 +1770,9 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         m_PSCBuffer.ViewPosition = VxVector(mat[3][0], mat[3][1], mat[3][2]);
         auto res = m_VSCBHeap->Allocate(sizeof(VSConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
         memcpy(res.CPUAddress, &m_PSCBuffer, sizeof(PSConstantBufferStruct));
-        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
-        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
-        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex, handle);
+        //CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, m_PSConstantBufferHandle));
+        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex, m_PSConstantBufferHandle);
         m_PSConstantBufferUpToDate = TRUE;
     }
     //if (!m_PSLightConstantBufferUpToDate)
@@ -1781,9 +1780,9 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         auto res =
             m_VSCBHeap->Allocate(sizeof(PSLightConstantBufferStruct), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
         memcpy(res.CPUAddress, &m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
-        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
-        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
-        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 1, handle);
+        //CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, m_PSLightConstantBufferHandle));
+        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 1, m_PSLightConstantBufferHandle);
         m_PSLightConstantBufferUpToDate = TRUE;
     }
     /*if (!m_PSTexCombinatorConstantBufferUpToDate)
@@ -1791,9 +1790,9 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         auto res = m_VSCBHeap->Allocate(sizeof(PSTexCombinatorConstantBufferStruct),
                                         D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
         memcpy(res.CPUAddress, &m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));
-        CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
-        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, handle));
-        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 2, handle);
+        //CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+        D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, m_PSTexCombinatorConstantBufferHandle));
+        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 2, m_PSTexCombinatorConstantBufferHandle);
         m_PSTexCombinatorConstantBufferUpToDate = TRUE;
     /*}*/
     return hr;
@@ -2100,14 +2099,14 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     HRESULT hr;
     D3DCall(UpdatePipelineState(vbo->m_VertexFormat));
     //m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
-    m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    //m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 #if SETRESOURCES
     fprintf(stderr, "Set VB: %d\n", VB);
     fprintf(stderr, "Set IB: %d\n", IB);
 #endif
     assert(ibo->DxView.BufferLocation != 0);
-    m_CommandList->IASetIndexBuffer(&ibo->DxView);
-    m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
+    //m_CommandList->IASetIndexBuffer(&ibo->DxView);
+    //m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
     m_PSCBuffer.FVF = vbo->m_VertexFormat;
     D3DCall(UpdateConstantBuffer());
 #if defined(DEBUG) || defined(_DEBUG)
@@ -2116,7 +2115,43 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     fprintf(stdout, "%ls\n", stats);
     m_Allocator->FreeStatsString(stats);
 #endif
-    m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
+    //m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
+                                            m_RTVDescriptorSize);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
+                                            m_DSVDescriptorSize);
+    std::vector<ID3D12DescriptorHeap *> ppHeaps;
+    for (auto i = 0; i < m_CBV_SRV_Heap->m_Heaps.size(); ++i)
+    {
+        ppHeaps.emplace_back(m_CBV_SRV_Heap->m_Heaps[i].m_Heap.Get());
+    }
+
+
+    size_t thridx = vbibbat % m_ThreadCount;
+    asio::post(m_Strands[thridx],
+               [thridx, this,
+               vbview = vbo->DxView, ibview = ibo->DxView, pso = m_PipelineState[vbo->m_VertexFormat],
+                rtvHandle, dsvHandle, ppHeaps,
+               vscbhandle = m_VSConstantBufferHandle, pscbhandle = m_PSConstantBufferHandle,
+               pslightcbhandle = m_PSLightConstantBufferHandle, pstexcombcbhandle = m_PSTexCombinatorConstantBufferHandle,
+                vscbvbase = m_VSCBVBaseIndex,
+                pscbvbase = m_PSCBVBaseIndex, cmdlist = m_MTCommandLists[thridx],
+               Indexcount, StartIndex, MinVIndex]()
+               {
+                   cmdlist->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+                   cmdlist->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
+                    cmdlist->SetGraphicsRootSignature(this->m_RootSignature.Get());
+                    cmdlist->SetPipelineState(pso.Get());
+                    cmdlist->SetGraphicsRootDescriptorTable(vscbvbase, vscbhandle);
+                    cmdlist->SetGraphicsRootDescriptorTable(pscbvbase, pscbhandle);
+                    cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 1, pslightcbhandle);
+                    cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 2, pstexcombcbhandle);
+                    cmdlist->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                   cmdlist->IASetIndexBuffer(&ibview);
+                   cmdlist->IASetVertexBuffers(0, 1, &vbview);
+                   cmdlist->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
+    });
+
     return TRUE;
 }
 CKBOOL CKDX12RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)

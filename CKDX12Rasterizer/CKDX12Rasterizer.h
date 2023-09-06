@@ -534,6 +534,10 @@ public:
     CKBOOL m_PSConstantBufferUpToDate = FALSE;
     CKBOOL m_PSLightConstantBufferUpToDate = FALSE;
     CKBOOL m_PSTexCombinatorConstantBufferUpToDate = FALSE;
+    CD3DX12_GPU_DESCRIPTOR_HANDLE m_VSConstantBufferHandle = {};
+    CD3DX12_GPU_DESCRIPTOR_HANDLE m_PSConstantBufferHandle = {};
+    CD3DX12_GPU_DESCRIPTOR_HANDLE m_PSLightConstantBufferHandle = {};
+    CD3DX12_GPU_DESCRIPTOR_HANDLE m_PSTexCombinatorConstantBufferHandle = {};
     
     std::vector<CKDX12VertexBufferDesc> m_VertexBufferSubmitted[m_FrameInFlightCount];
     std::vector<CKDX12IndexBufferDesc> m_IndexBufferSubmitted[m_FrameInFlightCount];
