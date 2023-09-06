@@ -763,6 +763,17 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
         ppHeaps.emplace_back(m_CBV_SRV_Heap->m_Heaps[i].m_Heap.Get());
     }
     m_CommandList->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
+
+    for (size_t i = 0; i < m_MTCommandLists[m_FrameIndex].size(); ++i)
+    {
+        m_MTCommandLists[m_FrameIndex][i]->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+        m_MTCommandLists[m_FrameIndex][i]->RSSetViewports(1, &m_Viewport);
+        m_MTCommandLists[m_FrameIndex][i]->RSSetScissorRects(1, &m_ScissorRect);
+        m_MTCommandLists[m_FrameIndex][i]->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
+        m_MTCommandLists[m_FrameIndex][i]->SetGraphicsRootSignature(m_RootSignature.Get());
+    }
+    
+
     return TRUE;
 }
 
@@ -2179,11 +2190,12 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
          StartIndex, MinVIndex]()
         {
             auto* cmdlist = m_MTCommandLists[m_FrameIndex][thridx].Get();
-            cmdlist->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+
+            /*cmdlist->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
             cmdlist->RSSetViewports(1, &m_Viewport);
             cmdlist->RSSetScissorRects(1, &m_ScissorRect);
             cmdlist->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
-            cmdlist->SetGraphicsRootSignature(this->m_RootSignature.Get());
+            cmdlist->SetGraphicsRootSignature(this->m_RootSignature.Get());*/
             cmdlist->SetPipelineState(pso.Get());
             cmdlist->SetGraphicsRootDescriptorTable(vscbvbase, vscbhandle);
             cmdlist->SetGraphicsRootDescriptorTable(pscbvbase, pscbhandle);
