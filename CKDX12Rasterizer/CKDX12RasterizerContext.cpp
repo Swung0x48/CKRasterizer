@@ -477,7 +477,7 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
         psoDesc.InputLayout = { item.second.input_layout.data(), item.second.input_layout.size() };
         psoDesc.pRootSignature = m_RootSignature.Get();
         psoDesc.VS = item.second.shader;
-        psoDesc.PS = {g_PShaderSimple, sizeof(g_PShaderSimple)};
+        psoDesc.PS = {g_PShader, sizeof(g_PShader)};
         psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
         psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
         psoDesc.BlendState.RenderTarget[0].BlendEnable = TRUE;
@@ -1522,8 +1522,9 @@ CKBOOL CKDX12RasterizerContext::SetTexture(CKDWORD Texture, int Stage) {
     HRESULT hr;
     D3DCall(m_CBV_SRV_Heap->CreateShaderResourceView(desc->DefaultResource.Get(), &desc->DxView, desc->GPUHandle));
     m_TextureSubmitted[m_FrameIndex].emplace_back(*desc);
-    m_CommandList->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + Stage,
-                                                  m_TextureSubmitted[m_FrameIndex].back().GPUHandle);
+    m_CurrentTexture[Stage] = *desc;
+    /*m_CommandList->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + Stage,
+                                                  m_TextureSubmitted[m_FrameIndex].back().GPUHandle);*/
     
     return TRUE;
 }
@@ -2191,16 +2192,14 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         {
             auto* cmdlist = m_MTCommandLists[m_FrameIndex][thridx].Get();
 
-            /*cmdlist->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
-            cmdlist->RSSetViewports(1, &m_Viewport);
-            cmdlist->RSSetScissorRects(1, &m_ScissorRect);
-            cmdlist->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
-            cmdlist->SetGraphicsRootSignature(this->m_RootSignature.Get());*/
             cmdlist->SetPipelineState(pso.Get());
             cmdlist->SetGraphicsRootDescriptorTable(vscbvbase, vscbhandle);
             cmdlist->SetGraphicsRootDescriptorTable(pscbvbase, pscbhandle);
             cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 1, pslightcbhandle);
             cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 2, pstexcombcbhandle);
+            for (size_t i = 0; i < MAX_TEX_STAGES; ++i)
+                if (m_CurrentTexture[i].GPUHandle != D3D12_GPU_DESCRIPTOR_HANDLE(0))
+                    cmdlist->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + i, m_CurrentTexture[i].GPUHandle);
             cmdlist->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             cmdlist->IASetIndexBuffer(&ibview);
             cmdlist->IASetVertexBuffers(0, 1, &vbview);

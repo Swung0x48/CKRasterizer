@@ -569,4 +569,5 @@ public:
     std::vector<ComPtr<ID3D12CommandAllocator>> m_MTCommandAllocators[m_FrameInFlightCount];
     std::vector<ID3D12CommandList *> m_PendingCommandList;
     std::vector<std::future<void>> m_RecordCommandTasks[m_FrameInFlightCount];
+    CKDX12TextureDesc m_CurrentTexture[MAX_TEX_STAGES];
 };
