@@ -771,10 +771,17 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
         m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     m_CommandList->ResourceBarrier(1, &transitionToPresent);
     D3DCall(m_CommandList->Close());
+    // Wait until command recording complete
+    for (size_t i = 0; i < m_RecordCommandTasks[m_FrameIndex].size(); ++i)
+    {
+        m_RecordCommandTasks[m_FrameIndex][i].get();
+    }
+    m_RecordCommandTasks[m_FrameIndex].clear();
     for (size_t i = 0; i < m_MTCommandLists.size(); ++i)
     {
         D3DCall(m_MTCommandLists[i]->Close());
     }
+
 #if CMDLIST
     fprintf(stderr, "m_CommandList->Close() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
 #if defined DEBUG || defined _DEBUG
@@ -2146,29 +2153,30 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
 
 
     size_t thridx = vbibbat % m_ThreadCount;
-    asio::post(m_Strands[thridx],
-               [thridx, this,
-               vbview = vbo->DxView, ibview = ibo->DxView, pso = m_PipelineState[vbo->m_VertexFormat],
-                rtvHandle, dsvHandle, ppHeaps,
-               vscbhandle = m_VSConstantBufferHandle, pscbhandle = m_PSConstantBufferHandle,
-               pslightcbhandle = m_PSLightConstantBufferHandle, pstexcombcbhandle = m_PSTexCombinatorConstantBufferHandle,
-                vscbvbase = m_VSCBVBaseIndex,
-                pscbvbase = m_PSCBVBaseIndex, cmdlist = m_MTCommandLists[thridx],
-               Indexcount, StartIndex, MinVIndex]()
-               {
-                   cmdlist->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
-                   cmdlist->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
-                    cmdlist->SetGraphicsRootSignature(this->m_RootSignature.Get());
-                    cmdlist->SetPipelineState(pso.Get());
-                    cmdlist->SetGraphicsRootDescriptorTable(vscbvbase, vscbhandle);
-                    cmdlist->SetGraphicsRootDescriptorTable(pscbvbase, pscbhandle);
-                    cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 1, pslightcbhandle);
-                    cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 2, pstexcombcbhandle);
-                    cmdlist->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-                   cmdlist->IASetIndexBuffer(&ibview);
-                   cmdlist->IASetVertexBuffers(0, 1, &vbview);
-                   cmdlist->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
-    });
+
+    auto task = std::packaged_task<void()>(
+        [thridx, this, vbview = vbo->DxView, ibview = ibo->DxView, pso = m_PipelineState[vbo->m_VertexFormat],
+         rtvHandle, dsvHandle, ppHeaps, vscbhandle = m_VSConstantBufferHandle, pscbhandle = m_PSConstantBufferHandle,
+         pslightcbhandle = m_PSLightConstantBufferHandle, pstexcombcbhandle = m_PSTexCombinatorConstantBufferHandle,
+         vscbvbase = m_VSCBVBaseIndex, pscbvbase = m_PSCBVBaseIndex, cmdlist = m_MTCommandLists[thridx], Indexcount,
+         StartIndex, MinVIndex]()
+        {
+            cmdlist->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+            cmdlist->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
+            cmdlist->SetGraphicsRootSignature(this->m_RootSignature.Get());
+            cmdlist->SetPipelineState(pso.Get());
+            cmdlist->SetGraphicsRootDescriptorTable(vscbvbase, vscbhandle);
+            cmdlist->SetGraphicsRootDescriptorTable(pscbvbase, pscbhandle);
+            cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 1, pslightcbhandle);
+            cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 2, pstexcombcbhandle);
+            cmdlist->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            cmdlist->IASetIndexBuffer(&ibview);
+            cmdlist->IASetVertexBuffers(0, 1, &vbview);
+            cmdlist->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
+        });
+
+    auto future = asio::post(m_Strands[thridx], std::move(task));
+    m_RecordCommandTasks[m_FrameIndex].emplace_back(std::move(future));
 
     return TRUE;
 }
