@@ -780,7 +780,6 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
     for (size_t i = 0; i < m_RecordCommandTasks[m_FrameIndex].size(); ++i)
     {
         m_RecordCommandTasks[m_FrameIndex][i].get();
-        fprintf(stderr, "waited %zd\n", i);
     }
     m_RecordCommandTasks[m_FrameIndex].clear();
     for (size_t i = 0; i < m_MTCommandLists[m_FrameIndex].size(); ++i)
@@ -2173,7 +2172,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     size_t thridx = (vbibbat - 1) % m_ThreadCount;
 
     auto task = std::packaged_task<void()>(
-        [thridx, b = vbibbat, this, vbview = vbo->DxView, ibview = ibo->DxView, pso = m_PipelineState[vbo->m_VertexFormat],
+        [thridx, this, vbview = vbo->DxView, ibview = ibo->DxView, pso = m_PipelineState[vbo->m_VertexFormat],
          rtvHandle, dsvHandle, ppHeaps, vscbhandle = m_VSConstantBufferHandle, pscbhandle = m_PSConstantBufferHandle,
          pslightcbhandle = m_PSLightConstantBufferHandle, pstexcombcbhandle = m_PSTexCombinatorConstantBufferHandle,
          vscbvbase = m_VSCBVBaseIndex, pscbvbase = m_PSCBVBaseIndex, Indexcount,
@@ -2181,6 +2180,8 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
         {
             auto* cmdlist = m_MTCommandLists[m_FrameIndex][thridx].Get();
             cmdlist->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+            cmdlist->RSSetViewports(1, &m_Viewport);
+            cmdlist->RSSetScissorRects(1, &m_ScissorRect);
             cmdlist->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
             cmdlist->SetGraphicsRootSignature(this->m_RootSignature.Get());
             cmdlist->SetPipelineState(pso.Get());
@@ -2192,7 +2193,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
             cmdlist->IASetIndexBuffer(&ibview);
             cmdlist->IASetVertexBuffers(0, 1, &vbview);
             cmdlist->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
-            fprintf(stderr, "draw %d\n", b - 1);
         });
 
     auto future = asio::post(m_Strands[thridx], std::move(task));
