@@ -19,6 +19,7 @@
 #include <algorithm>
 
 #define STATUS 1
+#define TITLE 0
 #if defined(DEBUG) || defined(_DEBUG)
     //#define LOGGING 1
     #define CONSOLE 1
@@ -67,9 +68,7 @@ void InverseMatrix(VxMatrix& result, const VxMatrix &m)
 }
 
 CKDX12RasterizerContext::CKDX12RasterizerContext() { CKRasterizerContext::CKRasterizerContext(); }
-CKDX12RasterizerContext::~CKDX12RasterizerContext()
-{
-}
+CKDX12RasterizerContext::~CKDX12RasterizerContext() { TracyD3D12Destroy(g_D3d12Ctx); }
 
 void CKDX12RasterizerContext::SetTitleStatus(const char *fmt, ...)
 {
@@ -552,6 +551,7 @@ HRESULT CKDX12RasterizerContext::CreateResources()
 
 HRESULT CKDX12RasterizerContext::WaitForGpu()
 {
+    ZoneScopedN(__FUNCTION__);
     HRESULT hr;
     // Schedule a Signal command in the queue.
     D3DCall(m_CommandQueue->Signal(m_Fence.Get(), m_FenceValues[m_FrameIndex]));
@@ -653,6 +653,8 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
     SetRenderState(VXRENDERSTATE_COLORVERTEX, 0);
 
+    g_D3d12Ctx = TracyD3D12Context(m_Device.Get(), m_CommandQueue.Get());
+
     m_InCreateDestroy = FALSE;
     m_Inited = TRUE;
     return SUCCEEDED(hr);
@@ -673,6 +675,7 @@ CKBOOL CKDX12RasterizerContext::Resize(int PosX, int PosY, int Width, int Height
 CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD Stencil, int RectCount,
                                       CKRECT *rects)
 {
+    ZoneScopedN(__FUNCTION__);
 #if LOGGING
     fprintf(stderr, "Clear\n");
 #endif
@@ -701,15 +704,20 @@ CKBOOL CKDX12RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDW
 
 CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync)
 {
+    ZoneScopedN(__FUNCTION__);
+    FrameMark;
+    TracyD3D12NewFrame(g_D3d12Ctx);
+
     if (m_SceneBegined)
         EndScene();
 #if LOGGING
     fprintf(stderr, "BackToFront\n");
 #endif
 #if STATUS
-    SetTitleStatus("D3D12 | DXGI %s | batch stats: direct %d, vb %d, vbib %d",
-                   m_Owner->m_DXGIVersionString.c_str(), directbat, vbbat, vbibbat);
-
+    #if TITLE
+        SetTitleStatus("D3D12 | DXGI %s | batch stats: direct %d, vb %d, vbib %d",
+                       m_Owner->m_DXGIVersionString.c_str(), directbat, vbbat, vbibbat);
+    #endif
     directbat = 0;
     vbbat = 0;
     vbibbat = 0;
@@ -718,6 +726,8 @@ CKBOOL CKDX12RasterizerContext::BackToFront(CKBOOL vsync)
     HRESULT hr;
     //D3DCall(m_SwapChain->Present(1, 0));
     D3DCall(m_SwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING));
+    TracyD3D12Collect(g_D3d12Ctx);
+
     D3DCall(MoveToNextFrame());
     return SUCCEEDED(hr);
 }
@@ -766,18 +776,27 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
 
     for (size_t i = 0; i < m_MTCommandLists[m_FrameIndex].size(); ++i)
     {
-        m_MTCommandLists[m_FrameIndex][i]->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
-        m_MTCommandLists[m_FrameIndex][i]->RSSetViewports(1, &m_Viewport);
-        m_MTCommandLists[m_FrameIndex][i]->RSSetScissorRects(1, &m_ScissorRect);
-        m_MTCommandLists[m_FrameIndex][i]->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
-        m_MTCommandLists[m_FrameIndex][i]->SetGraphicsRootSignature(m_RootSignature.Get());
-    }
-    
+        auto task = std::packaged_task<void()>(
+            [thridx = i, this, rtvHandle, dsvHandle, ppHeaps]()
+            {
+                ZoneScopedN("Init MT cmdlist");
+                auto *cmdlist = m_MTCommandLists[m_FrameIndex][thridx].Get();
 
+                TracyD3D12Zone(g_D3d12Ctx, cmdlist, "Init MT cmdlist");
+                cmdlist->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+                cmdlist->RSSetViewports(1, &m_Viewport);
+                cmdlist->RSSetScissorRects(1, &m_ScissorRect);
+                cmdlist->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
+                cmdlist->SetGraphicsRootSignature(m_RootSignature.Get());
+            });
+        auto future = asio::post(m_Strands[i], std::move(task));
+        m_RecordCommandTasks[m_FrameIndex].emplace_back(std::move(future));
+    }
     return TRUE;
 }
 
 CKBOOL CKDX12RasterizerContext::EndScene() {
+    ZoneScopedN(__FUNCTION__);
     if (!m_SceneBegined)
         return TRUE;
 
@@ -832,6 +851,7 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
 
 CKBOOL CKDX12RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
+    ZoneScopedN(__FUNCTION__);
     if (Light >= MAX_ACTIVE_LIGHTS)
         return FALSE;
     m_PSLightConstantBufferUpToDate = FALSE;
@@ -844,6 +864,7 @@ CKBOOL CKDX12RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 
 CKBOOL CKDX12RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 {
+    ZoneScopedN(__FUNCTION__);
     if (Light >= MAX_ACTIVE_LIGHTS)
         return FALSE;
     m_PSLightConstantBufferUpToDate = FALSE;
@@ -860,6 +881,7 @@ CKBOOL CKDX12RasterizerContext::SetMaterial(CKMaterialData *mat)
 }
 
 CKBOOL CKDX12RasterizerContext::SetViewport(CKViewportData *data) {
+    ZoneScopedN(__FUNCTION__);
 #if LOGGING
     fprintf(stderr, "SetViewport\n");
 #endif
@@ -893,6 +915,7 @@ CKBOOL CKDX12RasterizerContext::SetViewport(CKViewportData *data) {
 }
 
 CKBOOL CKDX12RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat) {
+    ZoneScopedN(__FUNCTION__);
     CKDWORD UnityMatrixMask = 0;
     switch (Type)
     {
@@ -942,6 +965,7 @@ CKBOOL CKDX12RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
 
 CKBOOL CKDX12RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
+    ZoneScopedN(__FUNCTION__);
     if (m_StateCache[State].Flag)
         return TRUE;
 
@@ -968,6 +992,7 @@ CKBOOL CKDX12RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD 
 }
 
 CKBOOL CKDX12RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, CKDWORD Value) {
+    ZoneScopedN(__FUNCTION__);
     bool psoUpToDate = true;
     switch (State)
     {
@@ -1508,6 +1533,7 @@ CKBOOL CKDX12RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD 
 }
 
 CKBOOL CKDX12RasterizerContext::SetTexture(CKDWORD Texture, int Stage) {
+    ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
     auto *desc = static_cast<CKDX12TextureDesc *>(m_Textures[Texture]);
@@ -1551,6 +1577,7 @@ D3D12_TEXTURE_ADDRESS_MODE Vx2D3DTextureAddressMode(VXTEXTURE_ADDRESSMODE mode)
 
 CKBOOL CKDX12RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
+    ZoneScopedN(__FUNCTION__);
     switch (Tss)
     {
         case CKRST_TSS_ADDRESS:
@@ -1741,6 +1768,7 @@ CKBOOL CKDX12RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const v
 CKBOOL CKDX12RasterizerContext::TriangleFanToList(CKWORD VOffset, CKDWORD VCount,
                                                                   std::vector<CKWORD>& strip_index)
 {
+    ZoneScopedN(__FUNCTION__);
     strip_index.clear();
     strip_index.reserve(VCount * 3);
     // Center at VOffset
@@ -1756,6 +1784,7 @@ CKBOOL CKDX12RasterizerContext::TriangleFanToList(CKWORD VOffset, CKDWORD VCount
 CKBOOL CKDX12RasterizerContext::TriangleFanToList(CKWORD *indices, int count,
                                                   std::vector<CKWORD> &strip_index)
 {
+    ZoneScopedN(__FUNCTION__);
     if (!indices)
         return FALSE;
     CKWORD center = indices[0];
@@ -1799,6 +1828,7 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         Texture2D texture1 : register(t1)
         SamplerState sampler1 : register(s1)
     */
+    ZoneScopedN(__FUNCTION__);
     HRESULT hr = S_OK;
     //if (!m_VSConstantBufferUpToDate)
     {
@@ -1814,7 +1844,7 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         memcpy(res.CPUAddress, &m_VSCBuffer, sizeof(VSConstantBufferStruct));
         //CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, m_VSConstantBufferHandle));
-        m_CommandList->SetGraphicsRootDescriptorTable(m_VSCBVBaseIndex, m_VSConstantBufferHandle);
+        /*m_CommandList->SetGraphicsRootDescriptorTable(m_VSCBVBaseIndex, m_VSConstantBufferHandle);*/
         m_VSConstantBufferUpToDate = TRUE;
     }
     //if (!m_PSConstantBufferUpToDate)
@@ -1826,7 +1856,7 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         memcpy(res.CPUAddress, &m_PSCBuffer, sizeof(PSConstantBufferStruct));
         //CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, m_PSConstantBufferHandle));
-        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex, m_PSConstantBufferHandle);
+        /*m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex, m_PSConstantBufferHandle);*/
         m_PSConstantBufferUpToDate = TRUE;
     }
     //if (!m_PSLightConstantBufferUpToDate)
@@ -1836,7 +1866,7 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         memcpy(res.CPUAddress, &m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
         //CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, m_PSLightConstantBufferHandle));
-        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 1, m_PSLightConstantBufferHandle);
+        /*m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 1, m_PSLightConstantBufferHandle);*/
         m_PSLightConstantBufferUpToDate = TRUE;
     }
     /*if (!m_PSTexCombinatorConstantBufferUpToDate)
@@ -1846,13 +1876,14 @@ HRESULT CKDX12RasterizerContext::UpdateConstantBuffer()
         memcpy(res.CPUAddress, &m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));
         //CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
         D3DCall(m_CBV_SRV_Heap->CreateConstantBufferView(res, m_PSTexCombinatorConstantBufferHandle));
-        m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 2, m_PSTexCombinatorConstantBufferHandle);
+        /*m_CommandList->SetGraphicsRootDescriptorTable(m_PSCBVBaseIndex + 2, m_PSTexCombinatorConstantBufferHandle);*/
         m_PSTexCombinatorConstantBufferUpToDate = TRUE;
     /*}*/
     return hr;
 }
 
 HRESULT CKDX12RasterizerContext::UpdatePipelineState(DWORD fvf) {
+    ZoneScopedN(__FUNCTION__);
     HRESULT hr = S_OK;
     if (!m_PipelineStateUpToDate[fvf])
     {
@@ -1878,7 +1909,7 @@ HRESULT CKDX12RasterizerContext::UpdatePipelineState(DWORD fvf) {
         m_PipelineStateUpToDate[fvf] = true;
     }
 
-    m_CommandList->SetPipelineState(m_PipelineState[fvf].Get());
+    /*m_CommandList->SetPipelineState(m_PipelineState[fvf].Get());*/
     return hr;
 }
 
@@ -1962,6 +1993,7 @@ CKBOOL CKDX12RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
 CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
                                               VxDrawPrimitiveData *data)
 {
+    ZoneScopedN(__FUNCTION__);
     HRESULT hr;
 #if LOGGING
     fprintf(stderr, "DrawPrimitive\n");
@@ -2036,14 +2068,21 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 #endif
             return TRUE;
     }
-    D3D12_VERTEX_BUFFER_VIEW view;
-    view.BufferLocation = vb.GPUAddress;
-    view.SizeInBytes = data->VertexCount * vertexSize;
-    view.StrideInBytes = vertexSize;
-    m_CommandList->IASetVertexBuffers(0, 1, &view);
+    D3D12_VERTEX_BUFFER_VIEW vbview;
+    vbview.BufferLocation = vb.GPUAddress;
+    vbview.SizeInBytes = data->VertexCount * vertexSize;
+    vbview.StrideInBytes = vertexSize;
+    /*m_CommandList->IASetVertexBuffers(0, 1, &vbview);*/
 
     int ibcount = (pType == VX_TRIANGLEFAN) ? ib.size() : indexcount;
     assert(ibcount > 0);
+
+    size_t thridx = (directbat - 1) % m_ThreadCount;
+    std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> textureHandle(MAX_TEX_STAGES);
+    for (size_t i = 0; i < MAX_TEX_STAGES; ++i)
+    {
+        textureHandle[i] = m_CurrentTexture[m_FrameIndex][i].GPUHandle;
+    }
     if (indices || pType == VX_TRIANGLEFAN)
     {
         auto res = m_DynamicIBHeap->Allocate(ibcount * sizeof(CKWORD));
@@ -2067,12 +2106,62 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
         MultiByteToWideChar(CP_ACP, 0, name, strlen(name) + 1, wname, std::size(wname));
         res.pBuffer->SetName(wname);
 #endif
-        m_CommandList->IASetIndexBuffer(&ibo.DxView);
-        m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, 0, 0);
+        /*m_CommandList->IASetIndexBuffer(&ibo.DxView);
+        m_CommandList->DrawIndexedInstanced(ibcount, 1, desc.m_CurrentICount, 0, 0);*/
+        
+        auto task = std::packaged_task<void()>([thridx, this, vbview, ibview = ibo.DxView, pso = m_PipelineState[vertexFormat],
+             vscbhandle = m_VSConstantBufferHandle,
+             pscbhandle = m_PSConstantBufferHandle, pslightcbhandle = m_PSLightConstantBufferHandle,
+             pstexcombcbhandle = m_PSTexCombinatorConstantBufferHandle, textureHandle, vscbvbase = m_VSCBVBaseIndex, pscbvbase = m_PSCBVBaseIndex, Indexcount = ibcount,
+             StartIndex = desc.m_CurrentICount]()
+        {
+                ZoneScopedN("Direct DrawCall Indexed");
+                auto *cmdlist = m_MTCommandLists[m_FrameIndex][thridx].Get();
+
+                TracyD3D12Zone(g_D3d12Ctx, cmdlist, "Direct DrawCall Indexed");
+                cmdlist->SetPipelineState(pso.Get());
+                cmdlist->SetGraphicsRootDescriptorTable(vscbvbase, vscbhandle);
+                cmdlist->SetGraphicsRootDescriptorTable(pscbvbase, pscbhandle);
+                cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 1, pslightcbhandle);
+                cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 2, pstexcombcbhandle);
+                for (size_t i = 0; i < MAX_TEX_STAGES; ++i)
+                    if (textureHandle[i].ptr != 0)
+                        cmdlist->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + i, textureHandle[i]);
+                cmdlist->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                cmdlist->IASetIndexBuffer(&ibview);
+                cmdlist->IASetVertexBuffers(0, 1, &vbview);
+                cmdlist->DrawIndexedInstanced(Indexcount, 1, StartIndex, 0, 0);
+        });
+        auto future = asio::post(m_Strands[thridx], std::move(task));
+        m_RecordCommandTasks[m_FrameIndex].emplace_back(std::move(future));
     }
     else
     {
         m_CommandList->DrawInstanced(data->VertexCount, 1, 0, 0);
+        auto task = std::packaged_task<void()>(
+            [thridx, this, vbview, pso = m_PipelineState[vertexFormat],
+             vscbhandle = m_VSConstantBufferHandle, pscbhandle = m_PSConstantBufferHandle,
+             pslightcbhandle = m_PSLightConstantBufferHandle, pstexcombcbhandle = m_PSTexCombinatorConstantBufferHandle, textureHandle, vscbvbase = m_VSCBVBaseIndex,
+             pscbvbase = m_PSCBVBaseIndex, vertexCount = data->VertexCount]()
+            {
+                ZoneScopedN("Direct DrawCall");
+                auto *cmdlist = m_MTCommandLists[m_FrameIndex][thridx].Get();
+
+                TracyD3D12Zone(g_D3d12Ctx, cmdlist, "Direct DrawCall");
+                cmdlist->SetPipelineState(pso.Get());
+                cmdlist->SetGraphicsRootDescriptorTable(vscbvbase, vscbhandle);
+                cmdlist->SetGraphicsRootDescriptorTable(pscbvbase, pscbhandle);
+                cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 1, pslightcbhandle);
+                cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 2, pstexcombcbhandle);
+                for (size_t i = 0; i < MAX_TEX_STAGES; ++i)
+                    if (textureHandle[i].ptr != 0)
+                        cmdlist->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + i, textureHandle[i]);
+                cmdlist->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                cmdlist->IASetVertexBuffers(0, 1, &vbview);
+                cmdlist->DrawInstanced(vertexCount, 1, 0, 0);
+            });
+        auto future = asio::post(m_Strands[thridx], std::move(task));
+        m_RecordCommandTasks[m_FrameIndex].emplace_back(std::move(future));
     }
 
     //return InternalDrawPrimitive(pType, vbo, vbase, data->VertexCount, indices, indexcount);
@@ -2087,6 +2176,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
 CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD StartVIndex,
                                                 CKDWORD VertexCount, CKWORD *indices, int indexcount)
 {
+    ZoneScopedN(__FUNCTION__);
 #if STATUS
     ++vbbat;
 #endif
@@ -2113,6 +2203,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
 CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                                   CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount)
 {
+    ZoneScopedN(__FUNCTION__);
 #if STATUS
     ++vbibbat;
 #endif
@@ -2171,7 +2262,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     m_Allocator->FreeStatsString(stats);
 #endif
     //m_CommandList->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
+    /*CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
                                             m_RTVDescriptorSize);
     CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_DSVHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex,
                                             m_DSVDescriptorSize);
@@ -2179,7 +2270,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     for (auto i = 0; i < m_CBV_SRV_Heap->m_Heaps.size(); ++i)
     {
         ppHeaps.emplace_back(m_CBV_SRV_Heap->m_Heaps[i].m_Heap.Get());
-    }
+    }*/
 
 
     size_t thridx = (vbibbat - 1) % m_ThreadCount;
@@ -2190,14 +2281,16 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     }
     auto task = std::packaged_task<void()>(
         [thridx, this, vbview = vbo->DxView, ibview = ibo->DxView, pso = m_PipelineState[vbo->m_VertexFormat],
-         rtvHandle, dsvHandle, ppHeaps, vscbhandle = m_VSConstantBufferHandle, pscbhandle = m_PSConstantBufferHandle,
+         vscbhandle = m_VSConstantBufferHandle, pscbhandle = m_PSConstantBufferHandle,
          pslightcbhandle = m_PSLightConstantBufferHandle, pstexcombcbhandle = m_PSTexCombinatorConstantBufferHandle,
          textureHandle,
          vscbvbase = m_VSCBVBaseIndex, pscbvbase = m_PSCBVBaseIndex, Indexcount,
          StartIndex, MinVIndex]()
         {
+            ZoneScopedN("VBIB DrawCall");
             auto* cmdlist = m_MTCommandLists[m_FrameIndex][thridx].Get();
 
+            TracyD3D12Zone(g_D3d12Ctx, cmdlist, "VBIB DrawCall");
             cmdlist->SetPipelineState(pso.Get());
             cmdlist->SetGraphicsRootDescriptorTable(vscbvbase, vscbhandle);
             cmdlist->SetGraphicsRootDescriptorTable(pscbvbase, pscbhandle);
@@ -2251,6 +2344,7 @@ CKBOOL CKDX12RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE 
 
 CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
 {
+    ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
 #if defined(DEBUG) || defined(_DEBUG) && (LIVETEXTURES)
@@ -2324,6 +2418,7 @@ CKBOOL CKDX12RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx
 
 CKBOOL CKDX12RasterizerContext::LoadSprite(CKDWORD Sprite, const VxImageDescEx &SurfDesc)
 {
+    ZoneScopedN(__FUNCTION__);
     if (Sprite >= (CKDWORD)m_Sprites.Size())
         return FALSE;
     CKSpriteDesc *spr = m_Sprites[Sprite];
@@ -2342,6 +2437,7 @@ CKBOOL CKDX12RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Widt
 }
 CKBOOL CKDX12RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *dst)
 {
+    ZoneScopedN(__FUNCTION__);
     if (Sprite >= (CKDWORD)m_Sprites.Size())
         return FALSE;
     CKSpriteDesc *spr = m_Sprites[Sprite];
@@ -2391,6 +2487,7 @@ CKBOOL CKDX12RasterizerContext::GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane
 void *CKDX12RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
                                                 CKRST_LOCKFLAGS Lock)
 {
+    ZoneScopedN(__FUNCTION__);
     if (VB > m_VertexBuffers.Size())
         return nullptr;
 #if defined(DEBUG) || defined(_DEBUG) && (LOCKVB)
@@ -2407,6 +2504,7 @@ void *CKDX12RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex,
 }
 
 CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
+    ZoneScopedN(__FUNCTION__);
     if (VB > m_VertexBuffers.Size())
         return FALSE;
 #if defined(DEBUG) || defined(_DEBUG) && (UNLOCKVB)
@@ -2464,6 +2562,7 @@ CKBOOL CKDX12RasterizerContext::UnlockVertexBuffer(CKDWORD VB) {
 
 void *CKDX12RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
 {
+    ZoneScopedN(__FUNCTION__);
     if (IB > m_IndexBuffers.Size())
         return nullptr;
 #if defined(DEBUG) || defined(_DEBUG) && (LOCKIB)
@@ -2481,6 +2580,7 @@ void *CKDX12RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, C
 
 CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
+    ZoneScopedN(__FUNCTION__);
     if (IB > m_IndexBuffers.Size())
         return FALSE;
 #if defined(DEBUG) || defined(_DEBUG) && (UNLOCKIB)
@@ -2531,6 +2631,7 @@ CKBOOL CKDX12RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 }
 
 CKBOOL CKDX12RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat) {
+    ZoneScopedN(__FUNCTION__);
     if (Texture >= m_Textures.Size())
         return FALSE;
 #if LOG_CREATETEXTURE
@@ -2545,6 +2646,7 @@ CKBOOL CKDX12RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *De
 
 CKBOOL CKDX12RasterizerContext::CreateSpriteNPOT(CKDWORD Sprite, CKSpriteDesc *DesiredFormat)
 {
+    ZoneScopedN(__FUNCTION__);
     if (Sprite >= (CKDWORD)m_Sprites.Size() || !DesiredFormat)
         return FALSE;
     if (m_Sprites[Sprite])
@@ -2587,6 +2689,7 @@ bool operator==(const CKVertexBufferDesc& a, const CKVertexBufferDesc& b){
 
 CKBOOL CKDX12RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat)
 {
+    ZoneScopedN(__FUNCTION__);
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
         return FALSE;
 
@@ -2618,6 +2721,7 @@ bool operator==(const CKIndexBufferDesc &a, const CKIndexBufferDesc &b)
 }
 
 CKBOOL CKDX12RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat) {
+    ZoneScopedN(__FUNCTION__);
     if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
         return FALSE;
 
