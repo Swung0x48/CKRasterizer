@@ -1522,9 +1522,9 @@ CKBOOL CKDX12RasterizerContext::SetTexture(CKDWORD Texture, int Stage) {
     HRESULT hr;
     D3DCall(m_CBV_SRV_Heap->CreateShaderResourceView(desc->DefaultResource.Get(), &desc->DxView, desc->GPUHandle));
     m_TextureSubmitted[m_FrameIndex].emplace_back(*desc);
-    m_CurrentTexture[Stage] = *desc;
-    /*m_CommandList->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + Stage,
-                                                  m_TextureSubmitted[m_FrameIndex].back().GPUHandle);*/
+    m_CurrentTexture[m_FrameIndex][Stage] = *desc;
+    m_CommandList->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + Stage,
+                                                  m_TextureSubmitted[m_FrameIndex].back().GPUHandle);
     
     return TRUE;
 }
@@ -1956,6 +1956,7 @@ CKBOOL CKDX12RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKD
     {
         m_CommandList->DrawInstanced(VertexCount, 1, StartVertex, 0);
     }
+    return TRUE;
 }
 
 CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount,
@@ -2182,11 +2183,16 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
 
 
     size_t thridx = (vbibbat - 1) % m_ThreadCount;
-
+    std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> textureHandle(MAX_TEX_STAGES);
+    for (size_t i = 0; i < MAX_TEX_STAGES; ++i)
+    {
+        textureHandle[i] = m_CurrentTexture[m_FrameIndex][i].GPUHandle;
+    }
     auto task = std::packaged_task<void()>(
         [thridx, this, vbview = vbo->DxView, ibview = ibo->DxView, pso = m_PipelineState[vbo->m_VertexFormat],
          rtvHandle, dsvHandle, ppHeaps, vscbhandle = m_VSConstantBufferHandle, pscbhandle = m_PSConstantBufferHandle,
          pslightcbhandle = m_PSLightConstantBufferHandle, pstexcombcbhandle = m_PSTexCombinatorConstantBufferHandle,
+         textureHandle,
          vscbvbase = m_VSCBVBaseIndex, pscbvbase = m_PSCBVBaseIndex, Indexcount,
          StartIndex, MinVIndex]()
         {
@@ -2198,8 +2204,8 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
             cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 1, pslightcbhandle);
             cmdlist->SetGraphicsRootDescriptorTable(pscbvbase + 2, pstexcombcbhandle);
             for (size_t i = 0; i < MAX_TEX_STAGES; ++i)
-                if (m_CurrentTexture[i].GPUHandle != D3D12_GPU_DESCRIPTOR_HANDLE(0))
-                    cmdlist->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + i, m_CurrentTexture[i].GPUHandle);
+                if (textureHandle[i].ptr != 0)
+                    cmdlist->SetGraphicsRootDescriptorTable(m_TextureBaseIndex + i, textureHandle[i]);
             cmdlist->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             cmdlist->IASetIndexBuffer(&ibview);
             cmdlist->IASetVertexBuffers(0, 1, &vbview);
