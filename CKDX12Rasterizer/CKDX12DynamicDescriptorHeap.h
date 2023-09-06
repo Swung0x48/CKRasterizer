@@ -27,7 +27,7 @@ public:
     void FinishFrame(UINT64 nextFenceValue, UINT64 lastCompletedFenceValue);
 
 public:
-    D3D12_DESCRIPTOR_HEAP_DESC m_HeapDesc = {};
+    D3D12_DESCRIPTOR_HEAP_DESC m_HeapDes = {};
     std::vector<CKDX12DescriptorRing> m_Heaps;
     D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
     UINT m_IncrementSize = 0;

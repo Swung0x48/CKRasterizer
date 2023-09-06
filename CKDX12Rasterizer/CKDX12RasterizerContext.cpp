@@ -18,8 +18,8 @@
 
 #include <algorithm>
 
+#define STATUS 1
 #if defined(DEBUG) || defined(_DEBUG)
-    #define STATUS 1
     //#define LOGGING 1
     #define CONSOLE 1
     #define CMDLIST 0
@@ -245,9 +245,14 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
         
 
         D3DCall(m_CommandList->Close());
+
+        D3DCall(m_Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocators[i].Get(), nullptr,
+                                            IID_PPV_ARGS(&m_PostCommandList)));
+
+
+        D3DCall(m_PostCommandList->Close());
     }
 
-    m_MTCommandLists.resize(m_ThreadCount);
     for (UINT i = 0; i < m_FrameInFlightCount; ++i)
     {
         m_MTCommandAllocators[i].resize(m_ThreadCount);
@@ -272,15 +277,19 @@ HRESULT CKDX12RasterizerContext::CreateFrameResources()
 
     for (UINT i = 0; i < m_FrameInFlightCount; ++i)
     {
+        m_MTCommandLists[i].resize(m_ThreadCount);
+    }
+    for (UINT i = 0; i < m_FrameInFlightCount; ++i)
+    {
         for (size_t j = 0; j < m_ThreadCount; ++j)
         {
             D3DCall(m_Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
                                                 m_MTCommandAllocators[i][j].Get(),
                                                 nullptr,
-                                                IID_PPV_ARGS(&m_MTCommandLists[j])));
+                                                IID_PPV_ARGS(&m_MTCommandLists[i][j])));
 
 
-            D3DCall(m_MTCommandLists[j]->Close());
+            D3DCall(m_MTCommandLists[i][j]->Close());
         }
     }
 
@@ -468,7 +477,7 @@ HRESULT CKDX12RasterizerContext::CreatePSOs() {
         psoDesc.InputLayout = { item.second.input_layout.data(), item.second.input_layout.size() };
         psoDesc.pRootSignature = m_RootSignature.Get();
         psoDesc.VS = item.second.shader;
-        psoDesc.PS = {g_PShader, sizeof(g_PShader)};
+        psoDesc.PS = {g_PShaderSimple, sizeof(g_PShaderSimple)};
         psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
         psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
         psoDesc.BlendState.RenderTarget[0].BlendEnable = TRUE;
@@ -728,9 +737,9 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
     {
         D3DCall(m_MTCommandAllocators[m_FrameIndex][i]->Reset());
     }
-    for (size_t i = 0; i < m_MTCommandLists.size(); ++i)
+    for (size_t i = 0; i < m_MTCommandLists[m_FrameIndex].size(); ++i)
     {
-        D3DCall(m_MTCommandLists[i]->Reset(m_MTCommandAllocators[m_FrameIndex][i].Get(), nullptr));
+        D3DCall(m_MTCommandLists[m_FrameIndex][i]->Reset(m_MTCommandAllocators[m_FrameIndex][i].Get(), nullptr));
     }
     
 #if CMDLIST
@@ -767,20 +776,24 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
 
     HRESULT hr = S_OK;
 
-    const auto transitionToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-    m_CommandList->ResourceBarrier(1, &transitionToPresent);
-    D3DCall(m_CommandList->Close());
     // Wait until command recording complete
     for (size_t i = 0; i < m_RecordCommandTasks[m_FrameIndex].size(); ++i)
     {
         m_RecordCommandTasks[m_FrameIndex][i].get();
+        fprintf(stderr, "waited %zd\n", i);
     }
     m_RecordCommandTasks[m_FrameIndex].clear();
-    for (size_t i = 0; i < m_MTCommandLists.size(); ++i)
+    for (size_t i = 0; i < m_MTCommandLists[m_FrameIndex].size(); ++i)
     {
-        D3DCall(m_MTCommandLists[i]->Close());
+        D3DCall(m_MTCommandLists[m_FrameIndex][i]->Close());
     }
+
+    D3DCall(m_CommandList->Close());
+
+    const auto transitionToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
+        m_RenderTargets[m_FrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    ID3D12CommandList *list = m_CommandList.Get();
+    m_CommandQueue->ExecuteCommandLists(1, &list);
 
 #if CMDLIST
     fprintf(stderr, "m_CommandList->Close() %u\n", m_SwapChain->GetCurrentBackBufferIndex());
@@ -789,14 +802,19 @@ CKBOOL CKDX12RasterizerContext::EndScene() {
 #endif // DEBUG || defined _DEBUG
 #endif
     assert(m_CmdListClosed);
-    ID3D12CommandList *list = m_CommandList.Get();
-    m_CommandQueue->ExecuteCommandLists(1, &list);
-    for (size_t i = 0; i < m_MTCommandLists.size(); ++i)
+    for (size_t i = 0; i < m_MTCommandLists[m_FrameIndex].size(); ++i)
     {
-        m_PendingCommandList.emplace_back(m_MTCommandLists[i].Get());
+        ID3D12CommandList *mtlist = m_MTCommandLists[m_FrameIndex][i].Get();
+        m_PendingCommandList.emplace_back(m_MTCommandLists[m_FrameIndex][i].Get());
     }
     m_CommandQueue->ExecuteCommandLists(m_PendingCommandList.size(), m_PendingCommandList.data());
     m_PendingCommandList.clear();
+
+    m_PostCommandList->Reset(m_CommandAllocators[m_FrameIndex].Get(), nullptr);
+    m_PostCommandList->ResourceBarrier(1, &transitionToPresent);
+    D3DCall(m_PostCommandList->Close());
+    ID3D12CommandList *postlist = m_PostCommandList.Get();
+    m_CommandQueue->ExecuteCommandLists(1, &postlist);
 
     m_SceneBegined = FALSE;
     return SUCCEEDED(hr);
@@ -2152,15 +2170,16 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     }
 
 
-    size_t thridx = vbibbat % m_ThreadCount;
+    size_t thridx = (vbibbat - 1) % m_ThreadCount;
 
     auto task = std::packaged_task<void()>(
-        [thridx, this, vbview = vbo->DxView, ibview = ibo->DxView, pso = m_PipelineState[vbo->m_VertexFormat],
+        [thridx, b = vbibbat, this, vbview = vbo->DxView, ibview = ibo->DxView, pso = m_PipelineState[vbo->m_VertexFormat],
          rtvHandle, dsvHandle, ppHeaps, vscbhandle = m_VSConstantBufferHandle, pscbhandle = m_PSConstantBufferHandle,
          pslightcbhandle = m_PSLightConstantBufferHandle, pstexcombcbhandle = m_PSTexCombinatorConstantBufferHandle,
-         vscbvbase = m_VSCBVBaseIndex, pscbvbase = m_PSCBVBaseIndex, cmdlist = m_MTCommandLists[thridx], Indexcount,
+         vscbvbase = m_VSCBVBaseIndex, pscbvbase = m_PSCBVBaseIndex, Indexcount,
          StartIndex, MinVIndex]()
         {
+            auto* cmdlist = m_MTCommandLists[m_FrameIndex][thridx].Get();
             cmdlist->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
             cmdlist->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
             cmdlist->SetGraphicsRootSignature(this->m_RootSignature.Get());
@@ -2173,6 +2192,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
             cmdlist->IASetIndexBuffer(&ibview);
             cmdlist->IASetVertexBuffers(0, 1, &vbview);
             cmdlist->DrawIndexedInstanced(Indexcount, 1, StartIndex, MinVIndex, 0);
+            fprintf(stderr, "draw %d\n", b - 1);
         });
 
     auto future = asio::post(m_Strands[thridx], std::move(task));

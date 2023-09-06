@@ -513,6 +513,7 @@ public:
     ComPtr<ID3D12RootSignature> m_RootSignature;
     ComPtr<ID3D12CommandAllocator> m_CommandAllocators[m_FrameInFlightCount];
     ComPtr<ID3D12GraphicsCommandList> m_CommandList;
+    ComPtr<ID3D12GraphicsCommandList> m_PostCommandList;
     
     std::unordered_map<DWORD, FVFResource> m_FVFResources;
     std::unordered_map<DWORD, ComPtr<ID3D12PipelineState>> m_PipelineState;
@@ -564,7 +565,7 @@ public:
     const size_t m_ThreadCount = std::thread::hardware_concurrency();
     asio::thread_pool m_ThreadPool = std::thread::hardware_concurrency();
     std::vector<asio::strand<asio::thread_pool::executor_type>> m_Strands;
-    std::vector<ComPtr<ID3D12GraphicsCommandList>> m_MTCommandLists;
+    std::vector<ComPtr<ID3D12GraphicsCommandList>> m_MTCommandLists[m_FrameInFlightCount];
     std::vector<ComPtr<ID3D12CommandAllocator>> m_MTCommandAllocators[m_FrameInFlightCount];
     std::vector<ID3D12CommandList *> m_PendingCommandList;
     std::vector<std::future<void>> m_RecordCommandTasks[m_FrameInFlightCount];
