@@ -20,6 +20,7 @@ public:
     HRESULT CreateConstantBufferView(const CKDX12AllocatedResource &resource, CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
     HRESULT CreateShaderResourceView(ID3D12Resource *pResource, const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc,
                                      CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
+    HRESULT CreateSampler(const D3D12_SAMPLER_DESC &desc, CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle);
 
 public:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_Heap;

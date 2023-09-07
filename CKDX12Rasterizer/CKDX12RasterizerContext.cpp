@@ -31,7 +31,7 @@
     #define CREATEVB 1
     #define CREATEIB 1
     #define RENDERSTATE 0
-    #define LIVETEXTURES 1
+    #define LIVETEXTURES 0
 #endif
 
 #if LOGGING || CONSOLE
@@ -297,6 +297,7 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
     m_VSCBVBaseIndex = 0;
     m_PSCBVBaseIndex = 1;
     m_TextureBaseIndex = 4;
+    m_SamplerBaseIndex = 6;
 
     m_RootParamRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
     m_RootParamRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
@@ -304,12 +305,16 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
     m_RootParamRanges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 2, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
     m_RootParamRanges[4].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
     m_RootParamRanges[5].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    m_RootParamRanges[6].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+    m_RootParamRanges[7].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
     m_RootParameters[0].InitAsDescriptorTable(1, &m_RootParamRanges[0], D3D12_SHADER_VISIBILITY_VERTEX);
     m_RootParameters[1].InitAsDescriptorTable(1, &m_RootParamRanges[1], D3D12_SHADER_VISIBILITY_PIXEL);
     m_RootParameters[2].InitAsDescriptorTable(1, &m_RootParamRanges[2], D3D12_SHADER_VISIBILITY_PIXEL);
     m_RootParameters[3].InitAsDescriptorTable(1, &m_RootParamRanges[3], D3D12_SHADER_VISIBILITY_PIXEL);
     m_RootParameters[4].InitAsDescriptorTable(1, &m_RootParamRanges[4], D3D12_SHADER_VISIBILITY_PIXEL);
     m_RootParameters[5].InitAsDescriptorTable(1, &m_RootParamRanges[5], D3D12_SHADER_VISIBILITY_PIXEL);
+    m_RootParameters[6].InitAsDescriptorTable(1, &m_RootParamRanges[6], D3D12_SHADER_VISIBILITY_PIXEL);
+    m_RootParameters[7].InitAsDescriptorTable(1, &m_RootParamRanges[7], D3D12_SHADER_VISIBILITY_PIXEL);
     
     // Allow input layout and deny uneccessary access to certain pipeline stages.
     D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -317,7 +322,22 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-    D3D12_STATIC_SAMPLER_DESC sampler = {};
+    D3D12_SAMPLER_DESC sampler = {};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+    sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.MipLODBias = 0;
+    sampler.MaxAnisotropy = 0;
+    sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; 
+    sampler.BorderColor[0] = 0.0;
+    sampler.BorderColor[1] = 0.0;
+    sampler.BorderColor[2] = 0.0;
+    sampler.BorderColor[3] = 0.0;
+    sampler.MinLOD = 0.0f;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
+
+    /*D3D12_STATIC_SAMPLER_DESC sampler = {};
     sampler.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
     sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -337,11 +357,21 @@ HRESULT CKDX12RasterizerContext::CreateRootSignature() {
     m_SamplerDesc[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     m_SamplerDesc[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     m_SamplerDesc[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    m_SamplerDesc[1].ShaderRegister = 1;
+    m_SamplerDesc[1].ShaderRegister = 1;*/
+    m_SamplerDesc[0] = sampler;
+    m_SamplerDesc[1] = sampler;
+    m_SamplerDesc[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    m_SamplerDesc[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    m_SamplerDesc[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+
+    m_SamplerStateUpToDate[0] = false;
+    m_SamplerStateUpToDate[1] = false;
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+    /*rootSignatureDesc.Init_1_1(_countof(m_RootParameters), m_RootParameters,
+        2, m_SamplerDesc, rootSignatureFlags);*/
     rootSignatureDesc.Init_1_1(_countof(m_RootParameters), m_RootParameters,
-        2, m_SamplerDesc, rootSignatureFlags);
+        0, nullptr, rootSignatureFlags);
     ComPtr<ID3DBlob> signature;
     ComPtr<ID3DBlob> error;
     
@@ -488,9 +518,12 @@ HRESULT CKDX12RasterizerContext::CreateResources()
 {
     HRESULT hr;
     const size_t size = 4096;
+    const size_t sampler_size = 2048;
     m_VSCBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device,
                                                            D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * size);
-    m_CBV_SRV_Heap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device);
+    m_CBV_SRV_Heap = std::make_unique<CKDX12DynamicDescriptorHeap>(size, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Device, false);
+    m_SamplerHeap =
+        std::make_unique<CKDX12DescriptorRing>(sampler_size, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, m_Device);
     m_VBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
     m_IBHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
     m_TextureHeap = std::make_unique<CKDX12DynamicUploadHeap>(true, m_Device, size, false);
@@ -702,7 +735,13 @@ CKBOOL CKDX12RasterizerContext::BeginScene() {
     {
         ppHeaps.emplace_back(m_CBV_SRV_Heap->m_Heaps[i].m_Heap.Get());
     }
+    ppHeaps.emplace_back(m_SamplerHeap->m_Heap.Get());
     m_CommandList->SetDescriptorHeaps(ppHeaps.size(), ppHeaps.data());
+
+    for (int i = 0; i < MAX_TEX_STAGES; ++i)
+    {
+        D3DCall(UpdateSamplerState(i));
+    }
     return TRUE;
 }
 
@@ -1480,15 +1519,7 @@ CKBOOL CKDX12RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTA
             {
                 m_SamplerStateUpToDate[Stage] = FALSE;
                 VxColor c(Value);
-                auto col = c.GetRGBA();
-                if ((col & (~A_MASK)) == 0)
-                    if (col == 0)
-                        m_SamplerDesc[Stage].BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-                    else
-                        m_SamplerDesc[Stage].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
-                else
-                    m_SamplerDesc[Stage].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
-
+                std::copy_n(c.col, 4, m_SamplerDesc[Stage].BorderColor);
                 return TRUE;
             }
         case CKRST_TSS_MINFILTER:
@@ -1770,6 +1801,30 @@ HRESULT CKDX12RasterizerContext::UpdatePipelineState(DWORD fvf) {
     return hr;
 }
 
+HRESULT CKDX12RasterizerContext::UpdateSamplerState(int Stage)
+{
+    HRESULT hr = S_OK;
+    if (Stage < 0 || Stage > MAX_TEX_STAGES)
+        return E_FAIL;
+    /*if (m_SamplerStateUpToDate[Stage])
+        return S_OK;*/
+
+    auto hash = CKComputeDataCRC((char *)&m_SamplerDesc[Stage], sizeof(m_SamplerDesc[Stage]));
+    CD3DX12_GPU_DESCRIPTOR_HANDLE handle;
+    if (m_CachedSamplerState.find(hash) != m_CachedSamplerState.end())
+    {
+        handle = m_CachedSamplerState[hash];
+    }
+    else
+    {
+        D3DCall(m_SamplerHeap->CreateSampler(m_SamplerDesc[Stage], handle));
+        m_CachedSamplerState[hash] = handle;
+    }
+    m_CommandList->SetGraphicsRootDescriptorTable(m_SamplerBaseIndex + Stage, handle);
+    m_SamplerStateUpToDate[Stage] = true;
+    return hr;
+}
+
 CKBOOL CKDX12RasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKDX12VertexBufferDesc *vbo,
                                                       CKDWORD StartVertex, CKDWORD VertexCount, CKWORD *indices,
                                                       int indexcount)
@@ -1867,6 +1922,15 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     m_PSCBuffer.FVF = vertexFormat;
     D3DCall(UpdateConstantBuffer());
+    if (vertexFormat & CKRST_VF_TEX1)
+    {
+        D3DCall(UpdateSamplerState(0));
+    }
+    else if (vertexFormat & CKRST_VF_TEX2)
+    {
+        D3DCall(UpdateSamplerState(0));
+        D3DCall(UpdateSamplerState(1));
+    }
 
     CKBOOL clip = FALSE;
     if ((data->Flags & CKRST_DP_DOCLIP))
@@ -1992,6 +2056,15 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD V
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     m_PSCBuffer.FVF = vbo->m_VertexFormat;
     D3DCall(UpdateConstantBuffer());
+    if (vbo->m_VertexFormat & CKRST_VF_TEX1)
+    {
+        D3DCall(UpdateSamplerState(0));
+    }
+    else if (vbo->m_VertexFormat & CKRST_VF_TEX2)
+    {
+        D3DCall(UpdateSamplerState(0));
+        D3DCall(UpdateSamplerState(1));
+    }
 
     return InternalDrawPrimitive(pType, vbo, StartVIndex, VertexCount, indices, indexcount);
     return TRUE;
@@ -2042,6 +2115,16 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     D3DCall(UpdatePipelineState(vbo->m_VertexFormat));
     //m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    D3DCall(UpdateConstantBuffer());
+    if (vbo->m_VertexFormat & CKRST_VF_TEX1)
+    {
+        D3DCall(UpdateSamplerState(0));
+    }
+    else if (vbo->m_VertexFormat & CKRST_VF_TEX2)
+    {
+        D3DCall(UpdateSamplerState(0));
+        D3DCall(UpdateSamplerState(1));
+    }
 #if SETRESOURCES
     fprintf(stderr, "Set VB: %d\n", VB);
     fprintf(stderr, "Set IB: %d\n", IB);
@@ -2050,7 +2133,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     m_CommandList->IASetIndexBuffer(&ibo->DxView);
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
     m_PSCBuffer.FVF = vbo->m_VertexFormat;
-    D3DCall(UpdateConstantBuffer());
 #if defined(DEBUG) || defined(_DEBUG)
     WCHAR *stats = nullptr;
     m_Allocator->BuildStatsString(&stats, TRUE);

@@ -44,8 +44,32 @@ HRESULT CKDX12DynamicDescriptorHeap::CreateShaderResourceView(ID3D12Resource *pR
     return hr;
 }
 
+HRESULT CKDX12DynamicDescriptorHeap::CreateSampler(const D3D12_SAMPLER_DESC &desc,
+                                                   CD3DX12_GPU_DESCRIPTOR_HANDLE &gpuHandle)
+{
+    HRESULT hr = m_Heaps.back().CreateSampler(desc, gpuHandle);
+    if (hr == E_OUTOFMEMORY)
+    {
+        // TODO: Should re-set corresponding descriptor heap!
+        // Create new buffer
+        auto newSize = m_Heaps.back().GetMaxSize() * 2;
+        // Make sure the buffer is large enough for the requested chunk
+        while (newSize < m_Heaps.back().GetUsedSize() + 1)
+            newSize *= 2;
+        m_Heaps.emplace_back(newSize, m_Type, m_Device);
+        hr = m_Heaps.back().CreateSampler(desc, gpuHandle);
+    }
+    else
+    {
+        D3DCall(hr);
+    }
+    return hr;
+}
+
 void CKDX12DynamicDescriptorHeap::FinishFrame(UINT64 nextFenceValue, UINT64 lastCompletedFenceValue)
 {
+    if (m_NoShrink)
+        return;
     size_t bufToDelete = 0;
     for (size_t i = 0; i < m_Heaps.size(); ++i)
     {

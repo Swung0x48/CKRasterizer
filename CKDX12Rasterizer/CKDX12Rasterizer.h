@@ -448,9 +448,11 @@ protected:
     HRESULT CreateDescriptorHeap();
     HRESULT CreateFrameResources();
     HRESULT CreateSyncObject();
-    UINT m_TextureBaseIndex = 0;
     UINT m_VSCBVBaseIndex = 0;
     UINT m_PSCBVBaseIndex = 0;
+    UINT m_TextureBaseIndex = 0;
+    UINT m_SamplerBaseIndex = 0;
+
     HRESULT CreateRootSignature();
     void PrepareShaders();
     HRESULT CreatePSOs();
@@ -464,6 +466,7 @@ protected:
 
     HRESULT UpdateConstantBuffer();
     HRESULT UpdatePipelineState(DWORD fvf);
+    HRESULT UpdateSamplerState(int Stage);
 
     CKBOOL InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKDX12VertexBufferDesc *vbo, CKDWORD StartVertex,
                                  CKDWORD VertexCount, CKWORD *indices, int indexcount);
@@ -495,6 +498,7 @@ public:
     ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
     UINT m_DSVDescriptorSize;
     std::unique_ptr<CKDX12DynamicDescriptorHeap> m_CBV_SRV_Heap;
+    std::unique_ptr<CKDX12DescriptorRing> m_SamplerHeap;
     std::unique_ptr<CKDX12DynamicUploadHeap> m_VSCBHeap;
 
     std::unique_ptr<CKDX12DynamicUploadHeap> m_VBHeap;
@@ -505,9 +509,9 @@ public:
     ComPtr<D3D12MA::Allocator> m_Allocator;
 
     ComPtr<ID3D12Resource> m_RenderTargets[m_BackBufferCount];
-    CD3DX12_DESCRIPTOR_RANGE1 m_RootParamRanges[6] = {};
-    CD3DX12_ROOT_PARAMETER1 m_RootParameters[6] = {};
-    D3D12_STATIC_SAMPLER_DESC m_SamplerDesc[2];
+    CD3DX12_DESCRIPTOR_RANGE1 m_RootParamRanges[8] = {};
+    CD3DX12_ROOT_PARAMETER1 m_RootParameters[8] = {};
+    D3D12_SAMPLER_DESC m_SamplerDesc[MAX_TEX_STAGES];
     ComPtr<ID3D12Resource> m_DepthStencils[m_BackBufferCount];
     ComPtr<ID3D12RootSignature> m_RootSignature;
     ComPtr<ID3D12CommandAllocator> m_CommandAllocators[m_FrameInFlightCount];
@@ -519,6 +523,7 @@ public:
     std::unordered_map<DWORD, D3D12_GRAPHICS_PIPELINE_STATE_DESC> m_PipelineStateDescriptions;
     std::unordered_map<DWORD, bool> m_PipelineStateUpToDate;
     std::unordered_map<DWORD, ComPtr<ID3D12PipelineState>> m_CachedPipelineState;
+    std::unordered_map<DWORD, CD3DX12_GPU_DESCRIPTOR_HANDLE> m_CachedSamplerState;
     
     CD3DX12_VIEWPORT m_Viewport;
     CD3DX12_RECT m_ScissorRect;
@@ -541,7 +546,7 @@ public:
     std::vector<CKDX12TextureDesc> m_TextureSubmitted[m_FrameInFlightCount];
     std::vector<ComPtr<ID3D12PipelineState>> m_PipelineStateSubmitted[m_FrameInFlightCount];
 
-    CKBOOL m_SamplerStateUpToDate[D3D12_COMMONSHADER_SAMPLER_SLOT_COUNT];
+    CKBOOL m_SamplerStateUpToDate[D3D12_COMMONSHADER_SAMPLER_SLOT_COUNT] = {FALSE};
     CKDX12TextureFilter m_Filter[D3D12_COMMONSHADER_SAMPLER_SLOT_COUNT];
 
     D3D12_RASTERIZER_DESC m_RasterizerDesc = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
