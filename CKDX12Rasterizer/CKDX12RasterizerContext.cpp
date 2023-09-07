@@ -1919,7 +1919,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
     CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
     D3DCall(UpdatePipelineState(vertexFormat));
     //m_CommandList->SetPipelineState(m_PipelineState[vertexFormat].Get());
-    m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     m_PSCBuffer.FVF = vertexFormat;
     D3DCall(UpdateConstantBuffer());
     if (vertexFormat & CKRST_VF_TEX1)
@@ -1960,6 +1959,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
                 ib.resize(indexcount);
                 memcpy(ib.data(), indices, sizeof(CKWORD) * indexcount);
             }*/
+            m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             break;
         case VX_TRIANGLEFAN:
             if (indices)
@@ -1969,23 +1969,22 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *ind
                 CKWORD voffset = 0;
                 TriangleFanToList(voffset, indexcount, ib);
             }
+            m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             break;
-#if defined(DEBUG) || defined(_DEBUG)
         case VX_POINTLIST:
-            fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
-            return TRUE;
+            m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
+            break;
         case VX_LINELIST:
-            fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
-            return TRUE;
+            m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+            break;
         case VX_LINESTRIP:
-            fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
-            return TRUE;
-#endif
+            m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINESTRIP);
+            break;
         default:
 #if defined(DEBUG) || defined(_DEBUG)
             fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
 #endif
-            return TRUE;
+            break;
     }
     D3D12_VERTEX_BUFFER_VIEW view;
     view.BufferLocation = vb.GPUAddress;
@@ -2082,25 +2081,26 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     switch (pType)
     {
         case VX_TRIANGLELIST:
+            m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             break;
         case VX_TRIANGLEFAN:
             break;
-#if defined(DEBUG) || defined(_DEBUG)
+            m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            break;
         case VX_POINTLIST:
-            fprintf(stderr, "Unhandled topology: VX_POINTLIST\n");
-            return TRUE;
+            m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
+            break;
         case VX_LINELIST:
-            fprintf(stderr, "Unhandled topology: VX_LINELIST\n");
-            return TRUE;
+            m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+            break;
         case VX_LINESTRIP:
-            fprintf(stderr, "Unhandled topology: VX_LINESTRIP\n");
-            return TRUE;
-#endif
+            m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINESTRIP);
+            break;
         default:
-#if defined (DEBUG) || defined(_DEBUG)
+#if defined(DEBUG) || defined(_DEBUG)
             fprintf(stderr, "Unhandled topology: 0x%x\n", pType);
 #endif
-            return TRUE;
+            break;
     }
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!vbo)
