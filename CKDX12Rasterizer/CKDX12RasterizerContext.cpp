@@ -2115,6 +2115,7 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     D3DCall(UpdatePipelineState(vbo->m_VertexFormat));
     //m_CommandList->SetPipelineState(m_PipelineState[vbo->m_VertexFormat].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_PSCBuffer.FVF = vbo->m_VertexFormat;
     D3DCall(UpdateConstantBuffer());
     if (vbo->m_VertexFormat & CKRST_VF_TEX1)
     {
@@ -2132,7 +2133,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     assert(ibo->DxView.BufferLocation != 0);
     m_CommandList->IASetIndexBuffer(&ibo->DxView);
     m_CommandList->IASetVertexBuffers(0, 1, &vbo->DxView);
-    m_PSCBuffer.FVF = vbo->m_VertexFormat;
 #if defined(DEBUG) || defined(_DEBUG)
     WCHAR *stats = nullptr;
     m_Allocator->BuildStatsString(&stats, TRUE);
