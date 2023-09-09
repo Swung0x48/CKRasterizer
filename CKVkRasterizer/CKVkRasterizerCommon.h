@@ -3,7 +3,9 @@
 
 #include <string>
 
-#include "tracy/Tracy.hpp"
+#if TRACY_ENABLE
+    #include "tracy/Tracy.hpp"
+#endif
 
 class CKContext;
 extern CKContext *rst_ckctx;
