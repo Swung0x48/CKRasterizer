@@ -39,18 +39,19 @@ jobs:
       # Setup MSVC command prompt environment vars
       - uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Install Vulkan SDK
-        uses: humbletim/install-vulkan-sdk@v1.1.1
+      - name: Cache Vulkan SDK
+        id: cache-vulkan-sdk
+        uses: actions/cache@v1
         with:
-          version: latest
-          cache: true
+          path: "C:\\VulkanSDK\\1.3.261.0"
+          key: vulkan-sdk-1.3.261.0
 
-      # - name: Prepare Vulkan SDK
-      #   uses: humbletim/setup-vulkan-sdk@v1.2.0
-      #   with:
-      #     vulkan-query-version: latest
-      #     vulkan-components: Vulkan-Headers, Vulkan-Loader
-      #     vulkan-use-cache: true
+      - name: Setup Vulkan
+        if: steps.cache-vulkan-sdk.outputs.cache-hit != 'true'
+        run: |
+            Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/1.3.261.1/windows/VulkanSDK-1.3.261.1-Installer.exe" -OutFile VulkanSDK.exe
+            $installer = Start-Process -FilePath VulkanSDK.exe -Wait -PassThru -ArgumentList @("/S");
+            $installer.WaitForExit();
 
       - name: Configure CMake
         run: cmake -B ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build -S ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ${{env.CMAKE_ARGS}}
