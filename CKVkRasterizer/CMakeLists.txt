@@ -69,7 +69,7 @@ set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/shaders.rc APPEND
 
 add_library(${PROJECT_NAME} SHARED ${CKVK_RASTERIZER_SRC})
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
-target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)
+#target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)
 target_link_libraries(${PROJECT_NAME} PRIVATE vulkan-1)
 target_compile_definitions(${PROJECT_NAME} PRIVATE
             $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
