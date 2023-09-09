@@ -8,10 +8,10 @@ set(CMAKE_MODULE_PATH
   "${CMAKE_CURRENT_LIST_DIR}/../buildsystems/cmake"
 )
 
-option(TRACY_ENABLE "" ON)
-if (NOT TARGET Tracy::TracyClient)
-    add_subdirectory (${CMAKE_CURRENT_LIST_DIR}/../vendor/tracy tracy.out)
-endif()
+#option(TRACY_ENABLE "" ON)
+#if (NOT TARGET Tracy::TracyClient)
+#    add_subdirectory (${CMAKE_CURRENT_LIST_DIR}/../vendor/tracy tracy.out)
+#endif()
 
 include_directories(${VIRTOOLS_SDK_PATH}/Include)
 
