@@ -5,6 +5,8 @@
 
 #if TRACY_ENABLE
     #include "tracy/Tracy.hpp"
+#else
+    #define ZoneScopedN(x) ((void)0)
 #endif
 
 class CKContext;
