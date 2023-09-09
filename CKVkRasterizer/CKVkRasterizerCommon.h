@@ -7,6 +7,7 @@
     #include "tracy/Tracy.hpp"
 #else
     #define ZoneScopedN(x) ((void)0)
+    #define FrameMark ((void)0)
 #endif
 
 class CKContext;
