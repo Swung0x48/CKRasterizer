@@ -54,7 +54,7 @@ jobs:
             $ProgressPreference = 'SilentlyContinue'
             Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/$ver/windows/VulkanSDK-$ver-Installer.exe" -OutFile VulkanSDK.exe
             echo Downloaded
-            .\VulkanSDK.exe --root C:\VulkanSDK  --accept-licenses --default-answer --confirm-command install
+            .\VulkanSDK.exe --root C:\VulkanSDK  --accept-licenses --default-answer --confirm-command install com.lunarg.vulkan.32bit com.lunarg.vulkan.sdl2 com.lunarg.vulkan.glm com.lunarg.vulkan.volk com.lunarg.vulkan.vma com.lunarg.vulkan.debug com.lunarg.vulkan.debug32
 
       - name: Configure CMake
         run: cmake -B ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build -S ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ${{env.CMAKE_ARGS}}
