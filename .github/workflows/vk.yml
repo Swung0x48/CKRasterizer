@@ -20,6 +20,7 @@ env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
   CMAKE_ARGS: -DVIRTOOLS_SDK_FETCH_FROM_GIT=ON -DTRACY_ENABLE=OFF -A Win32
+  VULKAN_SDK: C:\VulkanSDK\
 
 jobs:
   build-vk:
@@ -47,11 +48,13 @@ jobs:
           key: vulkan-sdk-1.3.261.0
 
       - name: Setup Vulkan
-        if: steps.cache-vulkan-sdk.outputs.cache-hit != 'true'
         run: |
-            Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/1.3.261.1/windows/VulkanSDK-1.3.261.1-Installer.exe" -OutFile VulkanSDK.exe
-            $installer = Start-Process -FilePath VulkanSDK.exe -Wait -PassThru -ArgumentList @("/S");
-            $installer.WaitForExit();
+            $ver = (Invoke-WebRequest -Uri "https://vulkan.lunarg.com/sdk/latest.json" | ConvertFrom-Json).windows
+            echo Version $ver
+            $ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/$ver/windows/VulkanSDK-$ver-Installer.exe" -OutFile VulkanSDK.exe
+            echo Downloaded
+            .\VulkanSDK.exe --root C:\VulkanSDK  --accept-licenses --default-answer --confirm-command install
 
       - name: Configure CMake
         run: cmake -B ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build -S ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ${{env.CMAKE_ARGS}}
