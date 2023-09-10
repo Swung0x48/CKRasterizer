@@ -2084,7 +2084,6 @@ CKBOOL CKDX12RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD
     auto *vbo = static_cast<CKDX12VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!vbo)
         return FALSE;
-    auto size = m_IndexBuffers.Size();
     auto *ibo = static_cast<CKDX12IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!ibo)
         return FALSE;
