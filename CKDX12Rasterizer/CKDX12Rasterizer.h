@@ -475,8 +475,8 @@ protected:
 #endif
     
 public:
-    static const UINT m_FrameInFlightCount = 3;
-    static const UINT m_BackBufferCount = 3;
+    static const UINT m_FrameInFlightCount = 2;
+    static const UINT m_BackBufferCount = 2;
 
     VxDirectXData m_DirectXData;
     
