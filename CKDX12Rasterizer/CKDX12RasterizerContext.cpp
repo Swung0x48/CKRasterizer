@@ -615,6 +615,11 @@ CKBOOL CKDX12RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     SetRenderState(VXRENDERSTATE_LOCALVIEWER, 1);
     SetRenderState(VXRENDERSTATE_COLORVERTEX, 0);
 
+    ZeroMemory(&m_VSCBuffer, sizeof(VSConstantBufferStruct));
+    ZeroMemory(&m_PSCBuffer, sizeof(PSConstantBufferStruct));
+    ZeroMemory(&m_PSLightCBuffer, sizeof(PSLightConstantBufferStruct));
+    ZeroMemory(&m_PSTexCombinatorCBuffer, sizeof(PSTexCombinatorConstantBufferStruct));
+
     m_InCreateDestroy = FALSE;
     m_Inited = TRUE;
     return SUCCEEDED(hr);
