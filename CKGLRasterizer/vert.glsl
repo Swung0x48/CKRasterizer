@@ -1,7 +1,7 @@
 #version 330 core
-const uint VP_HAS_COLOR      = 0x10000000U;
-const uint VP_IS_TRANSFORMED = 0x20000000U;
-const uint VP_TEXTURE_MASK   = 0x0000000fU;
+#define VERTEX_IS_TRANSFORMED 0 ///placeholder >_<
+#define VERTEX_HAS_COLOR      0 ///placeholder >_<
+#define HAS_MULTI_TEXTURE     0 ///placeholder >_<
 
 const uint TVP_TC_CSNORM     = 0x01000000U;
 const uint TVP_TC_CSVECP     = 0x02000000U;
@@ -20,7 +20,7 @@ out vec4 fragcol;
 out vec4 fragscol;
 flat out uint fntex;
 out vec2 ftexcoord[8];
-uniform uint vertex_properties;
+uniform uint ntex;
 uniform mat4 mvp2d;
 uniform mat4 world;
 uniform mat4 view;
@@ -32,33 +32,24 @@ uniform uint texp[8];
 
 void main()
 {
-    bool is_transformed = (vertex_properties & VP_IS_TRANSFORMED) != 0U;
-    bool has_color = (vertex_properties & VP_HAS_COLOR) != 0U;
-    uint ntex = (vertex_properties & VP_TEXTURE_MASK);
     vec4 pos = xyzw;
-    if (is_transformed)
-    {
-        pos = vec4(xyzw.x, -xyzw.y, xyzw.w, 1.0);
-        gl_Position = mvp2d * pos;
-    }
-    else
-    {
-        pos = vec4(xyzw.xyz, 1.0);
-        gl_Position = proj * view * world * pos;
-    }
+#if VERTEX_IS_TRANSFORMED
+    pos = vec4(xyzw.x, -xyzw.y, xyzw.w, 1.0);
+    gl_Position = mvp2d * pos;
+#else
+    pos = vec4(xyzw.xyz, 1.0);
+    gl_Position = proj * view * world * pos;
+#endif
     fpos = vec3(world * pos);
     fnormal = mat3(tiworld) * normal;
     vec3 ffnormal = mat3(tiworldview) * normal;
-    if (has_color)
-    {
-        fragcol.rgba = color.bgra; //convert from D3D color BGRA (ARGB as little endian) -> RGBA
-        fragscol.rgba = spec_color.bgra;
-    }
-    else
-    {
-        fragcol = vec4(1.);
-        fragscol = vec4(0.);
-    }
+#if VERTEX_HAS_COLOR
+    fragcol.rgba = color.bgra; //convert from D3D color BGRA (ARGB as little endian) -> RGBA
+    fragscol.rgba = spec_color.bgra;
+#else
+    fragcol = vec4(1.);
+    fragscol = vec4(0.);
+#endif
     for (uint i = 0u; i < ntex; ++i)
     {
         vec4 tcout = vec4(0.);

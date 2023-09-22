@@ -1,4 +1,8 @@
 #version 330 core
+#define VERTEX_IS_TRANSFORMED 0 ///placeholder >_<
+#define VERTEX_HAS_COLOR      0 ///placeholder >_<
+#define HAS_MULTI_TEXTURE     0 ///placeholder >_<
+
 #define DEBUG
 const uint LSW_SPECULAR_ENABLED = 0x0001U;
 const uint LSW_LIGHTING_ENABLED = 0x0002U;
@@ -267,60 +271,57 @@ void main()
     //d3d adds the specular light without modulating it with the texture...
     //No idea how d3d exactly behaves for multi-textured draws, current
     //implementation is guesswork
-    if (fntex > 1U)
+#if HAS_MULTI_TEXTURE
+    vec4 accum = vec4(0.);
+    vec4 temp[8] = vec4[8](vec4(0.), vec4(0.), vec4(0.), vec4(0.),
+                            vec4(0.), vec4(0.), vec4(0.), vec4(0.));
+    for (uint i = 0U; i < fntex; ++i)
     {
-        vec4 accum = vec4(0.);
-        vec4 temp[8] = vec4[8](vec4(0.), vec4(0.), vec4(0.), vec4(0.),
-                               vec4(0.), vec4(0.), vec4(0.), vec4(0.));
-        for (uint i = 0U; i < fntex; ++i)
+        vec4 txc = vec4(1.);
+        if ((null_texture_mask & (1U << i)) == 0U)
         {
-            vec4 txc = vec4(1.);
-            if ((null_texture_mask & (1U << i)) == 0U)
+            switch (i)
             {
-                switch (i)
-                {
-                    case 0U: txc = texture(tex[0], ftexcoord[i]); break;
-                    case 1U: txc = texture(tex[1], ftexcoord[i]); break;
-                    case 2U: txc = texture(tex[2], ftexcoord[i]); break;
-                    case 3U: txc = texture(tex[3], ftexcoord[i]); break;
-                    case 4U: txc = texture(tex[4], ftexcoord[i]); break;
-                    case 5U: txc = texture(tex[5], ftexcoord[i]); break;
-                    case 6U: txc = texture(tex[6], ftexcoord[i]); break;
-                    case 7U: txc = texture(tex[7], ftexcoord[i]); break;
-                }
+                case 0U: txc = texture(tex[0], ftexcoord[i]); break;
+                case 1U: txc = texture(tex[1], ftexcoord[i]); break;
+                case 2U: txc = texture(tex[2], ftexcoord[i]); break;
+                case 3U: txc = texture(tex[3], ftexcoord[i]); break;
+                case 4U: txc = texture(tex[4], ftexcoord[i]); break;
+                case 5U: txc = texture(tex[5], ftexcoord[i]); break;
+                case 6U: txc = texture(tex[6], ftexcoord[i]); break;
+                case 7U: txc = texture(tex[7], ftexcoord[i]); break;
             }
-            uint cop = texcomb[i].op & 0xfU;
-            uint aop = (texcomb[i].op & 0xf0U) >> 4;
-            uint dst = texcomb[i].op >> 31; //1: temp, 0: accumulator
-            uint ca1 = texcomb[i].cargs & 0xffU;
-            uint ca2 = (texcomb[i].cargs & 0xff00U) >> 8;
-            uint aa1 = texcomb[i].aargs & 0xffU;
-            uint aa2 = (texcomb[i].aargs & 0xff00U) >> 8;
-            vec4 cv1 = select_argument(i, ca1, txc, accum, temp[i], lighting_colors_e);
-            vec4 cv2 = select_argument(i, ca2, txc, accum, temp[i], lighting_colors_e);
-            vec4 av1 = select_argument(i, aa1, txc, accum, temp[i], lighting_colors_e);
-            vec4 av2 = select_argument(i, aa2, txc, accum, temp[i], lighting_colors_e);
-            vec4 rc = combine_value(cop, cv1, cv2, txc.a);
-            vec4 ra = combine_value(aop, av1, av2, txc.a);
-            if (dst == 1U)
-                temp[i] = vec4(rc.rgb, ra.a);
-            else
-                accum = vec4(rc.rgb, ra.a);
         }
-        color = accum + lighting_colors[2];
+        uint cop = texcomb[i].op & 0xfU;
+        uint aop = (texcomb[i].op & 0xf0U) >> 4;
+        uint dst = texcomb[i].op >> 31; //1: temp, 0: accumulator
+        uint ca1 = texcomb[i].cargs & 0xffU;
+        uint ca2 = (texcomb[i].cargs & 0xff00U) >> 8;
+        uint aa1 = texcomb[i].aargs & 0xffU;
+        uint aa2 = (texcomb[i].aargs & 0xff00U) >> 8;
+        vec4 cv1 = select_argument(i, ca1, txc, accum, temp[i], lighting_colors_e);
+        vec4 cv2 = select_argument(i, ca2, txc, accum, temp[i], lighting_colors_e);
+        vec4 av1 = select_argument(i, aa1, txc, accum, temp[i], lighting_colors_e);
+        vec4 av2 = select_argument(i, aa2, txc, accum, temp[i], lighting_colors_e);
+        vec4 rc = combine_value(cop, cv1, cv2, txc.a);
+        vec4 ra = combine_value(aop, av1, av2, txc.a);
+        if (dst == 1U)
+            temp[i] = vec4(rc.rgb, ra.a);
+        else
+            accum = vec4(rc.rgb, ra.a);
     }
-    else
+    color = accum + lighting_colors[2];
+#else
+    if ((null_texture_mask & 1U) == 0U)
     {
-        if ((null_texture_mask & 1U) == 0U)
-        {
-            vec4 texc = texture(tex[0], ftexcoord[0]);
-            if ((texcomb[0].op & 0xfU) == 13U)
-                color = texc;
-            else
-                color = (color - lighting_colors[2]) * texture(tex[0], ftexcoord[0]);
-            color += lighting_colors[2];
-        }
+        vec4 texc = texture(tex[0], ftexcoord[0]);
+        if ((texcomb[0].op & 0xfU) == 13U)
+            color = texc;
+        else
+            color = (color - lighting_colors[2]) * texture(tex[0], ftexcoord[0]);
+        color += lighting_colors[2];
     }
+#endif
     if ((alphatest_flags & 0x80U) != 0U && !alpha_test(color.a))
         discard;
     color = mix(fog_color, clamp_color(color), ffactor);

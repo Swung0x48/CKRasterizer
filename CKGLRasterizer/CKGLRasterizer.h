@@ -10,6 +10,7 @@
 #include <gl/GL.h>
 #include <gl/wglext.h>
 
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -187,6 +188,28 @@ struct CKGLTexCombinatorUniform
     }
 };
 
+struct CKGLFixedProgramState
+{
+    bool vertex_has_color;
+    bool vertex_is_transformed;
+    bool has_multi_texture;
+
+    bool operator ==(const CKGLFixedProgramState &other) const
+    {
+        return vertex_has_color == other.vertex_has_color &&
+               vertex_is_transformed == other.vertex_is_transformed &&
+               has_multi_texture == other.has_multi_texture;
+    }
+};
+
+template <> struct std::hash<CKGLFixedProgramState>
+{
+    std::size_t operator()(const CKGLFixedProgramState &s) const
+    {
+        return std::hash<std::vector<bool>>{}({s.vertex_has_color, s.vertex_is_transformed, s.has_multi_texture});
+    }
+};
+
 class CKGLRasterizerContext : public CKRasterizerContext
 {
 public:
@@ -272,9 +295,14 @@ public:
     static unsigned get_vertex_attrib_location(CKDWORD component);
     CKGLVertexFormat* get_vertex_format(CKRST_VERTEXFORMAT vf);
 
+    std::string preprocess_shader_source(const std::string &src, const CKGLFixedProgramState &st);
+    void setup_shader_program(CKGLProgram *p);
+    void init_program_uniform(CKGLProgram *p);
+
     void set_position_transformed(bool transformed);
     void set_vertex_has_color(bool color);
     void set_num_textures(CKDWORD ntex);
+    void switch_fprs(const CKGLFixedProgramState &newst);
     void select_framebuffer(bool twod);
     void set_title_status(const char* fmt, ...);
 
@@ -305,9 +333,11 @@ public:
 private:
     HDC m_DC = NULL;
     CKBOOL m_Vsync = FALSE;
-    constexpr static CKDWORD INVALID_VALUE = 0xffffffff;
-    CKGLProgram *m_prgm = nullptr;
-    CKDWORD m_CurrentIndexBuffer = INVALID_VALUE;
+    std::string m_vshsrc;
+    std::string m_fshsrc;
+    std::unordered_map<CKGLFixedProgramState, CKGLProgram*> m_programs;
+    CKGLProgram *m_curprgm = nullptr;
+    CKGLFixedProgramState m_current_fprs;
     std::vector<std::pair<CKDWORD, CKLightData>> m_lights;
     CKGLLightUniform m_lights_data[MAX_ACTIVE_LIGHTS];
     VxMatrix m_2dvpmtx;
@@ -327,7 +357,7 @@ private:
     CKDWORD m_current_vf = ~0U;
     std::unordered_map<CKDWORD, CKGLIndexBuffer*> m_dynibo;
     DWORD m_noibo_draw_counter = 0;
-    uint32_t m_cur_vp = 0;
+    uint32_t m_ntex = 0;
     CKDWORD m_cur_ts = ~0U;
     CKDWORD m_ts_texture[CKRST_MAX_STAGES] = {~0U};
     CKGLTexCombinatorUniform m_texcombo[CKRST_MAX_STAGES];
