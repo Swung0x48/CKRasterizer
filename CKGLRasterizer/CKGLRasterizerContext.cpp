@@ -262,7 +262,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     memset(m_renderst, 0xff, sizeof(m_renderst));
     memset(m_lights_data, 0, sizeof(m_lights_data));
 
-    m_lighting_flags = LSW_LIGHTING_ENABLED;
+    m_lighting_flags = 0;
     m_alpha_test_flags = 8; //alpha test off, alpha function always
     m_fog_flags = 0; //fog off, fog type none. We do not support vertex fog.
     m_fog_parameters[0] = 0.;
@@ -298,6 +298,7 @@ CKBOOL CKGLRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     switch_fprs(CKGLFixedProgramState {
         .vertex_has_color = false,
         .vertex_is_transformed = false,
+        .lighting_enabled = false,
         .has_multi_texture = false
     });
 
@@ -790,8 +791,9 @@ CKBOOL CKGLRasterizerContext::_SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         }
         case VXRENDERSTATE_LIGHTING:
         {
-            toggle_flag(&m_lighting_flags, LSW_LIGHTING_ENABLED, Value);
-            send_light_switches();
+            CKGLFixedProgramState ns = m_current_fprs;
+            ns.lighting_enabled = Value;
+            switch_fprs(ns);
             return TRUE;
         }
         case VXRENDERSTATE_COLORVERTEX:
@@ -1691,6 +1693,7 @@ std::string CKGLRasterizerContext::preprocess_shader_source(const std::string &s
             past_macro_block = true;
             oss << "#define VERTEX_IS_TRANSFORMED " << st.vertex_is_transformed << std::endl;
             oss << "#define VERTEX_HAS_COLOR " << st.vertex_has_color << std::endl;
+            oss << "#define LIGHTING_ENABLED " << st.lighting_enabled << std::endl;
             oss << "#define HAS_MULTI_TEXTURE " << st.has_multi_texture << std::endl;
         }
         if (!l.ends_with("///placeholder >_<"))

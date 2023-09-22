@@ -1,6 +1,7 @@
 #version 330 core
 #define VERTEX_IS_TRANSFORMED 0 ///placeholder >_<
 #define VERTEX_HAS_COLOR      0 ///placeholder >_<
+#define LIGHTING_ENABLED      0 ///placeholder >_<
 #define HAS_MULTI_TEXTURE     0 ///placeholder >_<
 
 const uint TVP_TC_CSNORM     = 0x01000000U;

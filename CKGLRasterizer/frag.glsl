@@ -1,11 +1,11 @@
 #version 330 core
 #define VERTEX_IS_TRANSFORMED 0 ///placeholder >_<
 #define VERTEX_HAS_COLOR      0 ///placeholder >_<
+#define LIGHTING_ENABLED      0 ///placeholder >_<
 #define HAS_MULTI_TEXTURE     0 ///placeholder >_<
 
 #define DEBUG
 const uint LSW_SPECULAR_ENABLED = 0x0001U;
-const uint LSW_LIGHTING_ENABLED = 0x0002U;
 const uint LSW_VRTCOLOR_ENABLED = 0x0004U;
 const uint LSW_SPCL_OVERR_FORCE = 0x0008U;
 const uint LSW_SPCL_OVERR_ONLY  = 0x0010U;
@@ -242,32 +242,34 @@ void main()
     color = vec4(1., 1., 1., 1.);
     vec4[3] lighting_colors = vec4[3](vec4(0.), vec4(0.), vec4(0.));
     vec4[4] lighting_colors_e = vec4[4](vec4(0.), vec4(0.), vec4(0.), vec4(0.));
-    if ((lighting_switches & LSW_LIGHTING_ENABLED) != 0U)
+#if LIGHTING_ENABLED
+    for (uint i = 0U; i < 16U; ++i)
     {
-        for (uint i = 0U; i < 16U; ++i)
-        {
-            if (lights[i].type != 0U)
-                lighting_colors = component_add(
-                    lighting_colors,
-                    light_unified(lights[i], norm, fpos, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U));
-        }
-        lighting_colors[0] = clamp_color(lighting_colors[0]);
-        lighting_colors[1] = clamp_color(lighting_colors[1]);
-        lighting_colors[2] = clamp_color(lighting_colors[2]);
-        color = accum_light(lighting_colors);
-        lighting_colors_e = vec4[4](lighting_colors[0], lighting_colors[1], lighting_colors[2], vec4(0.));
+        if (lights[i].type != 0U)
+            lighting_colors = component_add(
+                lighting_colors,
+                light_unified(lights[i], norm, fpos, vdir, (lighting_switches & LSW_SPECULAR_ENABLED) != 0U));
+    }
+    lighting_colors[0] = clamp_color(lighting_colors[0]);
+    lighting_colors[1] = clamp_color(lighting_colors[1]);
+    lighting_colors[2] = clamp_color(lighting_colors[2]);
+    color = accum_light(lighting_colors);
+    lighting_colors_e = vec4[4](lighting_colors[0], lighting_colors[1], lighting_colors[2], vec4(0.));
 #ifdef DEBUG
-        if ((lighting_switches & LSW_SPECULAR_ENABLED) == 0U ||
-            (lighting_switches & LSW_SPECULAR_ENABLED) != 0U && (lighting_switches & LSW_SPCL_OVERR_ONLY) == 0U)
+    if ((lighting_switches & LSW_SPECULAR_ENABLED) == 0U ||
+        (lighting_switches & LSW_SPECULAR_ENABLED) != 0U && (lighting_switches & LSW_SPCL_OVERR_ONLY) == 0U)
 #endif
-        {
-            lighting_colors_e[3] = material.emis;
-            color = accum_light_e(lighting_colors_e);
-            color.a = clamp(color.a, 0, 1);
-            if (material.diff.a < 1)
-                color.a = material.diff.a;
-        }
-    } else color = fragcol;
+    {
+        lighting_colors_e[3] = material.emis;
+        color = accum_light_e(lighting_colors_e);
+        color.a = clamp(color.a, 0, 1);
+        if (material.diff.a < 1)
+            color.a = material.diff.a;
+    }
+#else
+    color = fragcol;
+#endif
+
     //d3d adds the specular light without modulating it with the texture...
     //No idea how d3d exactly behaves for multi-textured draws, current
     //implementation is guesswork

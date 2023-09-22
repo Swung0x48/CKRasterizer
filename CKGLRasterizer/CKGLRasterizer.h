@@ -19,15 +19,9 @@
 #include "CKGLRasterizerCommon.h"
 
 #define LSW_SPECULAR_ENABLED 0x0001
-#define LSW_LIGHTING_ENABLED 0x0002
 #define LSW_VRTCOLOR_ENABLED 0x0004
 #define LSW_SPCL_OVERR_FORCE 0x0008
 #define LSW_SPCL_OVERR_ONLY  0x0010
-
-//vertex properties
-#define VP_HAS_COLOR      0x10000000 //vertex attribute includes color data
-#define VP_IS_TRANSFORMED 0x20000000 //vertex position is in viewport space
-#define VP_TEXTURE_MASK   0x0000000f //bitwise and with this to get # of textures used
 
 //per-texture vertex properties
 #define TVP_TC_CSNORM     0x01000000 //use camera space normal as input tex-coords
@@ -192,12 +186,14 @@ struct CKGLFixedProgramState
 {
     bool vertex_has_color;
     bool vertex_is_transformed;
+    bool lighting_enabled;
     bool has_multi_texture;
 
     bool operator ==(const CKGLFixedProgramState &other) const
     {
         return vertex_has_color == other.vertex_has_color &&
                vertex_is_transformed == other.vertex_is_transformed &&
+               lighting_enabled == other.lighting_enabled &&
                has_multi_texture == other.has_multi_texture;
     }
 };
@@ -206,7 +202,7 @@ template <> struct std::hash<CKGLFixedProgramState>
 {
     std::size_t operator()(const CKGLFixedProgramState &s) const
     {
-        return std::hash<std::vector<bool>>{}({s.vertex_has_color, s.vertex_is_transformed, s.has_multi_texture});
+        return std::hash<std::vector<bool>>{}({s.vertex_has_color, s.vertex_is_transformed, s.lighting_enabled, s.has_multi_texture});
     }
 };
 
