@@ -22,14 +22,18 @@ out vec4 fragscol;
 flat out uint fntex;
 out vec2 ftexcoord[8];
 uniform uint ntex;
-uniform mat4 mvp2d;
-uniform mat4 world;
-uniform mat4 view;
-uniform mat4 proj;
-uniform mat4 tiworld;
-uniform mat4 tiworldview;
 uniform mat4 textr[8];
 uniform uint texp[8];
+
+layout (std140) uniform M
+{
+    uniform mat4 mvp2d;
+    uniform mat4 world;
+    uniform mat4 view;
+    uniform mat4 proj;
+    uniform mat4 tiworld;
+    uniform mat4 tiworldview;
+};
 
 void main()
 {

@@ -23,6 +23,7 @@ private:
         uint32_t binding_point;
         uint32_t current_buffer;
         std::vector<GLuint> ubos;
+        bool is_mirror;
     };
     std::unordered_map<std::string, UniformBlockInfo> ubs;
 public:
@@ -33,6 +34,7 @@ public:
     void use();
 
     void define_uniform_block(const std::string &name, uint32_t nbuffers, int block_size, void *initial_data);
+    void define_uniform_block_mirrored(const std::string &name, CKGLProgram *from, const std::string &from_name);
     void update_uniform_block(const std::string &name, int start_offset, int data_size, void *data);
 
     void stage_uniform(const std::string &name, CKGLUniformValue *val);

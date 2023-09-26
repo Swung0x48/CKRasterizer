@@ -182,6 +182,16 @@ struct CKGLTexCombinatorUniform
     }
 };
 
+enum CKGLMatrices
+{
+    vp2d = 0,
+    world,
+    view,
+    proj,
+    tiworld,
+    tiworldview
+};
+
 struct CKGLFixedProgramState
 {
     bool vertex_has_color;
@@ -336,9 +346,7 @@ private:
     CKGLFixedProgramState m_current_fprs;
     std::vector<std::pair<CKDWORD, CKLightData>> m_lights;
     CKGLLightUniform m_lights_data[MAX_ACTIVE_LIGHTS];
-    VxMatrix m_2dvpmtx;
-    VxMatrix m_tiworldmtx;
-    VxMatrix m_tiworldviewmtx;
+    VxMatrix m_matrices[6];
     VxMatrix m_textrmtx[CKRST_MAX_STAGES];
     VxVector m_viewpos;
     uint32_t m_lighting_flags;

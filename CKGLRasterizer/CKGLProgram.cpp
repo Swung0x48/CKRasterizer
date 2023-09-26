@@ -65,7 +65,8 @@ CKGLProgram::~CKGLProgram()
     if (program)
         glDeleteProgram(program);
     for (auto &ubi : ubs)
-        glDeleteBuffers(ubi.second.ubos.size(), ubi.second.ubos.data());
+        if (!ubi.second.is_mirror)
+            glDeleteBuffers(ubi.second.ubos.size(), ubi.second.ubos.data());
 }
 
 bool CKGLProgram::validate() { return program; }
@@ -83,7 +84,22 @@ void CKGLProgram::define_uniform_block(const std::string &name, uint32_t nbuffer
     glBindBufferBase(GL_UNIFORM_BUFFER, bp, ubos[0]);
     ubs.emplace(std::piecewise_construct,
                 std::forward_as_tuple(name),
-                std::forward_as_tuple(bp, 0, std::move(ubos)));
+                std::forward_as_tuple(bp, 0, std::move(ubos), false));
+}
+
+void CKGLProgram::define_uniform_block_mirrored(const std::string &name, CKGLProgram *from, const std::string &from_name)
+{
+    if (from->ubs.find(from_name) == from->ubs.end())
+        return;
+    std::vector<GLuint> ubos = from->ubs[from_name].ubos;
+    uint32_t nbuffers = ubos.size();
+    int idx = glGetUniformBlockIndex(program, name.c_str());
+    uint32_t bp = ubs.size();
+    glUniformBlockBinding(program, idx, bp);
+    glBindBufferBase(GL_UNIFORM_BUFFER, bp, ubos[0]);
+    ubs.emplace(std::piecewise_construct,
+                std::forward_as_tuple(name),
+                std::forward_as_tuple(bp, 0, std::move(ubos), true));
 }
 
 void CKGLProgram::update_uniform_block(const std::string &name, int start_offset, int data_size, void *data)
