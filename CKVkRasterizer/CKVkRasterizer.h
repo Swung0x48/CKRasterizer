@@ -327,6 +327,8 @@ private:
     std::vector<VkFramebuffer> swchfb;
     VkShaderModule fsh;
     VkShaderModule vsh;
+    CKVkMemoryImage depthim;
+    VkImageView depthv;
     std::vector<VkCommandBuffer> cmdbuf;
     std::vector<VkSemaphore> vksimgavail;
     std::vector<VkSemaphore> vksrenderfinished;

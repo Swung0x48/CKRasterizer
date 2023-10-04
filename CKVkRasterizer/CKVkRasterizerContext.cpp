@@ -29,6 +29,8 @@ CKVkRasterizerContext::~CKVkRasterizerContext()
     for (auto &f : vkffrminfl)
         vkDestroyFence(vkdev, f, nullptr);
     vkDestroyCommandPool(vkdev, cmdpool, nullptr);
+    vkDestroyImageView(vkdev, depthv, nullptr);
+    destroy_memory_image(vkdev, depthim);
     for (auto &fb : swchfb)
         vkDestroyFramebuffer(vkdev, fb, nullptr);
     vkDestroyDescriptorSetLayout(vkdev, vkdsl, nullptr);
@@ -188,16 +190,47 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     colorattref.attachment = 0; //output location
     colorattref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
+    VkAttachmentDescription depthatt {
+        .flags=0,
+        .format=VK_FORMAT_D32_SFLOAT,
+        .samples=VK_SAMPLE_COUNT_1_BIT,
+        .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+    };
+
+    VkAttachmentReference depthattref {
+        .attachment=1,
+        .layout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+    };
+
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorattref;
+    subpass.pDepthStencilAttachment = &depthattref;
+
+    VkSubpassDependency dep {
+        .srcSubpass=VK_SUBPASS_EXTERNAL,
+        .dstSubpass=0,
+        .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        .srcAccessMask=0,
+        .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        .dependencyFlags=0
+    };
 
     auto rpc = make_vulkan_structure<VkRenderPassCreateInfo>();
-    rpc.attachmentCount = 1;
-    rpc.pAttachments = &coloratt;
+    const VkAttachmentDescription attchments[] = {coloratt, depthatt};
+    rpc.attachmentCount = 2;
+    rpc.pAttachments = attchments;
     rpc.subpassCount = 1;
     rpc.pSubpasses = &subpass;
+    rpc.dependencyCount = 1;
+    rpc.pDependencies = &dep;
 
     if (VK_SUCCESS != vkCreateRenderPass(vkdev, &rpc, nullptr, &vkrp))
         return FALSE;
@@ -267,6 +300,13 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     msstc.alphaToCoverageEnable = VK_FALSE;
     msstc.alphaToOneEnable = VK_FALSE;
 
+    auto dssc = make_vulkan_structure<VkPipelineDepthStencilStateCreateInfo>();
+    dssc.depthTestEnable = VK_TRUE;
+    dssc.depthWriteEnable = VK_TRUE;
+    dssc.depthCompareOp = VK_COMPARE_OP_LESS;
+    dssc.depthBoundsTestEnable = VK_FALSE;
+    dssc.stencilTestEnable = VK_FALSE;
+
     VkPipelineColorBlendAttachmentState blendst{};
     blendst.colorWriteMask = VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
     blendst.blendEnable = VK_FALSE;
@@ -305,7 +345,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     plc.pViewportState = &vpstc;
     plc.pRasterizationState = &rstc;
     plc.pMultisampleState = &msstc;
-    plc.pDepthStencilState = nullptr;
+    plc.pDepthStencilState = &dssc;
     plc.pColorBlendState = &blendstc;
     plc.pDynamicState = &dystc;
     plc.layout = vkpllo;
@@ -317,13 +357,16 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     if (VK_SUCCESS != vkCreateGraphicsPipelines(vkdev, VK_NULL_HANDLE, 1, &plc, nullptr, &vkpl))
         return FALSE;
 
+    depthim = create_memory_image(vkdev, vkphydev, swchiext.width, swchiext.height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    depthv = create_image_view(vkdev, depthim.im, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT);
+
     swchfb.resize(swchivw.size());
     for (size_t i = 0; i < swchfb.size(); ++i)
     {
-        VkImageView attachments[] = {swchivw[i]};
+        const VkImageView attachments[] = {swchivw[i], depthv};
         auto fbc = make_vulkan_structure<VkFramebufferCreateInfo>();
         fbc.renderPass = vkrp;
-        fbc.attachmentCount = 1;
+        fbc.attachmentCount = 2;
         fbc.pAttachments = attachments;
         fbc.width = swchiext.width;
         fbc.height = swchiext.height;
@@ -461,9 +504,11 @@ CKBOOL CKVkRasterizerContext::BeginScene()
     rpi.framebuffer = swchfb[image_index];//
     rpi.renderArea.offset = {0, 0};
     rpi.renderArea.extent = swchiext;
-    VkClearValue clearColor = {{{0., 0., 0., 1.}}};
-    rpi.clearValueCount = 1;
-    rpi.pClearValues = &clearColor;
+    VkClearValue colorc = {{{0., 0., 0., 1.}}};
+    VkClearValue depthsc = {1., 0.};
+    const VkClearValue clrv[] = {colorc, depthsc};
+    rpi.clearValueCount = 2;
+    rpi.pClearValues = clrv;
 
     vkCmdBeginRenderPass(cmdbuf[curfrm], &rpi, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, vkpl);

@@ -58,10 +58,23 @@ define_vk_typed_structure(VkPresentInfoKHR, VK_STRUCTURE_TYPE_PRESENT_INFO_KHR)
 define_vk_typed_structure(VkBufferCreateInfo, VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO)
 define_vk_typed_structure(VkMemoryAllocateInfo, VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
 define_vk_typed_structure(VkDescriptorSetLayoutCreateInfo, VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO)
+define_vk_typed_structure(VkImageCreateInfo, VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO)
+define_vk_typed_structure(VkPipelineDepthStencilStateCreateInfo, VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO)
+
+struct CKVkMemoryImage
+{
+    VkImage im;
+    VkDeviceMemory mem;
+};
 
 std::vector<VkVertexInputAttributeDescription> rst_vertex_format_to_vulkan_vertex_attrib(CKRST_VERTEXFORMAT vf);
 VkVertexInputBindingDescription rst_vertex_format_to_vulkan_input_binding(CKRST_VERTEXFORMAT vf);
 
 uint32_t get_memory_type_index(uint32_t wanted_type, VkMemoryPropertyFlags prop, VkPhysicalDevice vkphydev);
+
+CKVkMemoryImage create_memory_image(VkDevice vkdev, VkPhysicalDevice vkphydev, uint32_t w, uint32_t h, VkFormat fmt, VkImageTiling, VkImageUsageFlags usage, VkMemoryPropertyFlags memprop);
+void destroy_memory_image(VkDevice vkdev, CKVkMemoryImage i);
+
+VkImageView create_image_view(VkDevice vkdev, VkImage img, VkFormat fmt, VkImageAspectFlags aspf);
 
 #endif
