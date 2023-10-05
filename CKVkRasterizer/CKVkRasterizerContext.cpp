@@ -323,8 +323,8 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     blendstc.pAttachments = &blendst;
 
     auto plloc = make_vulkan_structure<VkPipelineLayoutCreateInfo>();
-    plloc.setLayoutCount = 1;
-    plloc.pSetLayouts = &vkdsl;
+    //plloc.setLayoutCount = 1;
+    //plloc.pSetLayouts = &vkdsl;
     VkPushConstantRange pconstr {
         VK_SHADER_STAGE_VERTEX_BIT,
         0, 192
