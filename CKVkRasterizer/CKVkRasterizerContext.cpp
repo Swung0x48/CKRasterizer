@@ -2,6 +2,7 @@
 #include "CKVkBuffer.h"
 #include "CKVkVertexBuffer.h"
 #include "CKVkIndexBuffer.h"
+#include "CKVkPipelineBuilder.h"
 #include "ResourceManagement.h"
 
 #include <algorithm>
@@ -161,34 +162,22 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     fshstc.module = fsh;
     fshstc.pName = "main";
 
-    VkPipelineShaderStageCreateInfo shst[] = {vshstc, fshstc};
+    VkAttachmentDescription coloratt {
+        .flags=0,
+        .format=swchifmt,
+        .samples=VK_SAMPLE_COUNT_1_BIT,
+        .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+    };
 
-    /*VkDescriptorSetLayoutBinding ubobinding{};
-    ubobinding.binding = 0;
-    ubobinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    ubobinding.descriptorCount = 1;
-    ubobinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    ubobinding.pImmutableSamplers = nullptr;
-
-    auto dslc = make_vulkan_structure<VkDescriptorSetLayoutCreateInfo>();
-    dslc.bindingCount = 1;
-    dslc.pBindings = &ubobinding;
-    if (VK_SUCCESS != vkCreateDescriptorSetLayout(vkdev, &dslc, nullptr, &vkdsl))
-        return FALSE;*/
-
-    VkAttachmentDescription coloratt{};
-    coloratt.format = swchifmt;
-    coloratt.samples = VK_SAMPLE_COUNT_1_BIT;
-    coloratt.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    coloratt.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    coloratt.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    coloratt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    coloratt.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    coloratt.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentReference colorattref{};
-    colorattref.attachment = 0; //output location
-    colorattref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    VkAttachmentReference colorattref {
+        .attachment=0, //output location
+        .layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+    };
 
     VkAttachmentDescription depthatt {
         .flags=0,
@@ -223,139 +212,83 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         .dependencyFlags=0
     };
 
-    auto rpc = make_vulkan_structure<VkRenderPassCreateInfo>();
-    const VkAttachmentDescription attchments[] = {coloratt, depthatt};
-    rpc.attachmentCount = 2;
-    rpc.pAttachments = attchments;
-    rpc.subpassCount = 1;
-    rpc.pSubpasses = &subpass;
-    rpc.dependencyCount = 1;
-    rpc.pDependencies = &dep;
-
-    if (VK_SUCCESS != vkCreateRenderPass(vkdev, &rpc, nullptr, &vkrp))
-        return FALSE;
-
-    std::vector<VkDynamicState> dyst = {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR
-    };
-
-    auto dystc = make_vulkan_structure<VkPipelineDynamicStateCreateInfo>();
-    dystc.dynamicStateCount = dyst.size();
-    dystc.pDynamicStates = dyst.data();
-
-    auto vtxinstc = make_vulkan_structure<VkPipelineVertexInputStateCreateInfo>();
     auto vibdesc = VkVertexInputBindingDescription{
         0,
         3 * 4 + 3 * 4 + 2 * 4,
         VK_VERTEX_INPUT_RATE_VERTEX
     };
-    vtxinstc.vertexBindingDescriptionCount = 1;
-    vtxinstc.pVertexBindingDescriptions = &vibdesc;
-    vtxinstc.vertexAttributeDescriptionCount = 3;
-    VkVertexInputAttributeDescription viadesc[3] = {
-        {
+
+    VkPipelineColorBlendAttachmentState blendatt{
+        .blendEnable=VK_FALSE,
+        .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,
+        .dstColorBlendFactor=VK_BLEND_FACTOR_ZERO,
+        .colorBlendOp=VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp=VK_BLEND_OP_ADD,
+        .colorWriteMask=VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT
+    };
+
+    std::tie(vkrp, vkpllo, vkpl) = CKVkPipelineBuilder()
+        .add_shader_stage(std::move(vshstc))
+        .add_shader_stage(std::move(fshstc))
+        .add_attachment(std::move(coloratt))
+        .add_attachment(std::move(depthatt))
+        .add_subpass(std::move(subpass))
+        .add_subpass_dependency(std::move(dep))
+        .add_dynamic_state(VK_DYNAMIC_STATE_VIEWPORT)
+        .add_dynamic_state(VK_DYNAMIC_STATE_SCISSOR)
+        .add_input_binding(VkVertexInputBindingDescription{
+            0,
+            3 * 4 + 3 * 4 + 2 * 4,
+            VK_VERTEX_INPUT_RATE_VERTEX
+        })
+        .add_vertex_attribute(VkVertexInputAttributeDescription{
             0, 0,
             VK_FORMAT_R32G32B32_SFLOAT, // POS
             0
-        },
-        {
+        })
+        .add_vertex_attribute(VkVertexInputAttributeDescription{
             1, 0,
             VK_FORMAT_R32G32B32_SFLOAT, // NORM
             12
-        },
-        {
+        })
+        .add_vertex_attribute(VkVertexInputAttributeDescription{
             2, 0,
             VK_FORMAT_R32G32_SFLOAT,    // TEX
             24
-        }
-    };
-    vtxinstc.pVertexAttributeDescriptions = viadesc;
+        })
+        .primitive_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .primitive_restart_enable(false)
+        .depth_clamp_enable(false)
+        .rasterizer_discard_enable(false)
+        .polygon_mode(VK_POLYGON_MODE_FILL)
+        .line_width(1.)
+        .cull_mode(VK_CULL_MODE_BACK_BIT)
+        .front_face(VK_FRONT_FACE_CLOCKWISE)
+        .depth_bias_enable(false)
+        .depth_test_enable(true)
+        .depth_write_enable(true)
+        .depth_op(VK_COMPARE_OP_LESS)
+        .depth_bounds_test_enable(false)
+        .stencil_test_enable(false)
+        .add_blending_attachment(std::move(blendatt))
+        .blending_logic_op_enable(false)
+        .add_push_constant_range(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, 192})
+        .build(vkdev);
 
-    auto inasc = make_vulkan_structure<VkPipelineInputAssemblyStateCreateInfo>();
-    inasc.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    inasc.primitiveRestartEnable = VK_FALSE;
+    /*VkDescriptorSetLayoutBinding ubobinding{};
+    ubobinding.binding = 0;
+    ubobinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    ubobinding.descriptorCount = 1;
+    ubobinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    ubobinding.pImmutableSamplers = nullptr;
 
-    VkViewport vp{0., 0., (float)Width, (float)Height, 0., 1.};
-    VkRect2D scis{{0, 0}, swchiext};
-
-    auto vpstc = make_vulkan_structure<VkPipelineViewportStateCreateInfo>();
-    vpstc.viewportCount = 1;
-    vpstc.scissorCount = 1;
-
-    auto rstc = make_vulkan_structure<VkPipelineRasterizationStateCreateInfo>();
-    rstc.depthClampEnable = VK_FALSE;
-    rstc.rasterizerDiscardEnable = VK_FALSE;
-    rstc.polygonMode = VK_POLYGON_MODE_FILL;
-    rstc.lineWidth = 1.;
-    rstc.cullMode = VK_CULL_MODE_BACK_BIT;
-    rstc.frontFace = VK_FRONT_FACE_CLOCKWISE;
-    rstc.depthBiasEnable = VK_FALSE;
-
-    auto msstc = make_vulkan_structure<VkPipelineMultisampleStateCreateInfo>();
-    msstc.sampleShadingEnable = VK_FALSE;
-    msstc.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-    msstc.minSampleShading = 1.;
-    msstc.pSampleMask = nullptr;
-    msstc.alphaToCoverageEnable = VK_FALSE;
-    msstc.alphaToOneEnable = VK_FALSE;
-
-    auto dssc = make_vulkan_structure<VkPipelineDepthStencilStateCreateInfo>();
-    dssc.depthTestEnable = VK_TRUE;
-    dssc.depthWriteEnable = VK_TRUE;
-    dssc.depthCompareOp = VK_COMPARE_OP_LESS;
-    dssc.depthBoundsTestEnable = VK_FALSE;
-    dssc.stencilTestEnable = VK_FALSE;
-
-    VkPipelineColorBlendAttachmentState blendst{};
-    blendst.colorWriteMask = VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
-    blendst.blendEnable = VK_FALSE;
-    blendst.colorBlendOp = VK_BLEND_OP_ADD;
-    blendst.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-    blendst.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-    blendst.alphaBlendOp = VK_BLEND_OP_ADD;
-    blendst.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    blendst.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-
-    auto blendstc = make_vulkan_structure<VkPipelineColorBlendStateCreateInfo>();
-    blendstc.logicOpEnable = VK_FALSE;
-    blendstc.attachmentCount = 1;
-    blendstc.pAttachments = &blendst;
-
-    auto plloc = make_vulkan_structure<VkPipelineLayoutCreateInfo>();
-    //plloc.setLayoutCount = 1;
-    //plloc.pSetLayouts = &vkdsl;
-    VkPushConstantRange pconstr {
-        VK_SHADER_STAGE_VERTEX_BIT,
-        0, 192
-    };
-    plloc.pushConstantRangeCount = 1;
-    plloc.pPushConstantRanges = &pconstr;
-    //plloc.pushConstantRangeCount = 0;
-    //plloc.pPushConstantRanges = nullptr;
-
-    if (VK_SUCCESS != vkCreatePipelineLayout(vkdev, &plloc, nullptr, &vkpllo))
-        return FALSE;
-
-    auto plc = make_vulkan_structure<VkGraphicsPipelineCreateInfo>();
-    plc.stageCount = 2;
-    plc.pStages = shst;
-    plc.pVertexInputState = &vtxinstc;
-    plc.pInputAssemblyState = &inasc;
-    plc.pViewportState = &vpstc;
-    plc.pRasterizationState = &rstc;
-    plc.pMultisampleState = &msstc;
-    plc.pDepthStencilState = &dssc;
-    plc.pColorBlendState = &blendstc;
-    plc.pDynamicState = &dystc;
-    plc.layout = vkpllo;
-    plc.renderPass = vkrp;
-    plc.subpass = 0;
-    plc.basePipelineHandle = VK_NULL_HANDLE;
-    plc.basePipelineIndex = -1;
-
-    if (VK_SUCCESS != vkCreateGraphicsPipelines(vkdev, VK_NULL_HANDLE, 1, &plc, nullptr, &vkpl))
-        return FALSE;
+    auto dslc = make_vulkan_structure<VkDescriptorSetLayoutCreateInfo>();
+    dslc.bindingCount = 1;
+    dslc.pBindings = &ubobinding;
+    if (VK_SUCCESS != vkCreateDescriptorSetLayout(vkdev, &dslc, nullptr, &vkdsl))
+        return FALSE;*/
 
     depthim = create_memory_image(vkdev, vkphydev, swchiext.width, swchiext.height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     depthv = create_image_view(vkdev, depthim.im, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT);
