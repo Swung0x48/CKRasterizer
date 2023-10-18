@@ -2,7 +2,8 @@
 #include "CKVkBuffer.h"
 #include "CKVkVertexBuffer.h"
 #include "CKVkIndexBuffer.h"
-#include "CKVkPipelineBuilder.h"
+#include "VkPipelineBuilder.h"
+#include "ManagedVulkanPipeline.h"
 #include "ResourceManagement.h"
 
 #include <algorithm>
@@ -23,6 +24,11 @@ CKVkRasterizerContext::CKVkRasterizerContext()
 CKVkRasterizerContext::~CKVkRasterizerContext()
 {
     vkDeviceWaitIdle(vkdev);
+    for (auto &mu : matubos)
+    {
+        mu.first->unmap();
+        delete mu.first;
+    }
     for (auto &s : vksimgavail)
         vkDestroySemaphore(vkdev, s, nullptr);
     for (auto &s : vksrenderfinished)
@@ -30,14 +36,12 @@ CKVkRasterizerContext::~CKVkRasterizerContext()
     for (auto &f : vkffrminfl)
         vkDestroyFence(vkdev, f, nullptr);
     vkDestroyCommandPool(vkdev, cmdpool, nullptr);
+    vkDestroyDescriptorPool(vkdev, descpool, nullptr);
     vkDestroyImageView(vkdev, depthv, nullptr);
     destroy_memory_image(vkdev, depthim);
     for (auto &fb : swchfb)
         vkDestroyFramebuffer(vkdev, fb, nullptr);
-    vkDestroyDescriptorSetLayout(vkdev, vkdsl, nullptr);
-    vkDestroyPipeline(vkdev, vkpl, nullptr);
-    vkDestroyPipelineLayout(vkdev, vkpllo, nullptr);
-    vkDestroyRenderPass(vkdev, vkrp, nullptr);
+    delete pl;
     vkDestroyShaderModule(vkdev, vsh, nullptr);
     vkDestroyShaderModule(vkdev, fsh, nullptr);
     for (auto &ivw : swchivw)
@@ -229,7 +233,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         .colorWriteMask=VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT
     };
 
-    std::tie(vkrp, vkpllo, vkpl) = CKVkPipelineBuilder()
+    pl = VkPipelineBuilder()
         .add_shader_stage(std::move(vshstc))
         .add_shader_stage(std::move(fshstc))
         .add_attachment(std::move(coloratt))
@@ -238,6 +242,8 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         .add_subpass_dependency(std::move(dep))
         .add_dynamic_state(VK_DYNAMIC_STATE_VIEWPORT)
         .add_dynamic_state(VK_DYNAMIC_STATE_SCISSOR)
+        .set_fixed_scissor_count(1)
+        .set_fixed_viewport_count(1)
         .add_input_binding(VkVertexInputBindingDescription{
             0,
             3 * 4 + 3 * 4 + 2 * 4,
@@ -260,6 +266,14 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         })
         .primitive_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .primitive_restart_enable(false)
+        .new_descriptor_set_layout(0)
+        .add_descriptor_set_binding(VkDescriptorSetLayoutBinding {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .pImmutableSamplers = nullptr
+        })
         .depth_clamp_enable(false)
         .rasterizer_discard_enable(false)
         .polygon_mode(VK_POLYGON_MODE_FILL)
@@ -277,18 +291,13 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         .add_push_constant_range(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, 192})
         .build(vkdev);
 
-    /*VkDescriptorSetLayoutBinding ubobinding{};
-    ubobinding.binding = 0;
-    ubobinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    ubobinding.descriptorCount = 1;
-    ubobinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    ubobinding.pImmutableSamplers = nullptr;
-
-    auto dslc = make_vulkan_structure<VkDescriptorSetLayoutCreateInfo>();
-    dslc.bindingCount = 1;
-    dslc.pBindings = &ubobinding;
-    if (VK_SUCCESS != vkCreateDescriptorSetLayout(vkdev, &dslc, nullptr, &vkdsl))
-        return FALSE;*/
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        CKVkBuffer *b = new CKVkBuffer(this);
+        b->create(sizeof(CKVkMatrixUniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, false);
+        void *d = b->map(0, sizeof(CKVkMatrixUniform));
+        matubos.emplace_back(b, d);
+    }
 
     depthim = create_memory_image(vkdev, vkphydev, swchiext.width, swchiext.height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     depthv = create_image_view(vkdev, depthim.im, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT);
@@ -298,7 +307,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     {
         const VkImageView attachments[] = {swchivw[i], depthv};
         auto fbc = make_vulkan_structure<VkFramebufferCreateInfo>();
-        fbc.renderPass = vkrp;
+        fbc.renderPass = pl->render_pass();
         fbc.attachmentCount = 2;
         fbc.pAttachments = attachments;
         fbc.width = swchiext.width;
@@ -321,6 +330,42 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     cmdbufac.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
     if (VK_SUCCESS != vkAllocateCommandBuffers(vkdev, &cmdbufac, cmdbuf.data()) != VK_SUCCESS)
         return FALSE;
+
+    auto dpc = make_vulkan_structure<VkDescriptorPoolCreateInfo>();
+    auto matpsz = VkDescriptorPoolSize {
+        .type=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount=MAX_FRAMES_IN_FLIGHT
+    };
+    dpc.poolSizeCount = 1;
+    dpc.pPoolSizes = &matpsz;
+    dpc.maxSets = MAX_FRAMES_IN_FLIGHT;
+    if (VK_SUCCESS != vkCreateDescriptorPool(vkdev, &dpc, nullptr, &descpool))
+        return FALSE;
+
+    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, pl->descriptor_set_layouts().front());
+    auto dsai = make_vulkan_structure<VkDescriptorSetAllocateInfo>();
+    dsai.descriptorPool = descpool;
+    dsai.descriptorSetCount = layouts.size();
+    dsai.pSetLayouts = layouts.data();
+    descsets.resize(layouts.size());
+    if (VK_SUCCESS != vkAllocateDescriptorSets(vkdev, &dsai, descsets.data()))
+        return FALSE;
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        VkDescriptorBufferInfo bi {
+            .buffer=matubos[i].first->get_buffer(),
+            .offset=0,
+            .range=sizeof(CKVkMatrixUniform)
+        };
+        auto dsw = make_vulkan_structure<VkWriteDescriptorSet>();
+        dsw.dstSet = descsets[i];
+        dsw.dstBinding = 0;
+        dsw.dstArrayElement = 0;
+        dsw.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        dsw.descriptorCount = 1;
+        dsw.pBufferInfo = &bi;
+        vkUpdateDescriptorSets(vkdev, 1, &dsw, 0, nullptr);
+    }
 
     auto semc = make_vulkan_structure<VkSemaphoreCreateInfo>();
 
@@ -433,7 +478,7 @@ CKBOOL CKVkRasterizerContext::BeginScene()
         return FALSE;
 
     auto rpi = make_vulkan_structure<VkRenderPassBeginInfo>();
-    rpi.renderPass = vkrp;
+    rpi.renderPass = pl->render_pass();
     rpi.framebuffer = swchfb[image_index];//
     rpi.renderArea.offset = {0, 0};
     rpi.renderArea.extent = swchiext;
@@ -444,7 +489,8 @@ CKBOOL CKVkRasterizerContext::BeginScene()
     rpi.pClearValues = clrv;
 
     vkCmdBeginRenderPass(cmdbuf[curfrm], &rpi, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, vkpl);
+    pl->command_bind_pipeline(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS);
+    pl->command_bind_descriptor_sets(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, 0, 1, &descsets[curfrm], 0, nullptr);
 
     in_scene = true;
 
@@ -623,8 +669,9 @@ CKBOOL CKVkRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
         default:
             return FALSE;
     }
-    if (in_scene)
-        vkCmdPushConstants(cmdbuf[curfrm], vkpllo, VK_SHADER_STAGE_VERTEX_BIT, 0, 192, &m_WorldMatrix);
+    memcpy(matubos[curfrm].second, &matrices, sizeof(CKVkMatrixUniform));
+    //if (in_scene)
+    //    pl->command_push_constants(cmdbuf[curfrm], VK_SHADER_STAGE_VERTEX_BIT, 0, 192, &m_WorldMatrix);
     return TRUE;
 }
 

@@ -2,11 +2,7 @@
 
 #include "CKVkRasterizer.h"
 
-CKVkBuffer::CKVkBuffer(CKVkRasterizerContext *ctx) : rctx(ctx)
-{
-    vkbuf = 0;
-    vkbufmem = 0;
-}
+CKVkBuffer::CKVkBuffer(CKVkRasterizerContext *ctx) : rctx(ctx), vkbuf(0), vkbufmem(0), vkcmdbuf(0), size(0) {}
 
 CKVkBuffer::~CKVkBuffer()
 {
@@ -14,7 +10,7 @@ CKVkBuffer::~CKVkBuffer()
     vkFreeMemory(rctx->vkdev, vkbufmem, nullptr);
 }
 
-void CKVkBuffer::create(uint64_t sz, VkBufferUsageFlags usage, VkMemoryPropertyFlags mprop)
+void CKVkBuffer::create(uint64_t sz, VkBufferUsageFlags usage, VkMemoryPropertyFlags mprop, bool xfersrc)
 {
     size = sz;
     auto vkbufc = make_vulkan_structure<VkBufferCreateInfo>();
@@ -31,11 +27,14 @@ void CKVkBuffer::create(uint64_t sz, VkBufferUsageFlags usage, VkMemoryPropertyF
     vkAllocateMemory(rctx->vkdev, &alloci, nullptr, &vkbufmem);
     vkBindBufferMemory(rctx->vkdev, vkbuf, vkbufmem, 0);
 
-    auto vkcmdbufac = make_vulkan_structure<VkCommandBufferAllocateInfo>();
-    vkcmdbufac.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    vkcmdbufac.commandPool = rctx->cmdpool;
-    vkcmdbufac.commandBufferCount = 1;
-    vkAllocateCommandBuffers(rctx->vkdev, &vkcmdbufac, &vkcmdbuf);
+    if (xfersrc)
+    {
+        auto vkcmdbufac = make_vulkan_structure<VkCommandBufferAllocateInfo>();
+        vkcmdbufac.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        vkcmdbufac.commandPool = rctx->cmdpool;
+        vkcmdbufac.commandBufferCount = 1;
+        vkAllocateCommandBuffers(rctx->vkdev, &vkcmdbufac, &vkcmdbuf);
+    }
 }
 
 VkBuffer CKVkBuffer::get_buffer() { return vkbuf; }
@@ -60,11 +59,11 @@ void CKVkBuffer::transfer(VkBuffer dst)
     vkQueueWaitIdle(rctx->gfxq);
 }
 
-void *CKVkBuffer::lock(uint64_t offset, uint64_t size)
+void *CKVkBuffer::map(uint64_t offset, uint64_t size)
 {
     void *ret = nullptr;
     vkMapMemory(rctx->vkdev, vkbufmem, offset, size, 0, &ret);
     return ret;
 }
 
-void CKVkBuffer::unlock() { vkUnmapMemory(rctx->vkdev, vkbufmem); }
+void CKVkBuffer::unmap() { vkUnmapMemory(rctx->vkdev, vkbufmem); }

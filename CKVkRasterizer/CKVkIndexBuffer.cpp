@@ -24,16 +24,16 @@ void CKVkIndexBuffer::create()
     {
         ssbuf = new CKVkBuffer(rctx);
         ssbuf->create(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, false);
     }
     else
     {
         ssbuf = new CKVkBuffer(rctx);
         ssbuf->create(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, false);
         csbuf = new CKVkBuffer(rctx);
         csbuf->create(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, true);
     }
 }
 
@@ -45,13 +45,13 @@ void CKVkIndexBuffer::bind(VkCommandBuffer cmdbuf)
 void *CKVkIndexBuffer::lock(uint64_t offset, uint64_t size)
 {
     if (csbuf)
-        return csbuf->lock(offset, size ? size : this->size);
+        return csbuf->map(offset, size ? size : this->size);
     else
-        return ssbuf->lock(offset, size ? size : this->size);
+        return ssbuf->map(offset, size ? size : this->size);
 }
 
 void CKVkIndexBuffer::unlock()
 {
-    if (csbuf) csbuf->unlock();
-    else ssbuf->unlock();
+    if (csbuf) csbuf->unmap();
+    else ssbuf->unmap();
 }

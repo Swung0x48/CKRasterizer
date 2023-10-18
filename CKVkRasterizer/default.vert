@@ -1,13 +1,6 @@
 #version 450
 
-/*layout (std140, binding=0) uniform MatricesUniformBlock
-{
-    mat4 world;
-    mat4 view;
-    mat4 proj;
-} m;*/
-
-layout ( push_constant ) uniform MatricesUniformBlock
+layout (std140, binding=0) uniform MatricesUniformBlock
 {
     mat4 world;
     mat4 view;

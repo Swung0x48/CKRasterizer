@@ -37,9 +37,10 @@
 
 #define MAX_ACTIVE_LIGHTS 16
 
-#define MAX_FRAMES_IN_FLIGHT 2
+const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
 class CKVkRasterizerContext;
+class ManagedVulkanPipeline;
 
 class CKVkRasterizer : public CKRasterizer
 {
@@ -309,10 +310,6 @@ public:
     VkDevice vkdev;
     uint32_t gqidx;
     uint32_t pqidx;
-    VkRenderPass vkrp;
-    VkDescriptorSetLayout vkdsl;
-    VkPipelineLayout vkpllo;
-    VkPipeline vkpl;
     VkCommandPool cmdpool;
     VkQueue gfxq;
     VkQueue prsq;
@@ -325,10 +322,13 @@ private:
     VkExtent2D swchiext;
     std::vector<VkImageView> swchivw;
     std::vector<VkFramebuffer> swchfb;
+    ManagedVulkanPipeline *pl = nullptr;
     VkShaderModule fsh;
     VkShaderModule vsh;
     CKVkMemoryImage depthim;
     VkImageView depthv;
+    VkDescriptorPool descpool;
+    std::vector<VkDescriptorSet> descsets;
     std::vector<VkCommandBuffer> cmdbuf;
     std::vector<VkSemaphore> vksimgavail;
     std::vector<VkSemaphore> vksrenderfinished;
@@ -338,7 +338,7 @@ private:
     bool in_scene = false;
 
     CKVkMatrixUniform matrices;
-    std::vector<CKVkBuffer*> matubos;
+    std::vector<std::pair<CKVkBuffer*, void*>> matubos;
     //debugging
     int m_step_mode = 0;
     int m_batch_status = 0;

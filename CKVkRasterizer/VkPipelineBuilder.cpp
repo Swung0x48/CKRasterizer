@@ -1,6 +1,6 @@
-#include "CKVkPipelineBuilder.h"
+#include "VkPipelineBuilder.h"
 
-CKVkPipelineBuilder::CKVkPipelineBuilder() :
+VkPipelineBuilder::VkPipelineBuilder() :
     vkrp{}
 {
     iasc = make_vulkan_structure<VkPipelineInputAssemblyStateCreateInfo>();
@@ -16,164 +16,176 @@ CKVkPipelineBuilder::CKVkPipelineBuilder() :
     bstc = make_vulkan_structure<VkPipelineColorBlendStateCreateInfo>();
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::add_shader_stage(VkPipelineShaderStageCreateInfo &&ss)
+VkPipelineBuilder &VkPipelineBuilder::add_shader_stage(VkPipelineShaderStageCreateInfo &&ss)
 {
     shader_stages.push_back(ss);
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::add_subpass(VkSubpassDescription &&sp)
+VkPipelineBuilder &VkPipelineBuilder::add_subpass(VkSubpassDescription &&sp)
 {
     subpasses.push_back(sp);
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::add_attachment(VkAttachmentDescription &&at)
+VkPipelineBuilder &VkPipelineBuilder::add_attachment(VkAttachmentDescription &&at)
 {
     attachments.push_back(at);
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::add_subpass_dependency(VkSubpassDependency &&spd)
+VkPipelineBuilder &VkPipelineBuilder::add_subpass_dependency(VkSubpassDependency &&spd)
 {
     spdeps.push_back(spd);
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::add_dynamic_state(VkDynamicState dyst)
+VkPipelineBuilder &VkPipelineBuilder::add_dynamic_state(VkDynamicState dyst)
 {
     dynamic_states.push_back(dyst);
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::add_input_binding(VkVertexInputBindingDescription &&vib)
+VkPipelineBuilder &VkPipelineBuilder::add_input_binding(VkVertexInputBindingDescription &&vib)
 {
     input_bindings.push_back(vib);
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::add_vertex_attribute(VkVertexInputAttributeDescription &&via)
+VkPipelineBuilder &VkPipelineBuilder::add_vertex_attribute(VkVertexInputAttributeDescription &&via)
 {
     input_attribs.push_back(via);
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::primitive_topology(VkPrimitiveTopology t)
+VkPipelineBuilder &VkPipelineBuilder::primitive_topology(VkPrimitiveTopology t)
 {
     iasc.topology = t;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::primitive_restart_enable(bool e)
+VkPipelineBuilder &VkPipelineBuilder::primitive_restart_enable(bool e)
 {
     iasc.primitiveRestartEnable = e;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::add_viewport(VkViewport &&vp)
+VkPipelineBuilder &VkPipelineBuilder::add_viewport(VkViewport &&vp)
 {
     vps.push_back(vp);
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::add_scissor_area(VkRect2D &&sa)
+VkPipelineBuilder &VkPipelineBuilder::add_scissor_area(VkRect2D &&sa)
 {
     scissors.push_back(sa);
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::depth_clamp_enable(bool e)
+VkPipelineBuilder &VkPipelineBuilder::set_fixed_viewport_count(uint32_t c)
+{
+    vpc.emplace(c);
+    return *this;
+}
+
+VkPipelineBuilder &VkPipelineBuilder::set_fixed_scissor_count(uint32_t c)
+{
+    scc.emplace(c);
+    return *this;
+}
+
+VkPipelineBuilder &VkPipelineBuilder::depth_clamp_enable(bool e)
 {
     rstc.depthClampEnable = e;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::rasterizer_discard_enable(bool e)
+VkPipelineBuilder &VkPipelineBuilder::rasterizer_discard_enable(bool e)
 {
     rstc.rasterizerDiscardEnable = e;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::polygon_mode(VkPolygonMode m)
+VkPipelineBuilder &VkPipelineBuilder::polygon_mode(VkPolygonMode m)
 {
     rstc.polygonMode = m;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::line_width(float w)
+VkPipelineBuilder &VkPipelineBuilder::line_width(float w)
 {
     rstc.lineWidth = w;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::cull_mode(VkCullModeFlags cm)
+VkPipelineBuilder &VkPipelineBuilder::cull_mode(VkCullModeFlags cm)
 {
     rstc.cullMode = cm;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::front_face(VkFrontFace ff)
+VkPipelineBuilder &VkPipelineBuilder::front_face(VkFrontFace ff)
 {
     rstc.frontFace = ff;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::depth_bias_enable(bool e)
+VkPipelineBuilder &VkPipelineBuilder::depth_bias_enable(bool e)
 {
     rstc.depthBiasEnable = e;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::depth_test_enable(bool e)
+VkPipelineBuilder &VkPipelineBuilder::depth_test_enable(bool e)
 {
     dssc.depthTestEnable = e;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::depth_write_enable(bool e)
+VkPipelineBuilder &VkPipelineBuilder::depth_write_enable(bool e)
 {
     dssc.depthWriteEnable = e;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::depth_op(VkCompareOp op)
+VkPipelineBuilder &VkPipelineBuilder::depth_op(VkCompareOp op)
 {
     dssc.depthCompareOp = op;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::depth_bounds_test_enable(bool e)
+VkPipelineBuilder &VkPipelineBuilder::depth_bounds_test_enable(bool e)
 {
     dssc.depthBoundsTestEnable = e;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::depth_bounds(float min, float max)
+VkPipelineBuilder &VkPipelineBuilder::depth_bounds(float min, float max)
 {
     dssc.minDepthBounds = min;
     dssc.maxDepthBounds = max;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::stencil_test_enable(bool e)
+VkPipelineBuilder &VkPipelineBuilder::stencil_test_enable(bool e)
 {
     dssc.stencilTestEnable = e;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::stencil_front_op(VkStencilOpState sop)
+VkPipelineBuilder &VkPipelineBuilder::stencil_front_op(VkStencilOpState sop)
 {
     dssc.front = sop;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::stencil_back_op(VkStencilOpState sop)
+VkPipelineBuilder &VkPipelineBuilder::stencil_back_op(VkStencilOpState sop)
 {
     dssc.back = sop;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::add_blending_attachment(VkPipelineColorBlendAttachmentState &&ba)
+VkPipelineBuilder &VkPipelineBuilder::add_blending_attachment(VkPipelineColorBlendAttachmentState &&ba)
 {
     blend_attachments.push_back(ba);
     bstc.attachmentCount = blend_attachments.size();
@@ -181,25 +193,38 @@ CKVkPipelineBuilder &CKVkPipelineBuilder::add_blending_attachment(VkPipelineColo
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::blending_logic_op_enable(bool e)
+VkPipelineBuilder &VkPipelineBuilder::blending_logic_op_enable(bool e)
 {
     bstc.logicOpEnable = e;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::blending_logic_op(VkLogicOp lop)
+VkPipelineBuilder &VkPipelineBuilder::blending_logic_op(VkLogicOp lop)
 {
     bstc.logicOp = lop;
     return *this;
 }
 
-CKVkPipelineBuilder &CKVkPipelineBuilder::add_push_constant_range(VkPushConstantRange &&pcr)
+VkPipelineBuilder &VkPipelineBuilder::add_push_constant_range(VkPushConstantRange &&pcr)
 {
     push_constant_ranges.push_back(pcr);
     return *this;
 }
 
-std::tuple<VkRenderPass, VkPipelineLayout, VkPipeline> CKVkPipelineBuilder::build(VkDevice vkdev) const
+VkPipelineBuilder &VkPipelineBuilder::new_descriptor_set_layout(VkDescriptorSetLayoutCreateFlags flags)
+{
+    desc_sets.emplace_back(flags, std::vector<VkDescriptorSetLayoutBinding>{});
+    return *this;
+}
+
+VkPipelineBuilder &VkPipelineBuilder::add_descriptor_set_binding(VkDescriptorSetLayoutBinding &&b)
+{
+    if (!desc_sets.empty())
+        desc_sets.back().second.push_back(b);
+    return *this;
+}
+
+ManagedVulkanPipeline* VkPipelineBuilder::build(VkDevice vkdev) const
 {
     auto rpc = make_vulkan_structure<VkRenderPassCreateInfo>();
     rpc.attachmentCount = attachments.size();
@@ -210,7 +235,7 @@ std::tuple<VkRenderPass, VkPipelineLayout, VkPipeline> CKVkPipelineBuilder::buil
     rpc.pDependencies = spdeps.data();
     VkRenderPass rp;
     if (VK_SUCCESS != vkCreateRenderPass(vkdev, &rpc, nullptr, &rp))
-        return std::tuple<VkRenderPass, VkPipelineLayout, VkPipeline>();
+        return nullptr;
 
     auto dystc = make_vulkan_structure<VkPipelineDynamicStateCreateInfo>();
     dystc.dynamicStateCount = dynamic_states.size();
@@ -223,19 +248,42 @@ std::tuple<VkRenderPass, VkPipelineLayout, VkPipeline> CKVkPipelineBuilder::buil
     vtxinstc.pVertexAttributeDescriptions = input_attribs.data();
 
     auto vpstc = make_vulkan_structure<VkPipelineViewportStateCreateInfo>();
-    vpstc.viewportCount = vps.size();
+    vpstc.viewportCount = vpc.value_or(vps.size());
     vpstc.pViewports = vps.data();
-    vpstc.scissorCount = scissors.size();
+    vpstc.scissorCount = scc.value_or(scissors.size());
     vpstc.pScissors = scissors.data();
+
+    std::vector<VkDescriptorSetLayout> dsls;
+    for (auto& ds_desc : desc_sets)
+    {
+        auto dslc = make_vulkan_structure<VkDescriptorSetLayoutCreateInfo>();
+        dslc.flags = ds_desc.first;
+        dslc.bindingCount = ds_desc.second.size();
+        dslc.pBindings = ds_desc.second.data();
+        VkDescriptorSetLayout layout;
+        if (VK_SUCCESS != vkCreateDescriptorSetLayout(vkdev, &dslc, nullptr, &layout))
+        {
+            vkDestroyRenderPass(vkdev, rp, nullptr);
+            for (auto &dsl : dsls)
+                vkDestroyDescriptorSetLayout(vkdev, dsl, nullptr);
+            return nullptr;
+        }
+        dsls.push_back(layout);
+    }
 
     auto plloc = make_vulkan_structure<VkPipelineLayoutCreateInfo>();
     plloc.pushConstantRangeCount = push_constant_ranges.size();
     plloc.pPushConstantRanges = push_constant_ranges.data();
+    plloc.setLayoutCount = dsls.size();
+    plloc.pSetLayouts = dsls.data();
+
     VkPipelineLayout plo;
     if (VK_SUCCESS != vkCreatePipelineLayout(vkdev, &plloc, nullptr, &plo))
     {
         vkDestroyRenderPass(vkdev, rp, nullptr);
-        return std::tuple<VkRenderPass, VkPipelineLayout, VkPipeline>();
+        for (auto &dsl : dsls)
+            vkDestroyDescriptorSetLayout(vkdev, dsl, nullptr);
+        return nullptr;
     }
 
     auto plc = make_vulkan_structure<VkGraphicsPipelineCreateInfo>();
@@ -259,8 +307,10 @@ std::tuple<VkRenderPass, VkPipelineLayout, VkPipeline> CKVkPipelineBuilder::buil
     {
         vkDestroyPipelineLayout(vkdev, plo, nullptr);
         vkDestroyRenderPass(vkdev, rp, nullptr);
-        return std::tuple<VkRenderPass, VkPipelineLayout, VkPipeline>();
+        for (auto &dsl : dsls)
+            vkDestroyDescriptorSetLayout(vkdev, dsl, nullptr);
+        return nullptr;
     }
 
-    return std::make_tuple(rp, plo, p);
+    return new ManagedVulkanPipeline(rp, plo, p, std::move(dsls), vkdev);
 }

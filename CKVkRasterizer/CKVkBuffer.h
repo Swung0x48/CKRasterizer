@@ -19,11 +19,11 @@ public:
     explicit CKVkBuffer(CKVkRasterizerContext *ctx);
     ~CKVkBuffer();
 
-    void create(uint64_t sz, VkBufferUsageFlags usage, VkMemoryPropertyFlags mprop);
+    void create(uint64_t sz, VkBufferUsageFlags usage, VkMemoryPropertyFlags mprop, bool xfersrc);
     VkBuffer get_buffer();
     void transfer(VkBuffer dst);
-    void* lock(uint64_t offset, uint64_t size);
-    void unlock();
+    void* map(uint64_t offset, uint64_t size);
+    void unmap();
 };
 
 #endif
