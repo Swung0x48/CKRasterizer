@@ -269,7 +269,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         .new_descriptor_set_layout(0)
         .add_descriptor_set_binding(VkDescriptorSetLayoutBinding {
             .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .pImmutableSamplers = nullptr
@@ -294,8 +294,9 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
     {
         CKVkBuffer *b = new CKVkBuffer(this);
-        b->create(sizeof(CKVkMatrixUniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, false);
-        void *d = b->map(0, sizeof(CKVkMatrixUniform));
+        auto sz = sizeof(CKVkMatrixUniform) * 4096;
+        b->create(sz, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, false);
+        void *d = b->map(0, sz);
         matubos.emplace_back(b, d);
     }
 
@@ -361,7 +362,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         dsw.dstSet = descsets[i];
         dsw.dstBinding = 0;
         dsw.dstArrayElement = 0;
-        dsw.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        dsw.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
         dsw.descriptorCount = 1;
         dsw.pBufferInfo = &bi;
         vkUpdateDescriptorSets(vkdev, 1, &dsw, 0, nullptr);
@@ -488,11 +489,12 @@ CKBOOL CKVkRasterizerContext::BeginScene()
     rpi.clearValueCount = 2;
     rpi.pClearValues = clrv;
 
+    in_scene = true;
+    ubo_offset = 0;
+
     vkCmdBeginRenderPass(cmdbuf[curfrm], &rpi, VK_SUBPASS_CONTENTS_INLINE);
     pl->command_bind_pipeline(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS);
-    pl->command_bind_descriptor_sets(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, 0, 1, &descsets[curfrm], 0, nullptr);
-
-    in_scene = true;
+    pl->command_bind_descriptor_sets(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, 0, 1, &descsets[curfrm], 1, &ubo_offset);
 
     auto vpd = &m_ViewportData;
     VkViewport vp {
@@ -669,7 +671,6 @@ CKBOOL CKVkRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
         default:
             return FALSE;
     }
-    memcpy(matubos[curfrm].second, &matrices, sizeof(CKVkMatrixUniform));
     //if (in_scene)
     //    pl->command_push_constants(cmdbuf[curfrm], VK_SHADER_STAGE_VERTEX_BIT, 0, 192, &m_WorldMatrix);
     return TRUE;
@@ -763,7 +764,12 @@ CKBOOL CKVkRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
 
     if (pType != VX_TRIANGLELIST)
         return FALSE;
+    uint8_t *dest = static_cast<uint8_t*>(matubos[curfrm].second);
+    dest = dest + ubo_offset;
+    memcpy(dest, &matrices, sizeof(CKVkMatrixUniform));
+    pl->command_bind_descriptor_sets(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, 0, 1, &descsets[curfrm], 1, &ubo_offset);
     vkCmdDrawIndexed(cmdbuf[curfrm], Indexcount, 1, StartIndex, MinVIndex, 0);
+    ubo_offset += sizeof(CKVkMatrixUniform);
     return TRUE;
 }
 

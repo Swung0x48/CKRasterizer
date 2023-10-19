@@ -333,6 +333,7 @@ private:
     std::vector<VkSemaphore> vksimgavail;
     std::vector<VkSemaphore> vksrenderfinished;
     std::vector<VkFence> vkffrminfl;
+    uint32_t ubo_offset = 0;
     uint32_t curfrm = 0;
     uint32_t image_index = 0;
     bool in_scene = false;
