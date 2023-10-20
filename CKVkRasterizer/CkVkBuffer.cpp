@@ -2,7 +2,7 @@
 
 #include "CKVkRasterizer.h"
 
-CKVkBuffer::CKVkBuffer(CKVkRasterizerContext *ctx) : rctx(ctx), vkbuf(0), vkbufmem(0), vkcmdbuf(0), size(0) {}
+CKVkBuffer::CKVkBuffer(CKVkRasterizerContext *ctx) : rctx(ctx), vkbuf(0), vkbufmem(0), size(0) {}
 
 CKVkBuffer::~CKVkBuffer()
 {
@@ -28,38 +28,18 @@ void CKVkBuffer::create(uint64_t sz, VkBufferUsageFlags usage, VkMemoryPropertyF
     });
     vkAllocateMemory(rctx->vkdev, &alloci, nullptr, &vkbufmem);
     vkBindBufferMemory(rctx->vkdev, vkbuf, vkbufmem, 0);
-
-    if (usage & VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
-    {
-        auto vkcmdbufac = make_vulkan_structure<VkCommandBufferAllocateInfo>({
-            .commandPool=rctx->cmdpool,
-            .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            .commandBufferCount=1
-        });
-        vkAllocateCommandBuffers(rctx->vkdev, &vkcmdbufac, &vkcmdbuf);
-    }
 }
 
 VkBuffer CKVkBuffer::get_buffer() { return vkbuf; }
 
 void CKVkBuffer::transfer(VkBuffer dst)
 {
-    auto vkcbbegin = make_vulkan_structure<VkCommandBufferBeginInfo>({.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
-
-    vkResetCommandBuffer(vkcmdbuf, 0);
-    vkBeginCommandBuffer(vkcmdbuf, &vkcbbegin);
-    VkBufferCopy bcpy{};
-    bcpy.srcOffset = bcpy.dstOffset = 0;
-    bcpy.size = size;
-    vkCmdCopyBuffer(vkcmdbuf, vkbuf, dst, 1, &bcpy);
-    vkEndCommandBuffer(vkcmdbuf);
-
-    auto submiti = make_vulkan_structure<VkSubmitInfo>({
-        .commandBufferCount=1,
-        .pCommandBuffers=&vkcmdbuf
+    run_oneshot_command_list(rctx->vkdev, rctx->cmdpool, rctx->gfxq, [this, &dst](auto cmdbuf) {
+        VkBufferCopy bcpy{};
+        bcpy.srcOffset = bcpy.dstOffset = 0;
+        bcpy.size = size;
+        vkCmdCopyBuffer(cmdbuf, vkbuf, dst, 1, &bcpy);
     });
-    vkQueueSubmit(rctx->gfxq, 1, &submiti, VK_NULL_HANDLE);
-    vkQueueWaitIdle(rctx->gfxq);
 }
 
 void *CKVkBuffer::map(uint64_t offset, uint64_t size)

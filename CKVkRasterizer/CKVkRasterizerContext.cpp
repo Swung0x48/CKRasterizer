@@ -127,22 +127,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     swchiext = swpext;
 
     for (auto &img : swchi)
-    {
-        auto ivwc = make_vulkan_structure<VkImageViewCreateInfo>({
-            .image=img,
-            .viewType=VK_IMAGE_VIEW_TYPE_2D,
-            .format=swchifmt,
-            .components={VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
-            .subresourceRange={
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                0, 1,
-                0, 1
-        }});
-        VkImageView ivw;
-        if (VK_SUCCESS != vkCreateImageView(vkdev, &ivwc, nullptr, &ivw))
-            return FALSE;
-        swchivw.push_back(ivw);
-    }
+        swchivw.push_back(create_image_view(vkdev, img, swchifmt, VK_IMAGE_ASPECT_COLOR_BIT));
 
     auto shmodc = make_vulkan_structure<VkShaderModuleCreateInfo>(
     {

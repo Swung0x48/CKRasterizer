@@ -13,7 +13,6 @@ private:
     VkBuffer vkbuf;
     VkDeviceMemory vkbufmem;
     CKVkRasterizerContext *rctx;
-    VkCommandBuffer vkcmdbuf;
     uint64_t size;
 public:
     explicit CKVkBuffer(CKVkRasterizerContext *ctx);

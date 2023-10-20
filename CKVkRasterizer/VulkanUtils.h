@@ -4,6 +4,7 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
 
+#include <functional>
 #include <vector>
 
 #include <CKRasterizerEnums.h>
@@ -62,6 +63,7 @@ define_vk_typed_structure(VkPipelineDepthStencilStateCreateInfo, VK_STRUCTURE_TY
 define_vk_typed_structure(VkDescriptorPoolCreateInfo, VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO)
 define_vk_typed_structure(VkDescriptorSetAllocateInfo, VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO)
 define_vk_typed_structure(VkWriteDescriptorSet, VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
+define_vk_typed_structure(VkImageMemoryBarrier, VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER)
 
 struct CKVkMemoryImage
 {
@@ -71,6 +73,8 @@ struct CKVkMemoryImage
 
 std::vector<VkVertexInputAttributeDescription> rst_vertex_format_to_vulkan_vertex_attrib(CKRST_VERTEXFORMAT vf);
 VkVertexInputBindingDescription rst_vertex_format_to_vulkan_input_binding(CKRST_VERTEXFORMAT vf);
+
+void run_oneshot_command_list(VkDevice dev, VkCommandPool cmdp, VkQueue q, std::function<void(VkCommandBuffer)> f);
 
 uint32_t get_memory_type_index(uint32_t wanted_type, VkMemoryPropertyFlags prop, VkPhysicalDevice vkphydev);
 

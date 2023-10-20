@@ -65,6 +65,32 @@ VkVertexInputBindingDescription rst_vertex_format_to_vulkan_input_binding(CKRST_
     return ret;
 }
 
+void run_oneshot_command_list(VkDevice dev, VkCommandPool cmdp, VkQueue q, std::function<void(VkCommandBuffer)> f)
+{
+    VkCommandBuffer cmdbuf;
+    auto vkcmdbufac = make_vulkan_structure<VkCommandBufferAllocateInfo>({
+        .commandPool=cmdp,
+        .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount=1
+    });
+    vkAllocateCommandBuffers(dev, &vkcmdbufac, &cmdbuf);
+
+    auto cbbi = make_vulkan_structure<VkCommandBufferBeginInfo>({.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
+    vkResetCommandBuffer(cmdbuf, 0);
+
+    vkBeginCommandBuffer(cmdbuf, &cbbi);
+    f(cmdbuf);
+    vkEndCommandBuffer(cmdbuf);
+
+    auto submiti = make_vulkan_structure<VkSubmitInfo>({
+        .commandBufferCount=1,
+        .pCommandBuffers=&cmdbuf
+    });
+    vkQueueSubmit(q, 1, &submiti, VK_NULL_HANDLE);
+    vkQueueWaitIdle(q);
+    vkFreeCommandBuffers(dev, cmdp, 1, &cmdbuf);
+}
+
 uint32_t get_memory_type_index(uint32_t wanted_type, VkMemoryPropertyFlags prop, VkPhysicalDevice vkphydev)
 {
     VkPhysicalDeviceMemoryProperties mprop;
