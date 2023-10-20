@@ -80,25 +80,27 @@ uint32_t get_memory_type_index(uint32_t wanted_type, VkMemoryPropertyFlags prop,
 CKVkMemoryImage create_memory_image(VkDevice vkdev, VkPhysicalDevice vkphydev, uint32_t w, uint32_t h, VkFormat fmt, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags memprop)
 {
     CKVkMemoryImage ret{NULL, NULL};
-    auto imci = make_vulkan_structure<VkImageCreateInfo>();
-    imci.imageType = VK_IMAGE_TYPE_2D;
-    imci.extent = {.width=w, .height=h, .depth=1};
-    imci.mipLevels = 1;
-    imci.arrayLayers = 1;
-    imci.format = fmt;
-    imci.tiling = tiling;
-    imci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imci.usage = usage;
-    imci.samples = VK_SAMPLE_COUNT_1_BIT;
-    imci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    auto imci = make_vulkan_structure<VkImageCreateInfo>({
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = fmt,
+        .extent = {.width=w, .height=h, .depth=1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = tiling,
+        .usage = usage,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+    });
     if (vkCreateImage(vkdev, &imci, nullptr, &ret.im) != VK_SUCCESS)
         return ret;
 
     VkMemoryRequirements mreq;
     vkGetImageMemoryRequirements(vkdev, ret.im, &mreq);
-    auto alloci = make_vulkan_structure<VkMemoryAllocateInfo>();
-    alloci.allocationSize = mreq.size;
-    alloci.memoryTypeIndex = get_memory_type_index(mreq.memoryTypeBits, memprop, vkphydev);
+    auto alloci = make_vulkan_structure<VkMemoryAllocateInfo>({
+        .allocationSize=mreq.size,
+        .memoryTypeIndex=get_memory_type_index(mreq.memoryTypeBits, memprop, vkphydev)
+    });
     if (vkAllocateMemory(vkdev, &alloci, nullptr, &ret.mem) != VK_SUCCESS)
         return ret;
     vkBindImageMemory(vkdev, ret.im, ret.mem, 0);
@@ -113,17 +115,17 @@ void destroy_memory_image(VkDevice vkdev, CKVkMemoryImage i)
 
 VkImageView create_image_view(VkDevice vkdev, VkImage img, VkFormat fmt, VkImageAspectFlags aspf)
 {
-    auto ivci = make_vulkan_structure<VkImageViewCreateInfo>();
-    ivci.image = img;
-    ivci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    ivci.format = fmt;
-    ivci.subresourceRange = {
-        .aspectMask=aspf,
-        .baseMipLevel=0,
-        .levelCount=1,
-        .baseArrayLayer=0,
-        .layerCount=1
-    };
+    auto ivci = make_vulkan_structure<VkImageViewCreateInfo>({
+        .image=img,
+        .viewType=VK_IMAGE_VIEW_TYPE_2D,
+        .format=fmt,
+        .subresourceRange={
+            .aspectMask=aspf,
+            .baseMipLevel=0,
+            .levelCount=1,
+            .baseArrayLayer=0,
+            .layerCount=1
+    }});
 
     VkImageView ret;
     vkCreateImageView(vkdev, &ivci, nullptr, &ret); // != VK_SUCCESS...

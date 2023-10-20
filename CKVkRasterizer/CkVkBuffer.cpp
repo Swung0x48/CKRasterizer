@@ -10,29 +10,32 @@ CKVkBuffer::~CKVkBuffer()
     vkFreeMemory(rctx->vkdev, vkbufmem, nullptr);
 }
 
-void CKVkBuffer::create(uint64_t sz, VkBufferUsageFlags usage, VkMemoryPropertyFlags mprop, bool xfersrc)
+void CKVkBuffer::create(uint64_t sz, VkBufferUsageFlags usage, VkMemoryPropertyFlags mprop)
 {
     size = sz;
-    auto vkbufc = make_vulkan_structure<VkBufferCreateInfo>();
-    vkbufc.size = sz;
-    vkbufc.usage = usage;
-    vkbufc.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    auto vkbufc = make_vulkan_structure<VkBufferCreateInfo>({
+        .size=sz,
+        .usage=usage,
+        .sharingMode=VK_SHARING_MODE_EXCLUSIVE
+    });
     vkCreateBuffer(rctx->vkdev, &vkbufc, nullptr, &vkbuf);
 
     VkMemoryRequirements mreq;
     vkGetBufferMemoryRequirements(rctx->vkdev, vkbuf, &mreq);
-    auto alloci = make_vulkan_structure<VkMemoryAllocateInfo>();
-    alloci.allocationSize = mreq.size;
-    alloci.memoryTypeIndex = get_memory_type_index(mreq.memoryTypeBits, mprop, rctx->vkphydev);
+    auto alloci = make_vulkan_structure<VkMemoryAllocateInfo>({
+        .allocationSize=mreq.size,
+        .memoryTypeIndex=get_memory_type_index(mreq.memoryTypeBits, mprop, rctx->vkphydev)
+    });
     vkAllocateMemory(rctx->vkdev, &alloci, nullptr, &vkbufmem);
     vkBindBufferMemory(rctx->vkdev, vkbuf, vkbufmem, 0);
 
-    if (xfersrc)
+    if (usage & VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
     {
-        auto vkcmdbufac = make_vulkan_structure<VkCommandBufferAllocateInfo>();
-        vkcmdbufac.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        vkcmdbufac.commandPool = rctx->cmdpool;
-        vkcmdbufac.commandBufferCount = 1;
+        auto vkcmdbufac = make_vulkan_structure<VkCommandBufferAllocateInfo>({
+            .commandPool=rctx->cmdpool,
+            .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount=1
+        });
         vkAllocateCommandBuffers(rctx->vkdev, &vkcmdbufac, &vkcmdbuf);
     }
 }
@@ -41,8 +44,7 @@ VkBuffer CKVkBuffer::get_buffer() { return vkbuf; }
 
 void CKVkBuffer::transfer(VkBuffer dst)
 {
-    auto vkcbbegin = make_vulkan_structure<VkCommandBufferBeginInfo>();
-    vkcbbegin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    auto vkcbbegin = make_vulkan_structure<VkCommandBufferBeginInfo>({.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
     vkResetCommandBuffer(vkcmdbuf, 0);
     vkBeginCommandBuffer(vkcmdbuf, &vkcbbegin);
@@ -52,9 +54,10 @@ void CKVkBuffer::transfer(VkBuffer dst)
     vkCmdCopyBuffer(vkcmdbuf, vkbuf, dst, 1, &bcpy);
     vkEndCommandBuffer(vkcmdbuf);
 
-    auto submiti = make_vulkan_structure<VkSubmitInfo>();
-    submiti.commandBufferCount = 1;
-    submiti.pCommandBuffers = &vkcmdbuf;
+    auto submiti = make_vulkan_structure<VkSubmitInfo>({
+        .commandBufferCount=1,
+        .pCommandBuffers=&vkcmdbuf
+    });
     vkQueueSubmit(rctx->gfxq, 1, &submiti, VK_NULL_HANDLE);
     vkQueueWaitIdle(rctx->gfxq);
 }

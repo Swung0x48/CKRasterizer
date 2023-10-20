@@ -58,14 +58,15 @@ XBOOL CKVkRasterizer::Start(WIN_HANDLE AppWnd)
     m_MainWindow = AppWnd;
     m_Init = TRUE;
 
-    auto appinfo = make_vulkan_structure<VkApplicationInfo>();
-    appinfo.pApplicationName = "Virtools Application";
-    appinfo.applicationVersion = VK_MAKE_API_VERSION(0, 2, 1, 0);
-    appinfo.pEngineName = "CK2";
-    appinfo.engineVersion = VK_MAKE_API_VERSION(0, 2, 1, 0);
-    appinfo.apiVersion = VK_API_VERSION_1_3;
+    auto appinfo = make_vulkan_structure<VkApplicationInfo>({
+        .pApplicationName="Virtools Application",
+        .applicationVersion=VK_MAKE_API_VERSION(0, 2, 1, 0),
+        .pEngineName="CK2",
+        .engineVersion=VK_MAKE_API_VERSION(0, 2, 1, 0),
+        .apiVersion=VK_API_VERSION_1_3
+    });
 
-    auto dmcinfo = make_vulkan_structure<VkDebugUtilsMessengerCreateInfoEXT>();
+    auto dmcinfo = make_vulkan_structure<VkDebugUtilsMessengerCreateInfoEXT>({.pfnUserCallback=debug_callback});
     dmcinfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
     dmcinfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
     dmcinfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
@@ -73,8 +74,6 @@ XBOOL CKVkRasterizer::Start(WIN_HANDLE AppWnd)
     dmcinfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
     dmcinfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
     dmcinfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    dmcinfo.pfnUserCallback = debug_callback;
-    dmcinfo.pUserData = nullptr;
 
     uint32_t lcnt = 0;
     vkEnumerateInstanceLayerProperties(&lcnt, nullptr);
@@ -94,13 +93,14 @@ XBOOL CKVkRasterizer::Start(WIN_HANDLE AppWnd)
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         //VK_KHR_DISPLAY_EXTENSION_NAME   //can't use this sh*t right now because Intel is so sh*t.
     };
-    auto instcinfo = make_vulkan_structure<VkInstanceCreateInfo>();
-    instcinfo.pApplicationInfo = &appinfo;
-    instcinfo.enabledExtensionCount = instext.size();
-    instcinfo.ppEnabledExtensionNames = instext.data();
-    instcinfo.enabledLayerCount = needed_layers.size();
-    instcinfo.ppEnabledLayerNames = needed_layers.data();
-    instcinfo.pNext = &dmcinfo;
+    auto instcinfo = make_vulkan_structure<VkInstanceCreateInfo>({
+        .pNext = &dmcinfo,
+        .pApplicationInfo = &appinfo,
+        .enabledLayerCount = needed_layers.size(),
+        .ppEnabledLayerNames = needed_layers.data(),
+        .enabledExtensionCount = instext.size(),
+        .ppEnabledExtensionNames = instext.data()
+    });
     if (VK_SUCCESS != vkCreateInstance(&instcinfo, nullptr, &vkinst))
         return FALSE;
 
@@ -113,9 +113,7 @@ XBOOL CKVkRasterizer::Start(WIN_HANDLE AppWnd)
                               WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
                               0, 0, 1, 1, nullptr, nullptr,
                               GetModuleHandle(NULL), NULL);
-    auto surfacecinfo = make_vulkan_structure<VkWin32SurfaceCreateInfoKHR>();
-    surfacecinfo.hwnd = sacw;
-    surfacecinfo.hinstance = GetModuleHandle(NULL);
+    auto surfacecinfo = make_vulkan_structure<VkWin32SurfaceCreateInfoKHR>({.hinstance=GetModuleHandle(NULL),.hwnd=sacw});
     VkSurfaceKHR sacs;
     if (VK_SUCCESS != vkCreateWin32SurfaceKHR(vkinst, &surfacecinfo, nullptr, &sacs))
         return FALSE;
@@ -175,21 +173,23 @@ XBOOL CKVkRasterizer::Start(WIN_HANDLE AppWnd)
     uint32_t gqidx = ~0U;
     uint32_t pqidx = ~0U;
     select_qf(phydevs[selected_phydev], gqidx, pqidx);
-    auto qcinfo = make_vulkan_structure<VkDeviceQueueCreateInfo>();
-    qcinfo.queueFamilyIndex = gqidx;
-    qcinfo.queueCount = 1;
     float qprio = 1;
-    qcinfo.pQueuePriorities = &qprio;
+    auto qcinfo = make_vulkan_structure<VkDeviceQueueCreateInfo>({
+        .queueFamilyIndex=gqidx,
+        .queueCount=1,
+        .pQueuePriorities=&qprio
+    });
 
     VkPhysicalDeviceFeatures devfs{};
-    auto devcinfo = make_vulkan_structure<VkDeviceCreateInfo>();
-    devcinfo.queueCreateInfoCount = 1;
-    devcinfo.pQueueCreateInfos = &qcinfo;
-    devcinfo.pEnabledFeatures = &devfs;
-    devcinfo.enabledExtensionCount = devext.size();
-    devcinfo.ppEnabledExtensionNames = devext.data();
-    devcinfo.enabledLayerCount = needed_layers.size();
-    devcinfo.ppEnabledLayerNames = needed_layers.data();
+    auto devcinfo = make_vulkan_structure<VkDeviceCreateInfo>({
+        .queueCreateInfoCount=1,
+        .pQueueCreateInfos=&qcinfo,
+        .enabledLayerCount=needed_layers.size(),
+        .ppEnabledLayerNames=needed_layers.data(),
+        .enabledExtensionCount=devext.size(),
+        .ppEnabledExtensionNames=devext.data(),
+        .pEnabledFeatures=&devfs
+    });
 
     vkDestroySurfaceKHR(vkinst, sacs, nullptr);
     DestroyWindow(sacw);

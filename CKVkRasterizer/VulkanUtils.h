@@ -9,18 +9,17 @@
 #include <CKRasterizerEnums.h>
 
 template <typename T>
-T make_vulkan_structure()
+T make_vulkan_structure(T _)
 {
     static_assert(sizeof(T) == 0, "unimplemented");
 }
 
 #ifndef VULKANUTILS_IMPL
 #define define_vk_typed_structure(ty, _) \
-template <> ty make_vulkan_structure<ty>();
+template <> ty make_vulkan_structure<ty>(ty _);
 #else
 #define define_vk_typed_structure(ty, sty) \
-template <> ty make_vulkan_structure<ty>() {\
-    ty r{};\
+template <> ty make_vulkan_structure<ty>(ty r) {\
     r.sType = sty;\
     return r;\
 }

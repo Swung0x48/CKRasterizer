@@ -3,17 +3,18 @@
 VkPipelineBuilder::VkPipelineBuilder() :
     vkrp{}
 {
-    iasc = make_vulkan_structure<VkPipelineInputAssemblyStateCreateInfo>();
-    rstc = make_vulkan_structure<VkPipelineRasterizationStateCreateInfo>();
-    msstc = make_vulkan_structure<VkPipelineMultisampleStateCreateInfo>();
-    msstc.sampleShadingEnable = VK_FALSE;
-    msstc.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-    msstc.minSampleShading = 1.;
-    msstc.pSampleMask = nullptr;
-    msstc.alphaToCoverageEnable = VK_FALSE;
-    msstc.alphaToOneEnable = VK_FALSE;
-    dssc = make_vulkan_structure<VkPipelineDepthStencilStateCreateInfo>();
-    bstc = make_vulkan_structure<VkPipelineColorBlendStateCreateInfo>();
+    iasc = make_vulkan_structure<VkPipelineInputAssemblyStateCreateInfo>({});
+    rstc = make_vulkan_structure<VkPipelineRasterizationStateCreateInfo>({});
+    msstc = make_vulkan_structure<VkPipelineMultisampleStateCreateInfo>({
+        .rasterizationSamples=VK_SAMPLE_COUNT_1_BIT,
+        .sampleShadingEnable=VK_FALSE,
+        .minSampleShading=1.,
+        .pSampleMask=nullptr,
+        .alphaToCoverageEnable=VK_FALSE,
+        .alphaToOneEnable=VK_FALSE
+    });
+    dssc = make_vulkan_structure<VkPipelineDepthStencilStateCreateInfo>({});
+    bstc = make_vulkan_structure<VkPipelineColorBlendStateCreateInfo>({});
 }
 
 VkPipelineBuilder &VkPipelineBuilder::add_shader_stage(VkPipelineShaderStageCreateInfo &&ss)
@@ -226,40 +227,45 @@ VkPipelineBuilder &VkPipelineBuilder::add_descriptor_set_binding(VkDescriptorSet
 
 ManagedVulkanPipeline* VkPipelineBuilder::build(VkDevice vkdev) const
 {
-    auto rpc = make_vulkan_structure<VkRenderPassCreateInfo>();
-    rpc.attachmentCount = attachments.size();
-    rpc.pAttachments = attachments.data();
-    rpc.subpassCount = subpasses.size();
-    rpc.pSubpasses = subpasses.data();
-    rpc.dependencyCount = spdeps.size();
-    rpc.pDependencies = spdeps.data();
+    auto rpc = make_vulkan_structure<VkRenderPassCreateInfo>({
+        .attachmentCount=attachments.size(),
+        .pAttachments=attachments.data(),
+        .subpassCount=subpasses.size(),
+        .pSubpasses=subpasses.data(),
+        .dependencyCount=spdeps.size(),
+        .pDependencies=spdeps.data()
+    });
     VkRenderPass rp;
     if (VK_SUCCESS != vkCreateRenderPass(vkdev, &rpc, nullptr, &rp))
         return nullptr;
 
-    auto dystc = make_vulkan_structure<VkPipelineDynamicStateCreateInfo>();
-    dystc.dynamicStateCount = dynamic_states.size();
-    dystc.pDynamicStates = dynamic_states.data();
+    auto dystc = make_vulkan_structure<VkPipelineDynamicStateCreateInfo>({
+        .dynamicStateCount=dynamic_states.size(),
+        .pDynamicStates=dynamic_states.data()
+    });
 
-    auto vtxinstc = make_vulkan_structure<VkPipelineVertexInputStateCreateInfo>();
-    vtxinstc.vertexBindingDescriptionCount = input_bindings.size();
-    vtxinstc.pVertexBindingDescriptions = input_bindings.data();
-    vtxinstc.vertexAttributeDescriptionCount = input_attribs.size();
-    vtxinstc.pVertexAttributeDescriptions = input_attribs.data();
+    auto vtxinstc = make_vulkan_structure<VkPipelineVertexInputStateCreateInfo>({
+        .vertexBindingDescriptionCount=input_bindings.size(),
+        .pVertexBindingDescriptions=input_bindings.data(),
+        .vertexAttributeDescriptionCount=input_attribs.size(),
+        .pVertexAttributeDescriptions=input_attribs.data()
+    });
 
-    auto vpstc = make_vulkan_structure<VkPipelineViewportStateCreateInfo>();
-    vpstc.viewportCount = vpc.value_or(vps.size());
-    vpstc.pViewports = vps.data();
-    vpstc.scissorCount = scc.value_or(scissors.size());
-    vpstc.pScissors = scissors.data();
+    auto vpstc = make_vulkan_structure<VkPipelineViewportStateCreateInfo>({
+        .viewportCount=vpc.value_or(vps.size()),
+        .pViewports=vps.data(),
+        .scissorCount=scc.value_or(scissors.size()),
+        .pScissors=scissors.data()
+    });
 
     std::vector<VkDescriptorSetLayout> dsls;
     for (auto& ds_desc : desc_sets)
     {
-        auto dslc = make_vulkan_structure<VkDescriptorSetLayoutCreateInfo>();
-        dslc.flags = ds_desc.first;
-        dslc.bindingCount = ds_desc.second.size();
-        dslc.pBindings = ds_desc.second.data();
+        auto dslc = make_vulkan_structure<VkDescriptorSetLayoutCreateInfo>({
+            .flags=ds_desc.first,
+            .bindingCount=ds_desc.second.size(),
+            .pBindings=ds_desc.second.data()
+        });
         VkDescriptorSetLayout layout;
         if (VK_SUCCESS != vkCreateDescriptorSetLayout(vkdev, &dslc, nullptr, &layout))
         {
@@ -271,11 +277,12 @@ ManagedVulkanPipeline* VkPipelineBuilder::build(VkDevice vkdev) const
         dsls.push_back(layout);
     }
 
-    auto plloc = make_vulkan_structure<VkPipelineLayoutCreateInfo>();
-    plloc.pushConstantRangeCount = push_constant_ranges.size();
-    plloc.pPushConstantRanges = push_constant_ranges.data();
-    plloc.setLayoutCount = dsls.size();
-    plloc.pSetLayouts = dsls.data();
+    auto plloc = make_vulkan_structure<VkPipelineLayoutCreateInfo>({
+        .setLayoutCount=dsls.size(),
+        .pSetLayouts=dsls.data(),
+        .pushConstantRangeCount=push_constant_ranges.size(),
+        .pPushConstantRanges=push_constant_ranges.data()
+    });
 
     VkPipelineLayout plo;
     if (VK_SUCCESS != vkCreatePipelineLayout(vkdev, &plloc, nullptr, &plo))
@@ -286,22 +293,23 @@ ManagedVulkanPipeline* VkPipelineBuilder::build(VkDevice vkdev) const
         return nullptr;
     }
 
-    auto plc = make_vulkan_structure<VkGraphicsPipelineCreateInfo>();
-    plc.stageCount = shader_stages.size();
-    plc.pStages = shader_stages.data();
-    plc.pVertexInputState = &vtxinstc;
-    plc.pInputAssemblyState = &iasc;
-    plc.pViewportState = &vpstc;
-    plc.pRasterizationState = &rstc;
-    plc.pMultisampleState = &msstc;
-    plc.pDepthStencilState = &dssc;
-    plc.pColorBlendState = &bstc;
-    plc.pDynamicState = &dystc;
-    plc.layout = plo;
-    plc.renderPass = rp;
-    plc.subpass = 0;
-    plc.basePipelineHandle = VK_NULL_HANDLE;
-    plc.basePipelineIndex = -1;
+    auto plc = make_vulkan_structure<VkGraphicsPipelineCreateInfo>({
+        .stageCount=shader_stages.size(),
+        .pStages=shader_stages.data(),
+        .pVertexInputState=&vtxinstc,
+        .pInputAssemblyState=&iasc,
+        .pViewportState=&vpstc,
+        .pRasterizationState=&rstc,
+        .pMultisampleState=&msstc,
+        .pDepthStencilState=&dssc,
+        .pColorBlendState=&bstc,
+        .pDynamicState=&dystc,
+        .layout=plo,
+        .renderPass=rp,
+        .subpass=0,
+        .basePipelineHandle=VK_NULL_HANDLE,
+        .basePipelineIndex=-1
+    });
     VkPipeline p;
     if (VK_SUCCESS != vkCreateGraphicsPipelines(vkdev, VK_NULL_HANDLE, 1, &plc, nullptr, &p))
     {
