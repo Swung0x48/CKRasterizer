@@ -202,6 +202,7 @@ struct CKGLTexCombinatorUniform
 class CKVkBuffer;
 class CKVkVertexBuffer;
 class CKVkIndexBuffer;
+class CKVkSampler;
 
 class CKVkRasterizerContext : public CKRasterizerContext
 {
@@ -257,6 +258,7 @@ public:
 
     //--- Creation of Textures, Sprites and Vertex Buffer
     CKBOOL CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat) override;
+    CKBOOL DeleteObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type) override;
 
     //--- Vertex Buffers
     virtual void *LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
@@ -328,6 +330,7 @@ private:
     CKVkMemoryImage depthim;
     VkImageView depthv;
     VkDescriptorPool descpool;
+    CKVkSampler *smplr = nullptr;
     std::vector<VkDescriptorSet> descsets;
     std::vector<VkCommandBuffer> cmdbuf;
     std::vector<VkSemaphore> vksimgavail;
@@ -340,7 +343,11 @@ private:
 
     CKVkMatrixUniform matrices;
     std::vector<std::pair<CKVkBuffer*, void*>> matubos;
+    std::unordered_map<DWORD, uint32_t> texture_binding;
+    bool textures_updated;
     //debugging
     int m_step_mode = 0;
     int m_batch_status = 0;
+
+    void update_descriptor_sets(bool init);
 };

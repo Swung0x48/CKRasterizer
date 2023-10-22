@@ -212,16 +212,16 @@ VkPipelineBuilder &VkPipelineBuilder::add_push_constant_range(VkPushConstantRang
     return *this;
 }
 
-VkPipelineBuilder &VkPipelineBuilder::new_descriptor_set_layout(VkDescriptorSetLayoutCreateFlags flags)
+VkPipelineBuilder &VkPipelineBuilder::new_descriptor_set_layout(VkDescriptorSetLayoutCreateFlags flags, const void *dslc_pnext)
 {
-    desc_sets.emplace_back(flags, std::vector<VkDescriptorSetLayoutBinding>{});
+    desc_sets.emplace_back(flags, dslc_pnext, std::vector<VkDescriptorSetLayoutBinding>());
     return *this;
 }
 
 VkPipelineBuilder &VkPipelineBuilder::add_descriptor_set_binding(VkDescriptorSetLayoutBinding &&b)
 {
     if (!desc_sets.empty())
-        desc_sets.back().second.push_back(b);
+        std::get<2>(desc_sets.back()).push_back(b);
     return *this;
 }
 
@@ -261,10 +261,12 @@ ManagedVulkanPipeline* VkPipelineBuilder::build(VkDevice vkdev) const
     std::vector<VkDescriptorSetLayout> dsls;
     for (auto& ds_desc : desc_sets)
     {
+        auto [flags, pnext, dsl] = ds_desc;
         auto dslc = make_vulkan_structure<VkDescriptorSetLayoutCreateInfo>({
-            .flags=ds_desc.first,
-            .bindingCount=ds_desc.second.size(),
-            .pBindings=ds_desc.second.data()
+            .pNext=pnext,
+            .flags=flags,
+            .bindingCount=dsl.size(),
+            .pBindings=dsl.data()
         });
         VkDescriptorSetLayout layout;
         if (VK_SUCCESS != vkCreateDescriptorSetLayout(vkdev, &dslc, nullptr, &layout))

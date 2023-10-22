@@ -181,7 +181,15 @@ XBOOL CKVkRasterizer::Start(WIN_HANDLE AppWnd)
     });
 
     VkPhysicalDeviceFeatures devfs{};
+    auto phydif = make_vulkan_structure<VkPhysicalDeviceDescriptorIndexingFeatures>({
+        .descriptorBindingUniformBufferUpdateAfterBind=VK_TRUE,
+        .descriptorBindingSampledImageUpdateAfterBind=VK_TRUE,
+        .descriptorBindingPartiallyBound=VK_TRUE,
+        .descriptorBindingVariableDescriptorCount=VK_TRUE,
+        .runtimeDescriptorArray=VK_TRUE
+    });
     auto devcinfo = make_vulkan_structure<VkDeviceCreateInfo>({
+        .pNext=&phydif,
         .queueCreateInfoCount=1,
         .pQueueCreateInfos=&qcinfo,
         .enabledLayerCount=needed_layers.size(),

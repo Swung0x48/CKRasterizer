@@ -10,7 +10,15 @@ CKVkTexture::CKVkTexture(CKVkRasterizerContext *ctx, CKTextureDesc *texdesc) :
 {
 }
 
-CKVkTexture::~CKVkTexture() {}
+CKVkTexture::~CKVkTexture()
+{
+    if (img)
+    {
+        vkDestroyImageView(rctx->vkdev, imgv, nullptr);
+        vkDestroyImage(rctx->vkdev, img, nullptr);
+        vkFreeMemory(rctx->vkdev, dmem, nullptr);
+    }
+}
 
 void CKVkTexture::create()
 {
@@ -40,12 +48,12 @@ void CKVkTexture::create()
     imgv = create_image_view(rctx->vkdev, img, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
-void CKVkTexture::bind() {}
-
+//CKVkTexture::load always expects 32bpp image data.
+//Use VxDoBlit/VxDoBlitUpsideDown to convert the image.
 void CKVkTexture::load(void *data)
 {
     CKVkBuffer *stgbuf = new CKVkBuffer(rctx);
-    uint64_t isz = Format.BitsPerPixel / 8 * Format.Width * Format.Height;
+    uint64_t isz = 4 * Format.Width * Format.Height;
     stgbuf->create(isz, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     memcpy(stgbuf->map(0, isz), data, isz);
     stgbuf->unmap();
@@ -65,7 +73,7 @@ void CKVkTexture::load(void *data)
                 .layerCount=1
             }
         });
-        VkPipelineStageFlags srcst, dstst;
+        VkPipelineStageFlags srcst = 0, dstst = 0;
         if (from == VK_IMAGE_LAYOUT_UNDEFINED && to == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
         {
             imb.srcAccessMask = 0;
@@ -104,3 +112,5 @@ void CKVkTexture::load(void *data)
 
     delete stgbuf;
 }
+
+VkImageView CKVkTexture::view() { return imgv; }

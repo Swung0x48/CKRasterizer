@@ -12,8 +12,10 @@ layout (location=1) in vec3 normal;
 layout (location=2) in vec2 texcoord;
 
 layout (location=0) out vec3 fragColor;
+layout (location=1) out vec2 ftc;
 
 void main() {
     gl_Position = m.proj * m.view * m.world * vec4(xyz, 1.0);
     fragColor = vec3(sin(texcoord.x), cos(texcoord.y), sin(texcoord.y));
+    ftc = texcoord;
 }

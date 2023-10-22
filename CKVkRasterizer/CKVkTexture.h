@@ -19,8 +19,9 @@ public:
     ~CKVkTexture();
 
     void create();
-    void bind();
     void load(void *data);
+
+    VkImageView view();
 };
 
 #endif

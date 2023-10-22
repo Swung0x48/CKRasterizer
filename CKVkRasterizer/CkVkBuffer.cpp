@@ -6,6 +6,7 @@ CKVkBuffer::CKVkBuffer(CKVkRasterizerContext *ctx) : rctx(ctx), vkbuf(0), vkbufm
 
 CKVkBuffer::~CKVkBuffer()
 {
+    //buffer deallocation should be scheduled to happen at end of frame
     vkDestroyBuffer(rctx->vkdev, vkbuf, nullptr);
     vkFreeMemory(rctx->vkdev, vkbufmem, nullptr);
 }

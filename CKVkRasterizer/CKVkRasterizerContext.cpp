@@ -2,6 +2,8 @@
 #include "CKVkBuffer.h"
 #include "CKVkVertexBuffer.h"
 #include "CKVkIndexBuffer.h"
+#include "CKVkTexture.h"
+#include "CKVkSampler.h"
 #include "VkPipelineBuilder.h"
 #include "ManagedVulkanPipeline.h"
 #include "ResourceManagement.h"
@@ -24,11 +26,6 @@ CKVkRasterizerContext::CKVkRasterizerContext()
 CKVkRasterizerContext::~CKVkRasterizerContext()
 {
     vkDeviceWaitIdle(vkdev);
-    for (auto &mu : matubos)
-    {
-        mu.first->unmap();
-        delete mu.first;
-    }
     for (auto &s : vksimgavail)
         vkDestroySemaphore(vkdev, s, nullptr);
     for (auto &s : vksrenderfinished)
@@ -49,6 +46,11 @@ CKVkRasterizerContext::~CKVkRasterizerContext()
     vkDestroySwapchainKHR(vkdev, vkswch, nullptr);
     vkDestroySurfaceKHR(vkinst, vksurface, nullptr);
 
+    for (auto &mu : matubos)
+    {
+        mu.first->unmap();
+        delete mu.first;
+    }
     m_DirtyRects.Clear();
     m_PixelShaders.Clear();
     m_VertexShaders.Clear();
@@ -56,6 +58,8 @@ CKVkRasterizerContext::~CKVkRasterizerContext()
     m_VertexBuffers.Clear();
     m_Sprites.Clear();
     m_Textures.Clear();
+    delete smplr;
+    getchar();
 }
 
 CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
@@ -210,6 +214,12 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         VK_VERTEX_INPUT_RATE_VERTEX
     };
 
+    VkDescriptorBindingFlags dbf[2] = {0, VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT};
+    auto dslbfc = make_vulkan_structure<VkDescriptorSetLayoutBindingFlagsCreateInfo>({
+        .bindingCount=2,
+        .pBindingFlags=dbf
+    });
+
     VkPipelineColorBlendAttachmentState blendatt{
         .blendEnable=VK_FALSE,
         .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,
@@ -254,12 +264,19 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         })
         .primitive_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .primitive_restart_enable(false)
-        .new_descriptor_set_layout(0)
+        .new_descriptor_set_layout(0, &dslbfc)
         .add_descriptor_set_binding(VkDescriptorSetLayoutBinding{
             .binding=0,
             .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
             .descriptorCount=1,
             .stageFlags=VK_SHADER_STAGE_VERTEX_BIT,
+            .pImmutableSamplers=nullptr
+        })
+        .add_descriptor_set_binding(VkDescriptorSetLayoutBinding{
+            .binding=1,
+            .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount=1024,
+            .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
             .pImmutableSamplers=nullptr
         })
         .depth_clamp_enable(false)
@@ -276,7 +293,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         .stencil_test_enable(false)
         .add_blending_attachment(std::move(blendatt))
         .blending_logic_op_enable(false)
-        .add_push_constant_range(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, 192})
+        .add_push_constant_range(VkPushConstantRange{VK_SHADER_STAGE_FRAGMENT_BIT, 0, 32})
         .build(vkdev);
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
@@ -307,6 +324,8 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
             return FALSE;
     }
 
+    smplr = CKVkSamplerBuilder().build(vkdev);
+
     auto cmdpc = make_vulkan_structure<VkCommandPoolCreateInfo>({
         .flags=VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex=qfidx[0]
@@ -323,44 +342,37 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     if (VK_SUCCESS != vkAllocateCommandBuffers(vkdev, &cmdbufac, cmdbuf.data()))
         return FALSE;
 
-    auto matpsz = VkDescriptorPoolSize {
-        .type=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+    auto matpsz = std::vector<VkDescriptorPoolSize>({{
+        .type=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
         .descriptorCount=MAX_FRAMES_IN_FLIGHT
-    };
+    }, {
+        .type=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount=MAX_FRAMES_IN_FLIGHT * 1024
+    }});
     auto dpc = make_vulkan_structure<VkDescriptorPoolCreateInfo>({
         .maxSets=MAX_FRAMES_IN_FLIGHT,
-        .poolSizeCount=1,
-        .pPoolSizes=&matpsz
+        .poolSizeCount=matpsz.size(),
+        .pPoolSizes=matpsz.data()
     });
     if (VK_SUCCESS != vkCreateDescriptorPool(vkdev, &dpc, nullptr, &descpool))
         return FALSE;
 
     std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, pl->descriptor_set_layouts().front());
+    uint32_t sz[] = {1024, 1024}; //both set needs 1024 varlen descriptors
+    auto dsvdci = make_vulkan_structure<VkDescriptorSetVariableDescriptorCountAllocateInfo>({
+        .descriptorSetCount=2,
+        .pDescriptorCounts=sz
+    });
     auto dsai = make_vulkan_structure<VkDescriptorSetAllocateInfo>({
-        .descriptorPool = descpool,
-        .descriptorSetCount = layouts.size(),
-        .pSetLayouts = layouts.data()
+        .pNext=&dsvdci,
+        .descriptorPool=descpool,
+        .descriptorSetCount=layouts.size(),
+        .pSetLayouts=layouts.data()
     });
     descsets.resize(layouts.size());
     if (VK_SUCCESS != vkAllocateDescriptorSets(vkdev, &dsai, descsets.data()))
         return FALSE;
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
-    {
-        VkDescriptorBufferInfo bi {
-            .buffer=matubos[i].first->get_buffer(),
-            .offset=0,
-            .range=sizeof(CKVkMatrixUniform)
-        };
-        auto dsw = make_vulkan_structure<VkWriteDescriptorSet>({
-            .dstSet=descsets[i],
-            .dstBinding=0,
-            .dstArrayElement=0,
-            .descriptorCount=1,
-            .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-            .pBufferInfo=&bi
-        });
-        vkUpdateDescriptorSets(vkdev, 1, &dsw, 0, nullptr);
-    }
+    update_descriptor_sets(true);
 
     auto semc = make_vulkan_structure<VkSemaphoreCreateInfo>({});
     auto fenc = make_vulkan_structure<VkFenceCreateInfo>({.flags=VK_FENCE_CREATE_SIGNALED_BIT});
@@ -509,7 +521,6 @@ CKBOOL CKVkRasterizerContext::EndScene()
 
     in_scene = false;
 
-
     VkSemaphore waitsem[] = {vksimgavail[curfrm]};
     VkPipelineStageFlags waitst[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     auto submiti = make_vulkan_structure<VkSubmitInfo>({
@@ -537,6 +548,9 @@ CKBOOL CKVkRasterizerContext::EndScene()
     });
 
     vkQueuePresentKHR(prsq, &pri);
+
+    if (textures_updated)
+        update_descriptor_sets(false);
     return TRUE;
 }
 
@@ -684,6 +698,12 @@ CKBOOL CKVkRasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *V
 
 CKBOOL CKVkRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 {
+    if (Stage != 0) return TRUE;
+    int d[8] = {0};
+    if (texture_binding.find(Texture) != texture_binding.end())
+        d[0] = texture_binding[Texture];
+    if (in_scene)
+        pl->command_push_constants(cmdbuf[curfrm], VK_SHADER_STAGE_FRAGMENT_BIT, 0, 32, d);
     return TRUE;
 }
 
@@ -819,6 +839,16 @@ CKBOOL CKVkRasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Ty
     return result;
 }
 
+CKBOOL CKVkRasterizerContext::DeleteObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type)
+{
+    if (Type == CKRST_OBJ_TEXTURE)
+    {
+        texture_binding.erase(ObjIndex);
+        textures_updated = true;
+    }
+    return CKRasterizerContext::DeleteObject(ObjIndex, Type);
+}
+
 void * CKVkRasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
     CKRST_LOCKFLAGS Lock)
 {
@@ -842,6 +872,27 @@ CKBOOL CKVkRasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 CKBOOL CKVkRasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
 {
     ZoneScopedN(__FUNCTION__);
+    if (Texture >= m_Textures.Size())
+        return FALSE;
+    CKVkTexture *tex = static_cast<CKVkTexture*>(m_Textures[Texture]);
+    if (!tex)
+        return FALSE;
+    VxImageDescEx dst;
+    dst.Size = sizeof(VxImageDescEx);
+    ZeroMemory(&dst.Flags, sizeof(VxImageDescEx) - sizeof(dst.Size));
+    dst.Width = SurfDesc.Width;
+    dst.Height = SurfDesc.Height;
+    dst.BitsPerPixel = 32;
+    dst.BytesPerLine = 4 * SurfDesc.Width;
+    dst.AlphaMask = 0xFF000000;
+    dst.RedMask = 0x0000FF;
+    dst.GreenMask = 0x00FF00;
+    dst.BlueMask = 0xFF0000;
+    dst.Image = new uint8_t[dst.Width * dst.Height * (dst.BitsPerPixel / 8)];
+    VxDoBlitUpsideDown(SurfDesc, dst);
+    if (!(SurfDesc.AlphaMask || SurfDesc.Flags >= _DXT1)) VxDoAlphaBlit(dst, 255);
+    tex->load(dst.Image);
+    delete dst.Image;
     return TRUE;
 }
 
@@ -928,7 +979,14 @@ CKBOOL CKVkRasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Desi
     fprintf(stderr, "create texture %d %dx%d %x\n", Texture, DesiredFormat->Format.Width, DesiredFormat->Format.Height, DesiredFormat->Flags);
 #endif
 
-    return FALSE;
+    auto tex = new CKVkTexture(this, DesiredFormat);
+    tex->create();
+
+    m_Textures[Texture] = tex;
+    texture_binding[Texture] = 0;
+    textures_updated = true;
+
+    return TRUE;
 }
 
 CKBOOL CKVkRasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat)
@@ -993,7 +1051,47 @@ void CKVkRasterizerContext::ClearStreamCache()
 }
 
 void CKVkRasterizerContext::ReleaseScreenBackup()
+{}
+
+void CKVkRasterizerContext::update_descriptor_sets(bool init)
 {
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        VkDescriptorBufferInfo bi {
+            .buffer=matubos[i].first->get_buffer(),
+            .offset=0,
+            .range=sizeof(CKVkMatrixUniform)
+        };
+        std::vector<VkDescriptorImageInfo> iis;
+        for (auto &t : texture_binding)
+        {
+            t.second = iis.size();
+            iis.push_back({
+                .sampler=smplr->sampler(),
+                .imageView=static_cast<CKVkTexture*>(m_Textures[t.first])->view(),
+                .imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+            });
+        }
+        std::vector<VkWriteDescriptorSet> dsws;
+        if (init) dsws.push_back(make_vulkan_structure<VkWriteDescriptorSet>({
+            .dstSet=descsets[i],
+            .dstBinding=0,
+            .dstArrayElement=0,
+            .descriptorCount=1,
+            .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+            .pBufferInfo=&bi
+        }));
+        if (iis.size()) dsws.push_back(make_vulkan_structure<VkWriteDescriptorSet>({
+            .dstSet=descsets[i],
+            .dstBinding=1,
+            .dstArrayElement=0,
+            .descriptorCount=iis.size(),
+            .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo=iis.data()
+        }));
+        if (dsws.size())
+            vkUpdateDescriptorSets(vkdev, dsws.size(), dsws.data(), 0, nullptr);
+    }
 }
 
 VxMatrix inv(const VxMatrix &_m)

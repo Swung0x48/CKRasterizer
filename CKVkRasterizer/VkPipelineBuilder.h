@@ -53,7 +53,7 @@ public:
     VkPipelineBuilder &blending_logic_op(VkLogicOp lop);
     //Pipeline Layout
     VkPipelineBuilder &add_push_constant_range(VkPushConstantRange &&pcr);
-    VkPipelineBuilder &new_descriptor_set_layout(VkDescriptorSetLayoutCreateFlags flags);
+    VkPipelineBuilder &new_descriptor_set_layout(VkDescriptorSetLayoutCreateFlags flags, const void* dslc_pnext);
     VkPipelineBuilder &add_descriptor_set_binding(VkDescriptorSetLayoutBinding &&b);
 
     ManagedVulkanPipeline* build(VkDevice vkdev) const;
@@ -77,7 +77,7 @@ private:
     std::vector<VkPipelineColorBlendAttachmentState> blend_attachments;
     VkPipelineColorBlendStateCreateInfo bstc;
     std::vector<VkPushConstantRange> push_constant_ranges;
-    std::vector<std::pair<VkDescriptorSetLayoutCreateFlags, std::vector<VkDescriptorSetLayoutBinding>>> desc_sets;
+    std::vector<std::tuple<VkDescriptorSetLayoutCreateFlags, const void*, std::vector<VkDescriptorSetLayoutBinding>>> desc_sets;
 };
 
 #endif
