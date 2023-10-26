@@ -13,6 +13,9 @@
 #define DYNAMIC_VBO_COUNT 64
 #define DYNAMIC_IBO_COUNT 64
 
+template<class... Ts>
+struct overloaded : Ts... { using Ts::operator()...; };
+
 static int directbat = 0;
 static int vbbat = 0;
 static int vbibbat = 0;
@@ -26,11 +29,11 @@ CKVkRasterizerContext::CKVkRasterizerContext()
 CKVkRasterizerContext::~CKVkRasterizerContext()
 {
     vkDeviceWaitIdle(vkdev);
-    for (auto &s : vksimgavail)
+    for (auto &s : sem_image_available)
         vkDestroySemaphore(vkdev, s, nullptr);
-    for (auto &s : vksrenderfinished)
+    for (auto &s : sem_render_finished)
         vkDestroySemaphore(vkdev, s, nullptr);
-    for (auto &f : vkffrminfl)
+    for (auto &f : fence_cmdbuf_exec)
         vkDestroyFence(vkdev, f, nullptr);
     vkDestroyCommandPool(vkdev, cmdpool, nullptr);
     vkDestroyDescriptorPool(vkdev, descpool, nullptr);
@@ -53,6 +56,28 @@ CKVkRasterizerContext::~CKVkRasterizerContext()
         mu.first->unmap();
         delete mu.first;
     }
+    for (int i = 0; i < m_IndexBuffers.Size(); ++i)
+        if (m_IndexBuffers[i])
+            delete m_IndexBuffers[i];
+    for (int i = 0; i < m_VertexBuffers.Size(); ++i)
+        if (m_VertexBuffers[i])
+            delete m_VertexBuffers[i];
+    for (int i = 0; i < m_Textures.Size(); ++i)
+        if (m_Textures[i])
+            delete m_Textures[i];
+    for (auto &dynib : dynibo)
+        delete dynib;
+    for (auto &dynvb : dynvbo)
+        delete dynvb.second;
+    for (auto &q : buf_deletion_queue)
+        for (auto& b : q)
+        {
+            std::visit(overloaded {
+                [](CKVkVertexBuffer *b) { delete b; },
+                [](CKVkIndexBuffer *b) { delete b; }
+            }, b);
+        }
+
     m_DirtyRects.Clear();
     m_PixelShaders.Clear();
     m_VertexShaders.Clear();
@@ -343,17 +368,18 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     auto semc = make_vulkan_structure<VkSemaphoreCreateInfo>({});
     auto fenc = make_vulkan_structure<VkFenceCreateInfo>({.flags=VK_FENCE_CREATE_SIGNALED_BIT});
 
-    vksimgavail.resize(MAX_FRAMES_IN_FLIGHT);
-    vksrenderfinished.resize(MAX_FRAMES_IN_FLIGHT);
-    vkffrminfl.resize(MAX_FRAMES_IN_FLIGHT);
+    sem_image_available.resize(MAX_FRAMES_IN_FLIGHT);
+    sem_render_finished.resize(MAX_FRAMES_IN_FLIGHT);
+    fence_cmdbuf_exec.resize(MAX_FRAMES_IN_FLIGHT);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
-        if (VK_SUCCESS != vkCreateSemaphore(vkdev, &semc, nullptr, &vksimgavail[i]) ||
-            VK_SUCCESS != vkCreateSemaphore(vkdev, &semc, nullptr, &vksrenderfinished[i]) ||
-            VK_SUCCESS != vkCreateFence(vkdev, &fenc, nullptr, &vkffrminfl[i]))
+        if (VK_SUCCESS != vkCreateSemaphore(vkdev, &semc, nullptr, &sem_image_available[i]) ||
+            VK_SUCCESS != vkCreateSemaphore(vkdev, &semc, nullptr, &sem_render_finished[i]) ||
+            VK_SUCCESS != vkCreateFence(vkdev, &fenc, nullptr, &fence_cmdbuf_exec[i]))
             return FALSE;
 
     m_ViewportData = CKViewportData {0, 0, (int)swchiext.width, (int)swchiext.height, 0., 1.};
 
+    buf_deletion_queue = std::vector<std::vector<std::variant<CKVkVertexBuffer*, CKVkIndexBuffer*>>>(MAX_FRAMES_IN_FLIGHT);
     dynibo.resize(DYNAMIC_IBO_COUNT);
     unbuffered_vertex_draws = 0;
     unbuffered_index_draws = 0;
@@ -373,19 +399,41 @@ CKBOOL CKVkRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
 
 CKBOOL CKVkRasterizerContext::BackToFront(CKBOOL vsync)
 {
-    ++curfrm;
-    if (curfrm >= MAX_FRAMES_IN_FLIGHT)
-        curfrm = 0;
     return TRUE;
 }
 
 CKBOOL CKVkRasterizerContext::BeginScene()
 {
     FrameMark;
-    vkWaitForFences(vkdev, 1, &vkffrminfl[curfrm], VK_TRUE, ~0ULL);
-    vkResetFences(vkdev, 1, &vkffrminfl[curfrm]);
-    vkAcquireNextImageKHR(vkdev, vkswch, ~0ULL, vksimgavail[curfrm], VK_NULL_HANDLE, &image_index);
-    vkResetCommandBuffer(cmdbuf[curfrm], 0);
+    if (in_scene)
+    {
+        fprintf(stderr, "BeginScene() called while rendering is already active.\n");
+        EndScene(); //try to recover??
+    }
+    vkWaitForFences(vkdev, 1, &fence_cmdbuf_exec[curfrm], VK_TRUE, ~0ULL);
+    vkResetFences(vkdev, 1, &fence_cmdbuf_exec[curfrm]);
+    if (!buf_deletion_queue[curfrm].empty())
+    {
+        fprintf(stderr, "deleting %lu buffers\n", buf_deletion_queue[curfrm].size());
+        for (auto& b : buf_deletion_queue[curfrm])
+        {
+            std::visit(overloaded {
+                [](CKVkVertexBuffer *b) { delete b; },
+                [](CKVkIndexBuffer *b) { delete b; }
+            }, b);
+        }
+        buf_deletion_queue[curfrm].clear();
+    }
+    if (VK_SUCCESS != vkAcquireNextImageKHR(vkdev, vkswch, ~0ULL, sem_image_available[curfrm], VK_NULL_HANDLE, &image_index))
+    {
+        fprintf(stderr, "AcquireNextImage failed\n");
+        return FALSE;
+    }
+    if (VK_SUCCESS != vkResetCommandBuffer(cmdbuf[curfrm], 0))
+    {
+        fprintf(stderr, "ResetCommandBuffer failed\n");
+        return FALSE;
+    }
     auto cmdbufi = make_vulkan_structure<VkCommandBufferBeginInfo>({
         .flags=0,
         .pInheritanceInfo=nullptr
@@ -426,13 +474,19 @@ CKBOOL CKVkRasterizerContext::BeginScene()
 
 CKBOOL CKVkRasterizerContext::EndScene()
 {
+    if (!in_scene)
+    {
+        fprintf(stderr, "EndScene() called while there's no scene being rendered.\n");
+        return TRUE;
+    }
     vkCmdEndRenderPass(cmdbuf[curfrm]);
     if (VK_SUCCESS != vkEndCommandBuffer(cmdbuf[curfrm]))
+    {
+        fprintf(stderr, "EndCommandBuffer failed\n");
         return FALSE;
+    }
 
-    in_scene = false;
-
-    VkSemaphore waitsem[] = {vksimgavail[curfrm]};
+    VkSemaphore waitsem[] = {sem_image_available[curfrm]};
     VkPipelineStageFlags waitst[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     auto submiti = make_vulkan_structure<VkSubmitInfo>({
         .waitSemaphoreCount=1,
@@ -442,12 +496,16 @@ CKBOOL CKVkRasterizerContext::EndScene()
         .pCommandBuffers=&cmdbuf[curfrm]
     });
 
-    VkSemaphore signalsem[] = {vksrenderfinished[curfrm]};
+    VkSemaphore signalsem[] = {sem_render_finished[curfrm]};
     submiti.signalSemaphoreCount = 1;
     submiti.pSignalSemaphores = signalsem;
 
-    if (VK_SUCCESS != vkQueueSubmit(gfxq, 1, &submiti, vkffrminfl[curfrm]))
+    auto ret = vkQueueSubmit(gfxq, 1, &submiti, fence_cmdbuf_exec[curfrm]);
+    if (VK_SUCCESS != ret)
+    {
+        fprintf(stderr, "QueueSubmit failed: %d\n", ret);
         return FALSE;
+    }
 
     VkSwapchainKHR swch[] = {vkswch};
     auto pri = make_vulkan_structure<VkPresentInfoKHR>({
@@ -458,10 +516,21 @@ CKBOOL CKVkRasterizerContext::EndScene()
         .pImageIndices=&image_index
     });
 
-    vkQueuePresentKHR(prsq, &pri);
+    if (VK_SUCCESS != vkQueuePresentKHR(prsq, &pri))
+    {
+        fprintf(stderr, "QueuePresent failed\n");
+    }
 
     if (textures_updated)
+    {
         update_descriptor_sets(false);
+        textures_updated = false;
+    }
+
+    in_scene = false;
+    ++curfrm;
+    if (curfrm >= MAX_FRAMES_IN_FLIGHT)
+        curfrm = 0;
     return TRUE;
 }
 
@@ -913,6 +982,27 @@ CKBOOL CKVkRasterizerContext::DeleteObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Ty
         texture_binding.erase(ObjIndex);
         textures_updated = true;
     }
+    if (Type & (CKRST_OBJ_VERTEXBUFFER | CKRST_OBJ_INDEXBUFFER))
+    {
+        if (in_scene)
+            fprintf(stderr, "warning: deleting drawing buffer %d while cmdbuf is being recorded\n", ObjIndex);
+        else
+        {
+            fprintf(stderr, "scheduling deletion of drawing buffer %d\n", ObjIndex);
+            uint32_t lastfrm = (curfrm == 0) ? MAX_FRAMES_IN_FLIGHT - 1 : curfrm - 1;
+            if (Type & CKRST_OBJ_VERTEXBUFFER)
+            {
+                buf_deletion_queue[lastfrm].emplace_back(static_cast<CKVkVertexBuffer*>(m_VertexBuffers[ObjIndex]));
+                m_VertexBuffers[ObjIndex] = NULL;
+            }
+            else
+            {
+                buf_deletion_queue[lastfrm].emplace_back(static_cast<CKVkIndexBuffer*>(m_IndexBuffers[ObjIndex]));
+                m_IndexBuffers[ObjIndex] = NULL;
+            }
+            return TRUE;
+        }
+    }
     return CKRasterizerContext::DeleteObject(ObjIndex, Type);
 }
 
@@ -1072,28 +1162,28 @@ CKBOOL CKVkRasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc 
 {
     ZoneScopedN(__FUNCTION__);
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
-        return 0;
+        return FALSE;
     if (m_VertexBuffers[VB])
         delete m_VertexBuffers[VB];
 
     CKVkVertexBuffer* vb = new CKVkVertexBuffer(DesiredFormat, this);
     vb->create();
     m_VertexBuffers[VB] = vb;
-    return FALSE;
+    return TRUE;
 }
 
 CKBOOL CKVkRasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat)
 {
     ZoneScopedN(__FUNCTION__);
     if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
-        return 0;
+        return FALSE;
     if (m_IndexBuffers[IB])
         delete m_IndexBuffers[IB];
 
     CKVkIndexBuffer* ib = new CKVkIndexBuffer(DesiredFormat, this);
     ib->create();
     m_IndexBuffers[IB] = ib;
-    return FALSE;
+    return TRUE;
 }
 
 void CKVkRasterizerContext::FlushCaches()

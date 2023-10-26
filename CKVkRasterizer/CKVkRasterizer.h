@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "CKVkRasterizerCommon.h"
@@ -340,13 +341,14 @@ private:
     CKVkSampler *smplr = nullptr;
     std::vector<VkDescriptorSet> descsets;
     std::vector<VkCommandBuffer> cmdbuf;
-    std::vector<VkSemaphore> vksimgavail;
-    std::vector<VkSemaphore> vksrenderfinished;
-    std::vector<VkFence> vkffrminfl;
+    std::vector<VkSemaphore> sem_image_available;
+    std::vector<VkSemaphore> sem_render_finished;
+    std::vector<VkFence> fence_cmdbuf_exec;
     uint32_t ubo_offset = 0;
     uint32_t curfrm = 0;
     uint32_t image_index = 0;
     bool in_scene = false;
+    std::vector<std::vector<std::variant<CKVkVertexBuffer*, CKVkIndexBuffer*>>> buf_deletion_queue;
 
     CKVkMatrixUniform matrices;
     std::vector<std::pair<CKVkBuffer*, void*>> matubos;

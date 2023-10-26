@@ -20,7 +20,7 @@ CKVkIndexBuffer::~CKVkIndexBuffer()
 
 void CKVkIndexBuffer::create()
 {
-    if (true || m_Flags & CKRST_VB_DYNAMIC)
+    if (m_Flags & CKRST_VB_DYNAMIC)
     {
         ssbuf = new CKVkBuffer(rctx);
         ssbuf->create(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -52,6 +52,10 @@ void *CKVkIndexBuffer::lock(uint64_t offset, uint64_t size)
 
 void CKVkIndexBuffer::unlock()
 {
-    if (csbuf) csbuf->unmap();
+    if (csbuf)
+    {
+        csbuf->unmap();
+        csbuf->transfer(ssbuf->get_buffer());
+    }
     else ssbuf->unmap();
 }
