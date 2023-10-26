@@ -1,7 +1,7 @@
 #include "VkPipelineBuilder.h"
 
 VkPipelineBuilder::VkPipelineBuilder() :
-    vkrp{}
+    erp{}, eplo{}
 {
     iasc = make_vulkan_structure<VkPipelineInputAssemblyStateCreateInfo>({});
     rstc = make_vulkan_structure<VkPipelineRasterizationStateCreateInfo>({});
@@ -38,6 +38,12 @@ VkPipelineBuilder &VkPipelineBuilder::add_attachment(VkAttachmentDescription &&a
 VkPipelineBuilder &VkPipelineBuilder::add_subpass_dependency(VkSubpassDependency &&spd)
 {
     spdeps.push_back(spd);
+    return *this;
+}
+
+VkPipelineBuilder &VkPipelineBuilder::existing_render_pass(VkRenderPass rp)
+{
+    erp = rp;
     return *this;
 }
 
@@ -225,19 +231,30 @@ VkPipelineBuilder &VkPipelineBuilder::add_descriptor_set_binding(VkDescriptorSet
     return *this;
 }
 
+VkPipelineBuilder &VkPipelineBuilder::existing_pipeline_layout(VkPipelineLayout plo)
+{
+    eplo = plo;
+    return *this;
+}
+
 ManagedVulkanPipeline* VkPipelineBuilder::build(VkDevice vkdev) const
 {
-    auto rpc = make_vulkan_structure<VkRenderPassCreateInfo>({
-        .attachmentCount=attachments.size(),
-        .pAttachments=attachments.data(),
-        .subpassCount=subpasses.size(),
-        .pSubpasses=subpasses.data(),
-        .dependencyCount=spdeps.size(),
-        .pDependencies=spdeps.data()
-    });
-    VkRenderPass rp;
-    if (VK_SUCCESS != vkCreateRenderPass(vkdev, &rpc, nullptr, &rp))
-        return nullptr;
+    VkRenderPass rp = erp;
+    bool rp_shared = false;
+    if (rp) rp_shared = true;
+    else
+    {
+        auto rpc = make_vulkan_structure<VkRenderPassCreateInfo>({
+            .attachmentCount=attachments.size(),
+            .pAttachments=attachments.data(),
+            .subpassCount=subpasses.size(),
+            .pSubpasses=subpasses.data(),
+            .dependencyCount=spdeps.size(),
+            .pDependencies=spdeps.data()
+        });
+        if (VK_SUCCESS != vkCreateRenderPass(vkdev, &rpc, nullptr, &rp))
+            return nullptr;
+    }
 
     auto dystc = make_vulkan_structure<VkPipelineDynamicStateCreateInfo>({
         .dynamicStateCount=dynamic_states.size(),
@@ -259,40 +276,44 @@ ManagedVulkanPipeline* VkPipelineBuilder::build(VkDevice vkdev) const
     });
 
     std::vector<VkDescriptorSetLayout> dsls;
-    for (auto& ds_desc : desc_sets)
+    VkPipelineLayout plo = eplo;
+    bool plo_shared = false;
+    if (plo) plo_shared = true;
+    else
     {
-        auto [flags, pnext, dsl] = ds_desc;
-        auto dslc = make_vulkan_structure<VkDescriptorSetLayoutCreateInfo>({
-            .pNext=pnext,
-            .flags=flags,
-            .bindingCount=dsl.size(),
-            .pBindings=dsl.data()
-        });
-        VkDescriptorSetLayout layout;
-        if (VK_SUCCESS != vkCreateDescriptorSetLayout(vkdev, &dslc, nullptr, &layout))
+        for (auto& ds_desc : desc_sets)
         {
-            vkDestroyRenderPass(vkdev, rp, nullptr);
+            auto [flags, pnext, dsl] = ds_desc;
+            auto dslc = make_vulkan_structure<VkDescriptorSetLayoutCreateInfo>({
+                .pNext=pnext,
+                .flags=flags,
+                .bindingCount=dsl.size(),
+                .pBindings=dsl.data()
+            });
+            VkDescriptorSetLayout layout;
+            if (VK_SUCCESS != vkCreateDescriptorSetLayout(vkdev, &dslc, nullptr, &layout))
+            {
+                if (!rp_shared) vkDestroyRenderPass(vkdev, rp, nullptr);
+                for (auto &dsl : dsls)
+                    vkDestroyDescriptorSetLayout(vkdev, dsl, nullptr);
+                return nullptr;
+            }
+            dsls.push_back(layout);
+        }
+
+        auto plloc = make_vulkan_structure<VkPipelineLayoutCreateInfo>({
+            .setLayoutCount=dsls.size(),
+            .pSetLayouts=dsls.data(),
+            .pushConstantRangeCount=push_constant_ranges.size(),
+            .pPushConstantRanges=push_constant_ranges.data()
+        });
+        if (VK_SUCCESS != vkCreatePipelineLayout(vkdev, &plloc, nullptr, &plo))
+        {
+            if (!rp_shared) vkDestroyRenderPass(vkdev, rp, nullptr);
             for (auto &dsl : dsls)
                 vkDestroyDescriptorSetLayout(vkdev, dsl, nullptr);
             return nullptr;
         }
-        dsls.push_back(layout);
-    }
-
-    auto plloc = make_vulkan_structure<VkPipelineLayoutCreateInfo>({
-        .setLayoutCount=dsls.size(),
-        .pSetLayouts=dsls.data(),
-        .pushConstantRangeCount=push_constant_ranges.size(),
-        .pPushConstantRanges=push_constant_ranges.data()
-    });
-
-    VkPipelineLayout plo;
-    if (VK_SUCCESS != vkCreatePipelineLayout(vkdev, &plloc, nullptr, &plo))
-    {
-        vkDestroyRenderPass(vkdev, rp, nullptr);
-        for (auto &dsl : dsls)
-            vkDestroyDescriptorSetLayout(vkdev, dsl, nullptr);
-        return nullptr;
     }
 
     auto plc = make_vulkan_structure<VkGraphicsPipelineCreateInfo>({
@@ -315,12 +336,12 @@ ManagedVulkanPipeline* VkPipelineBuilder::build(VkDevice vkdev) const
     VkPipeline p;
     if (VK_SUCCESS != vkCreateGraphicsPipelines(vkdev, VK_NULL_HANDLE, 1, &plc, nullptr, &p))
     {
-        vkDestroyPipelineLayout(vkdev, plo, nullptr);
-        vkDestroyRenderPass(vkdev, rp, nullptr);
+        if (!plo_shared) vkDestroyPipelineLayout(vkdev, plo, nullptr);
+        if (!rp_shared) vkDestroyRenderPass(vkdev, rp, nullptr);
         for (auto &dsl : dsls)
             vkDestroyDescriptorSetLayout(vkdev, dsl, nullptr);
         return nullptr;
     }
 
-    return new ManagedVulkanPipeline(rp, plo, p, std::move(dsls), vkdev);
+    return new ManagedVulkanPipeline(rp, rp_shared, plo, plo_shared, p, std::move(dsls), vkdev);
 }

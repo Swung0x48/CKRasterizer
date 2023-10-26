@@ -4,6 +4,7 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
 
+#include <cstdint>
 #include <functional>
 #include <vector>
 
@@ -75,8 +76,8 @@ struct CKVkMemoryImage
     VkDeviceMemory mem;
 };
 
-std::vector<VkVertexInputAttributeDescription> rst_vertex_format_to_vulkan_vertex_attrib(CKRST_VERTEXFORMAT vf);
-VkVertexInputBindingDescription rst_vertex_format_to_vulkan_input_binding(CKRST_VERTEXFORMAT vf);
+std::vector<VkVertexInputAttributeDescription> rst_vertex_format_to_vulkan_vertex_attrib(uint32_t vf);
+VkVertexInputBindingDescription rst_vertex_format_to_vulkan_input_binding(uint32_t vf);
 
 void run_oneshot_command_list(VkDevice dev, VkCommandPool cmdp, VkQueue q, std::function<void(VkCommandBuffer)> f);
 

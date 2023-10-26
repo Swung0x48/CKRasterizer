@@ -14,10 +14,12 @@ public:
     VkPipelineBuilder();
     //Shaders
     VkPipelineBuilder &add_shader_stage(VkPipelineShaderStageCreateInfo &&ss);
-    //Subpasses
+    //Render Pass
     VkPipelineBuilder &add_subpass(VkSubpassDescription &&sp);
     VkPipelineBuilder &add_attachment(VkAttachmentDescription &&at);
     VkPipelineBuilder &add_subpass_dependency(VkSubpassDependency &&spd);
+    //OR use external shared render pass
+    VkPipelineBuilder &existing_render_pass(VkRenderPass rp);
     //Dynamic States
     VkPipelineBuilder &add_dynamic_state(VkDynamicState dyst);
     //Input Assemblage
@@ -55,6 +57,8 @@ public:
     VkPipelineBuilder &add_push_constant_range(VkPushConstantRange &&pcr);
     VkPipelineBuilder &new_descriptor_set_layout(VkDescriptorSetLayoutCreateFlags flags, const void* dslc_pnext);
     VkPipelineBuilder &add_descriptor_set_binding(VkDescriptorSetLayoutBinding &&b);
+    //OR use external shared pipeline layout
+    VkPipelineBuilder &existing_pipeline_layout(VkPipelineLayout plo);
 
     ManagedVulkanPipeline* build(VkDevice vkdev) const;
 private:
@@ -62,7 +66,7 @@ private:
     std::vector<VkSubpassDescription> subpasses;
     std::vector<VkAttachmentDescription> attachments;
     std::vector<VkSubpassDependency> spdeps;
-    VkRenderPass vkrp;
+    VkRenderPass erp;
     std::vector<VkDynamicState> dynamic_states;
     std::vector<VkVertexInputBindingDescription> input_bindings;
     std::vector<VkVertexInputAttributeDescription> input_attribs;
@@ -78,6 +82,7 @@ private:
     VkPipelineColorBlendStateCreateInfo bstc;
     std::vector<VkPushConstantRange> push_constant_ranges;
     std::vector<std::tuple<VkDescriptorSetLayoutCreateFlags, const void*, std::vector<VkDescriptorSetLayoutBinding>>> desc_sets;
+    VkPipelineLayout eplo;
 };
 
 #endif

@@ -15,6 +15,8 @@
 #include <vector>
 
 #include "CKVkRasterizerCommon.h"
+#include "VkPipelineBuilder.h"
+#include "CKVkPipelineState.h"
 #include "VulkanUtils.h"
 
 #define LSW_SPECULAR_ENABLED 0x0001
@@ -93,6 +95,7 @@ struct pair_hash
 
 struct CKVkMatrixUniform
 {
+    VxMatrix vp2d;
     VxMatrix world;
     VxMatrix view;
     VxMatrix proj;
@@ -324,7 +327,11 @@ private:
     VkExtent2D swchiext;
     std::vector<VkImageView> swchivw;
     std::vector<VkFramebuffer> swchfb;
-    ManagedVulkanPipeline *pl = nullptr;
+    VkPipelineBuilder pbtemplate;
+    std::unordered_map<CKVkPipelineState, ManagedVulkanPipeline*> pls;
+    CKVkPipelineState current_pipelinest;
+    ManagedVulkanPipeline* root_pipeline;
+    ManagedVulkanPipeline* bound_pipeline;
     VkShaderModule fsh;
     VkShaderModule vsh;
     CKVkMemoryImage depthim;
@@ -345,9 +352,19 @@ private:
     std::vector<std::pair<CKVkBuffer*, void*>> matubos;
     std::unordered_map<DWORD, uint32_t> texture_binding;
     bool textures_updated;
+
+    std::unordered_map<std::pair<DWORD, DWORD>, CKVkVertexBuffer*, pair_hash> dynvbo;
+    std::vector<CKVkIndexBuffer*> dynibo;
+    uint32_t unbuffered_vertex_draws;
+    uint32_t unbuffered_index_draws;
     //debugging
     int m_step_mode = 0;
     int m_batch_status = 0;
 
     void update_descriptor_sets(bool init);
+    void bind_pipeline();
+    CKBOOL set_render_state_impl(VXRENDERSTATETYPE state, CKDWORD value);
+    bool draw_primitive_unbuffered_index_impl(VXPRIMITIVETYPE pType, CKVkVertexBuffer *vb, CKDWORD StartVertex, CKDWORD VertexCount,
+                                              CKWORD *Indices = NULL, int IndexCount = NULL);
+    bool draw_primitive_impl(VXPRIMITIVETYPE pty, CKVkVertexBuffer *vb, CKVkIndexBuffer *ib, uint32_t vtxcnt, uint32_t idxcnt, uint32_t instcnt, uint32_t firstidx, int32_t vtxoffset, uint32_t firstinst);
 };

@@ -38,7 +38,9 @@ CKVkRasterizerContext::~CKVkRasterizerContext()
     destroy_memory_image(vkdev, depthim);
     for (auto &fb : swchfb)
         vkDestroyFramebuffer(vkdev, fb, nullptr);
-    delete pl;
+    for (auto &pl : pls)
+        delete pl.second;
+    delete root_pipeline;
     vkDestroyShaderModule(vkdev, vsh, nullptr);
     vkDestroyShaderModule(vkdev, fsh, nullptr);
     for (auto &ivw : swchivw)
@@ -59,7 +61,6 @@ CKVkRasterizerContext::~CKVkRasterizerContext()
     m_Sprites.Clear();
     m_Textures.Clear();
     delete smplr;
-    getchar();
 }
 
 CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
@@ -220,18 +221,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         .pBindingFlags=dbf
     });
 
-    VkPipelineColorBlendAttachmentState blendatt{
-        .blendEnable=VK_FALSE,
-        .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,
-        .dstColorBlendFactor=VK_BLEND_FACTOR_ZERO,
-        .colorBlendOp=VK_BLEND_OP_ADD,
-        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE,
-        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
-        .alphaBlendOp=VK_BLEND_OP_ADD,
-        .colorWriteMask=VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT
-    };
-
-    pl = VkPipelineBuilder()
+    pbtemplate = VkPipelineBuilder()
         .add_shader_stage(std::move(vshstc))
         .add_shader_stage(std::move(fshstc))
         .add_attachment(std::move(coloratt))
@@ -242,27 +232,6 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         .add_dynamic_state(VK_DYNAMIC_STATE_SCISSOR)
         .set_fixed_scissor_count(1)
         .set_fixed_viewport_count(1)
-        .add_input_binding(VkVertexInputBindingDescription{
-            0,
-            3 * 4 + 3 * 4 + 2 * 4,
-            VK_VERTEX_INPUT_RATE_VERTEX
-        })
-        .add_vertex_attribute(VkVertexInputAttributeDescription{
-            0, 0,
-            VK_FORMAT_R32G32B32_SFLOAT, // POS
-            0
-        })
-        .add_vertex_attribute(VkVertexInputAttributeDescription{
-            1, 0,
-            VK_FORMAT_R32G32B32_SFLOAT, // NORM
-            12
-        })
-        .add_vertex_attribute(VkVertexInputAttributeDescription{
-            2, 0,
-            VK_FORMAT_R32G32_SFLOAT,    // TEX
-            24
-        })
-        .primitive_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .primitive_restart_enable(false)
         .new_descriptor_set_layout(0, &dslbfc)
         .add_descriptor_set_binding(VkDescriptorSetLayoutBinding{
@@ -281,20 +250,17 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         })
         .depth_clamp_enable(false)
         .rasterizer_discard_enable(false)
-        .polygon_mode(VK_POLYGON_MODE_FILL)
         .line_width(1.)
-        .cull_mode(VK_CULL_MODE_BACK_BIT)
-        .front_face(VK_FRONT_FACE_CLOCKWISE)
         .depth_bias_enable(false)
-        .depth_test_enable(true)
-        .depth_write_enable(true)
-        .depth_op(VK_COMPARE_OP_LESS)
         .depth_bounds_test_enable(false)
         .stencil_test_enable(false)
-        .add_blending_attachment(std::move(blendatt))
         .blending_logic_op_enable(false)
-        .add_push_constant_range(VkPushConstantRange{VK_SHADER_STAGE_FRAGMENT_BIT, 0, 32})
-        .build(vkdev);
+        .add_push_constant_range(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, 48});
+    current_pipelinest = CKVkPipelineState();
+    current_pipelinest.set_vertex_format(CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1);
+    root_pipeline = CKVkPipelineState::build_pipeline(&pbtemplate, vkdev, current_pipelinest);
+    pbtemplate.existing_render_pass(root_pipeline->render_pass());
+    pbtemplate.existing_pipeline_layout(root_pipeline->pipeline_layout());
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
     {
@@ -313,7 +279,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     {
         const VkImageView attachments[] = {swchivw[i], depthv};
         auto fbc = make_vulkan_structure<VkFramebufferCreateInfo>({
-            .renderPass=pl->render_pass(),
+            .renderPass=root_pipeline->render_pass(),
             .attachmentCount=2,
             .pAttachments=attachments,
             .width=swchiext.width,
@@ -357,7 +323,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     if (VK_SUCCESS != vkCreateDescriptorPool(vkdev, &dpc, nullptr, &descpool))
         return FALSE;
 
-    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, pl->descriptor_set_layouts().front());
+    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, root_pipeline->descriptor_set_layouts().front());
     uint32_t sz[] = {1024, 1024}; //both set needs 1024 varlen descriptors
     auto dsvdci = make_vulkan_structure<VkDescriptorSetVariableDescriptorCountAllocateInfo>({
         .descriptorSetCount=2,
@@ -388,6 +354,10 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
 
     m_ViewportData = CKViewportData {0, 0, (int)swchiext.width, (int)swchiext.height, 0., 1.};
 
+    dynibo.resize(DYNAMIC_IBO_COUNT);
+    unbuffered_vertex_draws = 0;
+    unbuffered_index_draws = 0;
+
     return TRUE;
 }
 
@@ -403,66 +373,6 @@ CKBOOL CKVkRasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWOR
 
 CKBOOL CKVkRasterizerContext::BackToFront(CKBOOL vsync)
 {
-/*
-    vkWaitForFences(vkdev, 1, &vkffrminfl[curfrm], VK_TRUE, ~0ULL);
-    vkResetFences(vkdev, 1, &vkffrminfl[curfrm]);
-    uint32_t imidx;
-    vkAcquireNextImageKHR(vkdev, vkswch, ~0ULL, vksimgavail[curfrm], VK_NULL_HANDLE, &imidx);
-    vkResetCommandBuffer(cmdbuf[curfrm], 0);
-    auto cmdbufi = make_vulkan_structure<VkCommandBufferBeginInfo>();
-    cmdbufi.flags = 0;
-    cmdbufi.pInheritanceInfo = nullptr;
-    if (VK_SUCCESS != vkBeginCommandBuffer(cmdbuf[curfrm], &cmdbufi))
-        return FALSE;
-    
-    auto rpi = make_vulkan_structure<VkRenderPassBeginInfo>();
-    rpi.renderPass = vkrp;
-    rpi.framebuffer = swchfb[imidx];//
-    rpi.renderArea.offset = {0, 0};
-    rpi.renderArea.extent = swchiext;
-    VkClearValue clearColor = {{{0., 0., 0., 1.}}};
-    rpi.clearValueCount = 1;
-    rpi.pClearValues = &clearColor;
-
-    vkCmdBeginRenderPass(cmdbuf[curfrm], &rpi, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, vkpl);
-    VkViewport vp{0., 1., (float)swchiext.width, (float)swchiext.height, 0., 1.};
-    vkCmdSetViewport(cmdbuf[curfrm], 0, 1, &vp);
-    VkRect2D sc{{0, 0}, swchiext};
-    vkCmdSetScissor(cmdbuf[curfrm], 0, 1, &sc);
-    vkCmdDraw(cmdbuf[curfrm], 3, 1, 0, 0);
-    vkCmdEndRenderPass(cmdbuf[curfrm]);
-    if (VK_SUCCESS != vkEndCommandBuffer(cmdbuf[curfrm]))
-        return FALSE;
-
-    auto submiti = make_vulkan_structure<VkSubmitInfo>();
-
-    VkSemaphore waitsem[] = {vksimgavail[curfrm]};
-    VkPipelineStageFlags waitst[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submiti.waitSemaphoreCount = 1;
-    submiti.pWaitSemaphores = waitsem;
-    submiti.pWaitDstStageMask = waitst;
-    submiti.commandBufferCount = 1;
-    submiti.pCommandBuffers = &cmdbuf[curfrm];
-
-    VkSemaphore signalsem[] = {vksrenderfinished[curfrm]};
-    submiti.signalSemaphoreCount = 1;
-    submiti.pSignalSemaphores = signalsem;
-
-    if (VK_SUCCESS != vkQueueSubmit(gfxq, 1, &submiti, vkffrminfl[curfrm]))
-        return FALSE;
-
-    auto pri = make_vulkan_structure<VkPresentInfoKHR>();
-    pri.waitSemaphoreCount = 1;
-    pri.pWaitSemaphores = signalsem;
-    VkSwapchainKHR swch[] = {vkswch};
-    pri.swapchainCount = 1;
-    pri.pSwapchains = swch;
-    pri.pImageIndices = &imidx;
-
-    vkQueuePresentKHR(prsq, &pri);
-*/
-
     ++curfrm;
     if (curfrm >= MAX_FRAMES_IN_FLIGHT)
         curfrm = 0;
@@ -484,7 +394,7 @@ CKBOOL CKVkRasterizerContext::BeginScene()
         return FALSE;
 
     auto rpi = make_vulkan_structure<VkRenderPassBeginInfo>({
-        .renderPass=pl->render_pass(),
+        .renderPass=root_pipeline->render_pass(),
         .framebuffer=swchfb[image_index],
         .renderArea={.offset={0, 0}, .extent=swchiext}
     });
@@ -496,10 +406,11 @@ CKBOOL CKVkRasterizerContext::BeginScene()
 
     in_scene = true;
     ubo_offset = 0;
+    bound_pipeline = nullptr;
 
     vkCmdBeginRenderPass(cmdbuf[curfrm], &rpi, VK_SUBPASS_CONTENTS_INLINE);
-    pl->command_bind_pipeline(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS);
-    pl->command_bind_descriptor_sets(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, 0, 1, &descsets[curfrm], 1, &ubo_offset);
+    //pl->command_bind_pipeline(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS);
+    root_pipeline->command_bind_descriptor_sets(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, 0, 1, &descsets[curfrm], 1, &ubo_offset);
 
     auto vpd = &m_ViewportData;
     VkViewport vp {
@@ -586,6 +497,13 @@ CKBOOL CKVkRasterizerContext::SetViewport(CKViewportData *data)
         };
         vkCmdSetViewport(cmdbuf[curfrm], 0, 1, &vp);
     }
+    matrices.vp2d = VxMatrix::Identity();
+    float (*m)[4] = (float(*)[4])&matrices.vp2d;
+    m[0][0] = 2. / data->ViewWidth;
+    m[1][1] = 2. / data->ViewHeight;
+    m[2][2] = 0;
+    m[3][0] = -(-2. * data->ViewX + data->ViewWidth) / data->ViewWidth;
+    m[3][1] =  (-2. * data->ViewY + data->ViewHeight) / data->ViewHeight;
 
     return TRUE;
 }
@@ -688,7 +606,51 @@ CKBOOL CKVkRasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMat
 CKBOOL CKVkRasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
     ZoneScopedN(__FUNCTION__);
+    if (m_StateCache[State].Value != Value || !m_StateCache[State].Valid)
+    {
+        ++ m_RenderStateCacheMiss;
+        m_StateCache[State].Valid = 1;
+        m_StateCache[State].Value = Value;
+        return set_render_state_impl(State, Value);
+    } else ++m_RenderStateCacheHit;
     return TRUE;
+}
+
+CKBOOL CKVkRasterizerContext::set_render_state_impl(VXRENDERSTATETYPE state, CKDWORD value)
+{
+    switch (state)
+    {
+        case VXRENDERSTATE_ZENABLE:
+            //TODO: Check correctness
+            //Reason: This is different from what we're doing in the GLRasterizer
+            current_pipelinest.set_depth_test(value);
+            return TRUE;
+        case VXRENDERSTATE_ZWRITEENABLE:
+            current_pipelinest.set_depth_write(value);
+            return TRUE;
+        case VXRENDERSTATE_ZFUNC:
+            current_pipelinest.set_depth_func(static_cast<VXCMPFUNC>(value));
+            return TRUE;
+        case VXRENDERSTATE_ALPHABLENDENABLE:
+            current_pipelinest.set_blending_enable(value);
+            return TRUE;
+        case VXRENDERSTATE_SRCBLEND:
+            current_pipelinest.set_src_blend(static_cast<VXBLEND_MODE>(value), static_cast<VXBLEND_MODE>(value));
+            return TRUE;
+        case VXRENDERSTATE_DESTBLEND:
+            current_pipelinest.set_dst_blend(static_cast<VXBLEND_MODE>(value), static_cast<VXBLEND_MODE>(value));
+            return TRUE;
+        case VXRENDERSTATE_INVERSEWINDING:
+            current_pipelinest.set_inverse_winding(value);
+            return TRUE;
+        case VXRENDERSTATE_CULLMODE:
+            current_pipelinest.set_cull_mode(static_cast<VXCULL>(value));
+            return TRUE;
+        case VXRENDERSTATE_FILLMODE:
+            current_pipelinest.set_fill_mode(static_cast<VXFILL_MODE>(value));
+            return TRUE;
+    }
+    return FALSE;
 }
 
 CKBOOL CKVkRasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *Value)
@@ -700,10 +662,12 @@ CKBOOL CKVkRasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 {
     if (Stage != 0) return TRUE;
     int d[8] = {0};
-    if (texture_binding.find(Texture) != texture_binding.end())
+    if (!Texture) d[0] = -1;
+    else if (texture_binding.find(Texture) != texture_binding.end())
         d[0] = texture_binding[Texture];
+    //!!FIXME: semantically confusing -- only relies on the pipeline layout which is shared across all pipeline objects
     if (in_scene)
-        pl->command_push_constants(cmdbuf[curfrm], VK_SHADER_STAGE_FRAGMENT_BIT, 0, 32, d);
+        root_pipeline->command_push_constants(cmdbuf[curfrm], VK_SHADER_STAGE_VERTEX_BIT, 16, 32, d);
     return TRUE;
 }
 
@@ -741,10 +705,53 @@ CKBOOL CKVkRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
 #endif
     ++directbat;
     ZoneScopedN(__FUNCTION__);
-    return FALSE;
+
+    CKDWORD vertexSize;
+    CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
+
+    //if ((data->Flags & CKRST_DP_DOCLIP)) ...
+
+    CKVkVertexBuffer *vb = nullptr;
+    auto vboid = std::make_pair(vertexFormat, DWORD(unbuffered_vertex_draws));
+    if (++unbuffered_vertex_draws > DYNAMIC_VBO_COUNT) unbuffered_vertex_draws = 0;
+    if (dynvbo.find(vboid) == dynvbo.end() ||
+        dynvbo[vboid]->m_MaxVertexCount < data->VertexCount)
+    {
+        if (dynvbo[vboid])
+            delete dynvbo[vboid];
+        CKVertexBufferDesc vbd;
+        vbd.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+        vbd.m_VertexFormat = vertexFormat;
+        vbd.m_VertexSize = vertexSize;
+        vbd.m_MaxVertexCount = (data->VertexCount + 100 > DEFAULT_VB_SIZE) ? data->VertexCount + 100 : DEFAULT_VB_SIZE;
+        CKVkVertexBuffer *vb = new CKVkVertexBuffer(&vbd, this);
+        vb->create();
+        dynvbo[vboid] = vb;
+    }
+    vb = dynvbo[vboid];
+    void *pbData = nullptr;
+    CKDWORD vbase = 0;
+    if (vb->m_CurrentVCount + data->VertexCount <= vb->m_MaxVertexCount)
+    {
+        pbData = vb->lock(vertexSize * vb->m_CurrentVCount,
+                           vertexSize * data->VertexCount);
+        vbase = vb->m_CurrentVCount;
+        vb->m_CurrentVCount += data->VertexCount;
+    }
+    else
+    {
+        pbData = vb->lock(0, vertexSize * data->VertexCount);
+        vb->m_CurrentVCount = data->VertexCount;
+    }
+    {
+        ZoneScopedN("CKRSTLoadVertexBuffer");
+        CKRSTLoadVertexBuffer(static_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
+    }
+    vb->unlock();
+    return draw_primitive_unbuffered_index_impl(pType, vb, vbase, data->VertexCount, indices, indexcount);
 }
 
-CKBOOL CKVkRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex,
+CKBOOL CKVkRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartVertex,
     CKDWORD VertexCount, CKWORD *indices, int indexcount)
 {
 #if LOG_DRAWPRIMITIVEVB
@@ -752,7 +759,12 @@ CKBOOL CKVkRasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Ver
 #endif
     ++vbbat;
     ZoneScopedN(__FUNCTION__);
-    return FALSE;
+
+    if (VertexBuffer >= m_VertexBuffers.Size()) return FALSE;
+    CKVkVertexBuffer *vb = static_cast<CKVkVertexBuffer*>(m_VertexBuffers[VertexBuffer]);
+    if (!vb) return FALSE;
+
+    return draw_primitive_unbuffered_index_impl(pType, vb, StartVertex, VertexCount, indices, indexcount);
 }
 
 CKBOOL CKVkRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
@@ -765,34 +777,89 @@ CKBOOL CKVkRasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD V
     ZoneScopedN(__FUNCTION__);
 
     if (VB >= m_VertexBuffers.Size()) return FALSE;
-    CKVkVertexBuffer *vbo = static_cast<CKVkVertexBuffer*>(m_VertexBuffers[VB]);
-    if (vbo->m_VertexFormat != (CKRST_VF_POSITION | CKRST_VF_NORMAL | CKRST_VF_TEX1))
-        return FALSE;
-    if (!vbo) return FALSE;
+    CKVkVertexBuffer *vb = static_cast<CKVkVertexBuffer*>(m_VertexBuffers[VB]);
+    if (!vb) return FALSE;
 
     if (IB >= m_IndexBuffers.Size()) return FALSE;
-    CKVkIndexBuffer *ibo = static_cast<CKVkIndexBuffer*>(m_IndexBuffers[IB]);
-    if (!ibo) return FALSE;
+    CKVkIndexBuffer *ib = static_cast<CKVkIndexBuffer*>(m_IndexBuffers[IB]);
+    if (!ib) return FALSE;
 
-    vbo->bind(cmdbuf[curfrm]);
-    ibo->bind(cmdbuf[curfrm]);
+    return draw_primitive_impl(pType, vb, ib, VertexCount, Indexcount, 1, StartIndex, MinVIndex, 0);
+}
 
-    if (pType != VX_TRIANGLELIST)
-        return FALSE;
+bool CKVkRasterizerContext::draw_primitive_unbuffered_index_impl(VXPRIMITIVETYPE pType, CKVkVertexBuffer *vb,
+                                                                 CKDWORD StartVertex, CKDWORD VertexCount,
+                                                                 CKWORD *Indices, int IndexCount)
+{
+    int ibbase = 0;
+    CKVkIndexBuffer *ibo = nullptr;
+    if (Indices)
+    {
+        void *pdata = nullptr;
+        auto iboid = unbuffered_index_draws;
+        if (++unbuffered_index_draws >= DYNAMIC_IBO_COUNT) unbuffered_index_draws = 0;
+        if (!dynibo[iboid] || dynibo[iboid]->m_MaxIndexCount < IndexCount)
+        {
+            if (dynibo[iboid])
+                delete dynibo[iboid];
+            CKIndexBufferDesc ibd;
+            ibd.m_Flags = CKRST_VB_WRITEONLY | CKRST_VB_DYNAMIC;
+            ibd.m_MaxIndexCount = IndexCount + 100 < DEFAULT_VB_SIZE ? DEFAULT_VB_SIZE : IndexCount + 100;
+            ibd.m_CurrentICount = 0;
+            CKVkIndexBuffer *ib = new CKVkIndexBuffer(&ibd, this);
+            ib->create();
+            dynibo[iboid] = ib;
+        }
+        ibo = dynibo[iboid];
+        if (IndexCount + ibo->m_CurrentICount <= ibo->m_MaxIndexCount)
+        {
+            pdata = ibo->lock(2 * ibo->m_CurrentICount, 2 * IndexCount);
+            ibbase = ibo->m_CurrentICount;
+            ibo->m_CurrentICount += IndexCount;
+        } else
+        {
+            pdata = ibo->lock(0, 2 * IndexCount);
+            ibo->m_CurrentICount = IndexCount;
+        }
+        if (pdata)
+            memcpy(pdata, Indices, 2 * IndexCount);
+        ibo->unlock();
+    }
+
+    draw_primitive_impl(pType, vb, ibo, VertexCount, IndexCount, 1, ibbase, StartVertex, 0);
+
+    return FALSE;
+}
+
+bool CKVkRasterizerContext::draw_primitive_impl(VXPRIMITIVETYPE pty, CKVkVertexBuffer *vb, CKVkIndexBuffer *ib, uint32_t vtxcnt,
+                                                uint32_t idxcnt, uint32_t instcnt, uint32_t firstidx, int32_t vtxoffset,
+                                                uint32_t firstinst)
+{
+    current_pipelinest.set_primitive_type(pty);
+    current_pipelinest.set_vertex_format(vb->m_VertexFormat);
+    bind_pipeline();
+
+    vb->bind(cmdbuf[curfrm]);
+    if (ib)
+        ib->bind(cmdbuf[curfrm]);
+
     uint8_t *dest = static_cast<uint8_t*>(matubos[curfrm].second);
     dest = dest + ubo_offset;
     memcpy(dest, &matrices, sizeof(CKVkMatrixUniform));
-    pl->command_bind_descriptor_sets(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, 0, 1, &descsets[curfrm], 1, &ubo_offset);
-    vkCmdDrawIndexed(cmdbuf[curfrm], Indexcount, 1, StartIndex, MinVIndex, 0);
+    //!!FIXME (dumb design): only pipeline layout is used in the following call, which is shared across all pipelines
+    bound_pipeline->command_bind_descriptor_sets(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, 0, 1, &descsets[curfrm], 1, &ubo_offset);
+    int flags[4] = {0};
+    if (vb->m_VertexFormat & CKRST_VF_RASTERPOS)
+        flags[0] = 1;
+    bound_pipeline->command_push_constants(cmdbuf[curfrm], VK_SHADER_STAGE_VERTEX_BIT, 0, 16, flags);
+
+    if (ib)
+        vkCmdDrawIndexed(cmdbuf[curfrm], idxcnt, instcnt, firstidx, vtxoffset, firstinst);
+    else
+        vkCmdDraw(cmdbuf[curfrm], vtxcnt, 1, vtxoffset, 0);
     ubo_offset += sizeof(CKVkMatrixUniform);
     return TRUE;
 }
-
-/*CKBOOL CKVkRasterizerContext::InternalDrawPrimitive(VXPRIMITIVETYPE pType, CKGLVertexBuffer *vbo, CKDWORD vbase, CKDWORD vcnt, WORD* idx, GLuint icnt, bool vbbound)
-{
-    ZoneScopedN(__FUNCTION__);
-    return TRUE;
-}*/
 
 CKBOOL CKVkRasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
 {
@@ -889,7 +956,7 @@ CKBOOL CKVkRasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &
     dst.GreenMask = 0x00FF00;
     dst.BlueMask = 0xFF0000;
     dst.Image = new uint8_t[dst.Width * dst.Height * (dst.BitsPerPixel / 8)];
-    VxDoBlitUpsideDown(SurfDesc, dst);
+    VxDoBlit(SurfDesc, dst);
     if (!(SurfDesc.AlphaMask || SurfDesc.Flags >= _DXT1)) VxDoAlphaBlit(dst, 255);
     tex->load(dst.Image);
     delete dst.Image;
@@ -1091,6 +1158,21 @@ void CKVkRasterizerContext::update_descriptor_sets(bool init)
         }));
         if (dsws.size())
             vkUpdateDescriptorSets(vkdev, dsws.size(), dsws.data(), 0, nullptr);
+    }
+}
+
+void CKVkRasterizerContext::bind_pipeline()
+{
+    if (pls.find(current_pipelinest) == pls.end())
+    {
+        auto pl = CKVkPipelineState::build_pipeline(&pbtemplate, vkdev, current_pipelinest);
+        pls[current_pipelinest] = pl;
+    }
+    auto pl = pls[current_pipelinest];
+    if (bound_pipeline != pl)
+    {
+        pl->command_bind_pipeline(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS);
+        bound_pipeline = pl;
     }
 }
 

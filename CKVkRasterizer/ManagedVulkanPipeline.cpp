@@ -1,19 +1,21 @@
 #include "ManagedVulkanPipeline.h"
 
-ManagedVulkanPipeline::ManagedVulkanPipeline(VkRenderPass _rp, VkPipelineLayout _plo, VkPipeline _pl,
-                                             std::vector<VkDescriptorSetLayout> &&_dsls, VkDevice _vkdev) :
-    rp(_rp), plo(_plo), pl(_pl), dsls(_dsls), vkdev(_vkdev) {}
+ManagedVulkanPipeline::ManagedVulkanPipeline(VkRenderPass _rp, bool _rp_shared, VkPipelineLayout _plo, bool _plo_shared,
+                                             VkPipeline _pl, std::vector<VkDescriptorSetLayout> &&_dsls, VkDevice _vkdev) :
+    rp(_rp), rp_shared(_rp_shared), plo(_plo), plo_shared(_plo_shared), pl(_pl), dsls(_dsls), vkdev(_vkdev) {}
 
 ManagedVulkanPipeline::~ManagedVulkanPipeline()
 {
     vkDestroyPipeline(vkdev, pl, nullptr);
-    vkDestroyPipelineLayout(vkdev, plo, nullptr);
-    vkDestroyRenderPass(vkdev, rp, nullptr);
+    if (!plo_shared) vkDestroyPipelineLayout(vkdev, plo, nullptr);
+    if (!rp_shared) vkDestroyRenderPass(vkdev, rp, nullptr);
     for(auto &dsl : dsls)
         vkDestroyDescriptorSetLayout(vkdev, dsl, nullptr);
 }
 
 VkRenderPass ManagedVulkanPipeline::render_pass() { return rp; }
+
+VkPipelineLayout ManagedVulkanPipeline::pipeline_layout() { return plo; }
 
 void ManagedVulkanPipeline::command_push_constants(VkCommandBuffer cmdbuf, VkShaderStageFlags stages, uint32_t offset, uint32_t size, const void *d)
 {
