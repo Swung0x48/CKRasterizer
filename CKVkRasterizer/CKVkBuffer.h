@@ -21,6 +21,7 @@ public:
     void create(uint64_t sz, VkBufferUsageFlags usage, VkMemoryPropertyFlags mprop);
     VkBuffer get_buffer();
     void transfer(VkBuffer dst);
+    void transfer_with_barrier(VkBuffer dst, VkPipelineStageFlags dststage, VkAccessFlags dstaccessmask);
     void* map(uint64_t offset, uint64_t size);
     void unmap();
 };

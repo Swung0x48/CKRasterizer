@@ -43,6 +43,21 @@ void CKVkBuffer::transfer(VkBuffer dst)
     });
 }
 
+void CKVkBuffer::transfer_with_barrier(VkBuffer dst, VkPipelineStageFlags dststage, VkAccessFlags dstaccessmask)
+{
+    run_oneshot_command_list(rctx->vkdev, rctx->cmdpool, rctx->gfxq, [&, this](auto cmdbuf) {
+        VkBufferCopy bcpy{};
+        bcpy.srcOffset = bcpy.dstOffset = 0;
+        bcpy.size = size;
+        vkCmdCopyBuffer(cmdbuf, vkbuf, dst, 1, &bcpy);
+        auto mb = make_vulkan_structure<VkMemoryBarrier>({
+            .srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask=dstaccessmask
+        });
+        vkCmdPipelineBarrier(cmdbuf, VK_PIPELINE_STAGE_TRANSFER_BIT, dststage, 0, 1, &mb, 0, nullptr, 0, nullptr);
+    });
+}
+
 void *CKVkBuffer::map(uint64_t offset, uint64_t size)
 {
     void *ret = nullptr;

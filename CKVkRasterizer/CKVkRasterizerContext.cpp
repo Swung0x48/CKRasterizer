@@ -10,6 +10,9 @@
 
 #include <algorithm>
 
+#define LOG_DRAWPRIMITIVE     0
+#define LOG_DRAWPRIMITIVEVB   0
+#define LOG_DRAWPRIMITIVEVBIB 0
 #define DYNAMIC_VBO_COUNT 64
 #define DYNAMIC_IBO_COUNT 64
 
@@ -269,7 +272,8 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         .add_descriptor_set_binding(VkDescriptorSetLayoutBinding{
             .binding=1,
             .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount=1024,
+            //INTEL XE HAS A maxPerStageDescriptorSamplers OF 64 AND maxPerStageDescriptorSampledImages OF 200, WTF???
+            .descriptorCount=64,
             .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
             .pImmutableSamplers=nullptr
         })
@@ -338,7 +342,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         .descriptorCount=MAX_FRAMES_IN_FLIGHT
     }, {
         .type=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .descriptorCount=MAX_FRAMES_IN_FLIGHT * 1024
+        .descriptorCount=MAX_FRAMES_IN_FLIGHT * 64
     }});
     auto dpc = make_vulkan_structure<VkDescriptorPoolCreateInfo>({
         .maxSets=MAX_FRAMES_IN_FLIGHT,
@@ -349,7 +353,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
         return FALSE;
 
     std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, root_pipeline->descriptor_set_layouts().front());
-    uint32_t sz[] = {1024, 1024}; //both set needs 1024 varlen descriptors
+    uint32_t sz[] = {64, 64}; //both set needs 1024 varlen descriptors
     auto dsvdci = make_vulkan_structure<VkDescriptorSetVariableDescriptorCountAllocateInfo>({
         .descriptorSetCount=2,
         .pDescriptorCounts=sz
@@ -380,7 +384,7 @@ CKBOOL CKVkRasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int 
     m_ViewportData = CKViewportData {0, 0, (int)swchiext.width, (int)swchiext.height, 0., 1.};
 
     buf_deletion_queue = std::vector<std::vector<std::variant<CKVkVertexBuffer*, CKVkIndexBuffer*>>>(MAX_FRAMES_IN_FLIGHT);
-    dynibo.resize(DYNAMIC_IBO_COUNT);
+    dynibo.resize(DYNAMIC_IBO_COUNT * MAX_FRAMES_IN_FLIGHT);
     unbuffered_vertex_draws = 0;
     unbuffered_index_draws = 0;
 
@@ -456,6 +460,10 @@ CKBOOL CKVkRasterizerContext::BeginScene()
     ubo_offset = 0;
     bound_pipeline = nullptr;
 
+    directbat = 0;
+    vbbat = 0;
+    vbibbat = 0;
+
     vkCmdBeginRenderPass(cmdbuf[curfrm], &rpi, VK_SUBPASS_CONTENTS_INLINE);
     //pl->command_bind_pipeline(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS);
     root_pipeline->command_bind_descriptor_sets(cmdbuf[curfrm], VK_PIPELINE_BIND_POINT_GRAPHICS, 0, 1, &descsets[curfrm], 1, &ubo_offset);
@@ -500,6 +508,7 @@ CKBOOL CKVkRasterizerContext::EndScene()
     submiti.signalSemaphoreCount = 1;
     submiti.pSignalSemaphores = signalsem;
 
+    fprintf(stderr, "Submit\n");
     auto ret = vkQueueSubmit(gfxq, 1, &submiti, fence_cmdbuf_exec[curfrm]);
     if (VK_SUCCESS != ret)
     {
@@ -770,7 +779,7 @@ CKBOOL CKVkRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     VxDrawPrimitiveData *data)
 {
 #if LOG_DRAWPRIMITIVE
-    fprintf(stderr, "drawprimitive ib %p %d\n", indices, indexcount);
+    fprintf(stderr, "drawprimitive ibp %p ic %d vc %d\n", indices, indexcount, data->VertexCount);
 #endif
     ++directbat;
     ZoneScopedN(__FUNCTION__);
@@ -781,7 +790,7 @@ CKBOOL CKVkRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     //if ((data->Flags & CKRST_DP_DOCLIP)) ...
 
     CKVkVertexBuffer *vb = nullptr;
-    auto vboid = std::make_pair(vertexFormat, DWORD(unbuffered_vertex_draws));
+    auto vboid = std::make_pair(vertexFormat, DWORD(unbuffered_vertex_draws + curfrm * DYNAMIC_VBO_COUNT));
     if (++unbuffered_vertex_draws > DYNAMIC_VBO_COUNT) unbuffered_vertex_draws = 0;
     if (dynvbo.find(vboid) == dynvbo.end() ||
         dynvbo[vboid]->m_MaxVertexCount < data->VertexCount)
@@ -800,10 +809,10 @@ CKBOOL CKVkRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
     vb = dynvbo[vboid];
     void *pbData = nullptr;
     CKDWORD vbase = 0;
-    if (vb->m_CurrentVCount + data->VertexCount <= vb->m_MaxVertexCount)
+    if (vb->m_CurrentVCount + data->VertexCount < vb->m_MaxVertexCount)
     {
         pbData = vb->lock(vertexSize * vb->m_CurrentVCount,
-                           vertexSize * data->VertexCount);
+                          vertexSize * data->VertexCount);
         vbase = vb->m_CurrentVCount;
         vb->m_CurrentVCount += data->VertexCount;
     }
@@ -812,6 +821,9 @@ CKBOOL CKVkRasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indic
         pbData = vb->lock(0, vertexSize * data->VertexCount);
         vb->m_CurrentVCount = data->VertexCount;
     }
+#if LOG_DRAWPRIMITIVE
+    fprintf(stderr, "vbase %u current vc %u max vc %u\n", vbase, vb->m_CurrentVCount, vb->m_MaxVertexCount);
+#endif
     {
         ZoneScopedN("CKRSTLoadVertexBuffer");
         CKRSTLoadVertexBuffer(static_cast<CKBYTE *>(pbData), vertexFormat, vertexSize, data);
@@ -865,7 +877,7 @@ bool CKVkRasterizerContext::draw_primitive_unbuffered_index_impl(VXPRIMITIVETYPE
     if (Indices)
     {
         void *pdata = nullptr;
-        auto iboid = unbuffered_index_draws;
+        auto iboid = unbuffered_index_draws + curfrm * DYNAMIC_IBO_COUNT;
         if (++unbuffered_index_draws >= DYNAMIC_IBO_COUNT) unbuffered_index_draws = 0;
         if (!dynibo[iboid] || dynibo[iboid]->m_MaxIndexCount < IndexCount)
         {
@@ -894,10 +906,13 @@ bool CKVkRasterizerContext::draw_primitive_unbuffered_index_impl(VXPRIMITIVETYPE
             memcpy(pdata, Indices, 2 * IndexCount);
         ibo->unlock();
     }
+#if LOG_DRAWPRIMITIVEVB
+    fprintf(stderr, "ibbase %d cur ic %u max ic %u\n", ibbase, ibo->m_CurrentICount, ibo->m_MaxIndexCount);
+#endif
 
-    draw_primitive_impl(pType, vb, ibo, VertexCount, IndexCount, 1, ibbase, StartVertex, 0);
+    draw_primitive_impl(pType, vb, ibo, VertexCount, IndexCount | 0x80000000, 1, ibbase, StartVertex, 0);
 
-    return FALSE;
+    return TRUE;
 }
 
 bool CKVkRasterizerContext::draw_primitive_impl(VXPRIMITIVETYPE pty, CKVkVertexBuffer *vb, CKVkIndexBuffer *ib, uint32_t vtxcnt,
@@ -922,10 +937,13 @@ bool CKVkRasterizerContext::draw_primitive_impl(VXPRIMITIVETYPE pty, CKVkVertexB
         flags[0] = 1;
     bound_pipeline->command_push_constants(cmdbuf[curfrm], VK_SHADER_STAGE_VERTEX_BIT, 0, 16, flags);
 
-    if (ib)
+    //if (!(idxcnt & 0x80000000)){
+    if (ib){
+    if (!(idxcnt & 0x80000000))
         vkCmdDrawIndexed(cmdbuf[curfrm], idxcnt, instcnt, firstidx, vtxoffset, firstinst);
+        }
     else
-        vkCmdDraw(cmdbuf[curfrm], vtxcnt, 1, vtxoffset, 0);
+        vkCmdDraw(cmdbuf[curfrm], vtxcnt, 1, vtxoffset, 0);//}
     ubo_offset += sizeof(CKVkMatrixUniform);
     return TRUE;
 }

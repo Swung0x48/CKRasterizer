@@ -15,6 +15,7 @@ private:
     CKVkBuffer *ssbuf;
     CKVkRasterizerContext *rctx;
     uint64_t size;
+    void *mapped_ptr;
 public:
     explicit CKVkIndexBuffer(CKIndexBufferDesc *desired_format, CKVkRasterizerContext *ctx);
     ~CKVkIndexBuffer();
