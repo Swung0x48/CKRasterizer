@@ -42,4 +42,4 @@ msbuild CKRasterizer.sln
 
 ## License
 
-BSD-3-Clause
+Apache License 2.0
