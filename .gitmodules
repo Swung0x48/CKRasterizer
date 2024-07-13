@@ -13,3 +13,7 @@
 [submodule "vendor/D3D12MemoryAllocator"]
 	path = vendor/D3D12MemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator.git
+[submodule "vendor/grpc"]
+	path = vendor/grpc
+	url = https://github.com/grpc/grpc
+	branch = v1.59.x

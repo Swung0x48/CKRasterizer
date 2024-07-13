@@ -225,6 +225,7 @@ CKBOOL CKDX11RasterizerDriver::InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapte
             CKRST_SPECIFICCAPS_CANDOINDEXBUFFER | 
             CKRST_SPECIFICCAPS_GLATTENUATIONMODEL | 
             CKRST_SPECIFICCAPS_HARDWARETL | 
+            CKRST_SPECIFICCAPS_EXPLICITSWAPCHAIN |
             CKRST_SPECIFICCAPS_DX8);
     m_3DCaps.MaxNumberTextureStage = MAX_TEX_STAGES; // D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; //We do 2 for now.
     m_3DCaps.MaxNumberBlendStage = 8; // fake it until we make it
@@ -250,6 +251,7 @@ CKBOOL CKDX11RasterizerDriver::InitializeCaps(Microsoft::WRL::ComPtr<IDXGIAdapte
     m_3DCaps.RasterCaps |= CKRST_RASTERCAPS_WFOG; // w fog hardcoded in shader
     m_3DCaps.SrcBlendCaps = 0x1fff; // everything
     m_3DCaps.DestBlendCaps = 0x1fff; // ditto
+    
     m_2DCaps.AvailableVideoMemory = 1024;
     m_2DCaps.MaxVideoMemory = 1024;
     m_2DCaps.Family = CKRST_DIRECTX;
