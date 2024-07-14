@@ -1,8 +1,10 @@
 #pragma once
 #include "common_include.h"
 
-D3DFORMAT VxPixelFormatToD3DFormat(VX_PIXELFORMAT pf) {
-	switch (pf) {
+D3DFORMAT VxPixelFormatToD3DFormat(VX_PIXELFORMAT pf)
+{
+	switch (pf)
+	{
 		case _32_ARGB8888: return D3DFMT_A8R8G8B8; // 32-bit ARGB pixel format with alpha
 		case _32_RGB888: return D3DFMT_X8R8G8B8; // 32-bit RGB pixel format without alpha
 		case _24_RGB888: return D3DFMT_R8G8B8; // 24-bit RGB pixel format
@@ -39,8 +41,10 @@ D3DFORMAT VxPixelFormatToD3DFormat(VX_PIXELFORMAT pf) {
 	}
 }
 
-VX_PIXELFORMAT D3DFormatToVxPixelFormat(D3DFORMAT ddpf) {
-	switch (ddpf) {
+VX_PIXELFORMAT D3DFormatToVxPixelFormat(D3DFORMAT ddpf)
+{
+	switch (ddpf)
+	{
 		case D3DFMT_A8R8G8B8: return _32_ARGB8888; // 32-bit ARGB pixel format with alpha
 		case D3DFMT_X8R8G8B8: return _32_RGB888; // 32-bit RGB pixel format without alpha
 		case D3DFMT_R8G8B8: return _24_RGB888; // 24-bit RGB pixel format
@@ -65,12 +69,14 @@ VX_PIXELFORMAT D3DFormatToVxPixelFormat(D3DFORMAT ddpf) {
 	}
 }
 
-D3DFORMAT TextureDescToD3DFormat(CKTextureDesc* desc) {
-	return VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(desc->Format));
+D3DFORMAT TextureDescToD3DFormat(CKTextureDesc *desc)
+{
+    return VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(desc->Format));
 }
 
-void D3DFormatToTextureDesc(D3DFORMAT ddpf, CKTextureDesc* desc) {
-	desc->Flags = (CKRST_TEXTURE_VALID | CKRST_TEXTURE_RGB | CKRST_TEXTURE_ALPHA); // 0x1801
-	VX_PIXELFORMAT VxPixelFormat = D3DFormatToVxPixelFormat(ddpf);
-	VxPixelFormat2ImageDesc(VxPixelFormat, desc->Format);
+void D3DFormatToTextureDesc(D3DFORMAT ddpf, CKTextureDesc *desc)
+{
+    desc->Flags = (CKRST_TEXTURE_VALID | CKRST_TEXTURE_RGB | CKRST_TEXTURE_ALPHA); // 0x1801
+    VX_PIXELFORMAT VxPixelFormat = D3DFormatToVxPixelFormat(ddpf);
+    VxPixelFormat2ImageDesc(VxPixelFormat, desc->Format);
 }

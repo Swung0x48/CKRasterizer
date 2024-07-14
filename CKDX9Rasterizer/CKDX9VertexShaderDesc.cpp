@@ -1,6 +1,6 @@
 #include "CKDX9Rasterizer.h"
 
-BOOL CKDX9VertexShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format)
+CKBOOL CKDX9VertexShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format)
 {
     Owner = Ctx;
     m_FunctionSize = Format->m_FunctionSize;

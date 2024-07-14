@@ -1,24 +1,9 @@
 #ifndef CKRASTERIZERDX9_H
-#define CKRASTERIZERDX9_H "$Id:$"
-/*************************************************************************/
-/*	File : CKDX9Rasterizer.h											 */
-/*	Author : Romain Sididris											 */
-/*																		 */
-/*	+ Direct X 9 Rasterizer declaration									 */
-/*	+ Some methods of these classes are already implemented in the 		 */
-/*	CKRasterizerLib	library	as they are common to all rasterizers		 */
-/*																		 */
-/*	Virtools SDK 														 */
-/*	Copyright (c) Virtools 2004, All Rights Reserved.					 */
-/*************************************************************************/
+#define CKRASTERIZERDX9_H
 
 typedef void TexFromFile;
 // Ensure we are using correct DirectDraw version
 #define NBTEMPZBUFFER 256
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-
-#define _NOD3DX
 
 #ifdef _DEBUG
 #define D3D_DEBUG_INFO
@@ -28,8 +13,9 @@ typedef void TexFromFile;
 // DDraw is included here only to get the Total Video memory and Free Video Memory
 #include "ddraw.h"
 
-#include "CKRasterizer.h"
 #include "XBitArray.h"
+#include "CKRasterizer.h"
+
 #ifdef TRACY_ENABLE
 #include "tracy/Tracy.hpp"
 #endif
@@ -50,27 +36,27 @@ class CKDX9RasterizerDriver;
 class CKDX9RasterizerContext;
 class CKDX9Rasterizer;
 
-typedef BOOL (*SetDXRenderStateFunc)(CKDX9RasterizerContext *ctx, CKDWORD Value);
-typedef BOOL (*GetDXRenderStateFunc)(CKDX9RasterizerContext *ctx, CKDWORD *Value);
+typedef CKBOOL (*SetDXRenderStateFunc)(CKDX9RasterizerContext *ctx, CKDWORD Value);
+typedef CKBOOL (*GetDXRenderStateFunc)(CKDX9RasterizerContext *ctx, CKDWORD *Value);
 
-#define PREPAREDXSTRUCT(x)                                                                                             \
-    {                                                                                                                  \
-        memset(&x, 0, sizeof(x));                                                                                      \
-        x.dwSize = sizeof(x);                                                                                          \
+#define PREPAREDXSTRUCT(x)        \
+    {                             \
+        memset(&x, 0, sizeof(x)); \
+        x.dwSize = sizeof(x);     \
     }
-#define SAFERELEASE(x)                                                                                                 \
-    {                                                                                                                  \
-        if (x)                                                                                                         \
-            x->Release();                                                                                              \
-        x = NULL;                                                                                                      \
+#define SAFERELEASE(x)    \
+    {                     \
+        if (x)            \
+            x->Release(); \
+        x = NULL;         \
     }
-#define SAFELASTRELEASE(x)                                                                                             \
-    {                                                                                                                  \
-        int refCount = 0;                                                                                              \
-        if (x)                                                                                                         \
-            refCount = x->Release();                                                                                   \
-        x = NULL;                                                                                                      \
-        XASSERT(refCount == 0);                                                                                        \
+#define SAFELASTRELEASE(x)           \
+    {                                \
+        int refCount = 0;            \
+        if (x)                       \
+            refCount = x->Release(); \
+        x = NULL;                    \
+        XASSERT(refCount == 0);      \
     }
 
 // Store texture operation required to perform blending between two texture stages
@@ -101,7 +87,7 @@ public:
     LPDIRECT3DTEXTURE9 DxRenderTexture;
     //----- For non managed surface to be locked (DX9 does not support direct locking anymore)
     LPDIRECT3DSURFACE9 DxLockedSurface;
-    DWORD LockedFlags;
+    CKDWORD LockedFlags;
 
 public:
     CKDX9TextureDesc()
@@ -109,6 +95,7 @@ public:
         DxTexture = NULL;
         DxRenderTexture = NULL;
         DxLockedSurface = NULL;
+        LockedFlags = 0;
     }
     ~CKDX9TextureDesc()
     {
@@ -155,12 +142,12 @@ public:
     XArray<BYTE> m_FunctionData;
 
 public:
-    BOOL Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format);
+    CKBOOL Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format);
     virtual ~CKDX9VertexShaderDesc();
     CKDX9VertexShaderDesc()
     {
-        DxShader = 0;
-        Owner = 0;
+        DxShader = NULL;
+        Owner = NULL;
     }
 } CKDX9VertexShaderDesc;
 
@@ -174,7 +161,7 @@ public:
     CKDX9RasterizerContext *Owner;
 
 public:
-    BOOL Create(CKDX9RasterizerContext *Ctx, CKDWORD *Function);
+    CKBOOL Create(CKDX9RasterizerContext *Ctx, CKDWORD *Function);
     virtual ~CKDX9PixelShaderDesc();
     CKDX9PixelShaderDesc()
     {
@@ -235,7 +222,7 @@ public:
     //--- Drawing
     virtual CKBOOL DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount, VxDrawPrimitiveData *data);
     virtual CKBOOL DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex, CKDWORD VertexCount,
-                                   CKWORD *indices = NULL, int indexcount = NULL);
+                                   CKWORD *indices = NULL, int indexcount = 0);
     virtual CKBOOL DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                      CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount);
 
@@ -270,12 +257,6 @@ public:
                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);
 
-    //---------------------------------------------------------------------
-    //---- New methods to lock video memory (DX only)
-    //virtual CKBOOL LockTextureVideoMemory(CKDWORD Texture, VxImageDescEx &Desc, int MipLevel = 0,
-    //                                      VX_LOCKFLAGS Flags = VX_LOCK_DEFAULT);
-    //virtual CKBOOL UnlockTextureVideoMemory(CKDWORD Texture, int MipLevel = 0);
-
     //---- To Enable more direct creation of system objects	without
     //---- CK2_3D holding a copy of the texture
     virtual CKBOOL CreateTextureFromFile(CKDWORD Texture, const char *Filename, TexFromFile *param);
@@ -302,9 +283,7 @@ protected:
     void ClearStreamCache();
     void ReleaseScreenBackup();
     CKDWORD DX9PresentInterval(DWORD PresentInterval);
-#ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
-#endif
 
     //--- Temp Z-Buffers for texture rendering...
     void ReleaseTempZBuffers()
@@ -385,7 +364,6 @@ public:
     UINT BytesPerPixel(D3DFORMAT Format);
 
     CKBOOL InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType);
-    CKBOOL IsTextureFormatOk(D3DFORMAT TextureFormat, D3DFORMAT AdapterFormat, DWORD Usage = 0);
 
     D3DFORMAT FindNearestTextureFormat(CKTextureDesc *desc, D3DFORMAT AdapterFormat, DWORD Usage = 0);
     D3DFORMAT FindNearestRenderTargetFormat(int Bpp, CKBOOL Windowed);
@@ -393,7 +371,7 @@ public:
 
 private:
     CKBOOL CheckDeviceFormat(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
-    BOOL CheckDepthStencilMatch(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
+    CKBOOL CheckDepthStencilMatch(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
 
 public:
     CKBOOL m_Inited;
@@ -415,7 +393,7 @@ public:
     virtual ~CKDX9Rasterizer();
 
     virtual CKBOOL Start(WIN_HANDLE AppWnd);
-    virtual void Close(void);
+    virtual void Close();
 
 public:
     CKBOOL m_Init;
