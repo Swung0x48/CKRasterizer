@@ -254,7 +254,7 @@ BOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType)
     m_2DCaps.Caps = (CKRST_2DCAPS_3D | CKRST_2DCAPS_GDI);
 
     DWORD Caps2 = m_D3DCaps.Caps2;
-    if ((Caps2 & 0x80000) != 0 && !AdapterIndex) // TODO: Unknown enum
+    if (AdapterIndex == 0) // TODO: Unknown enum
         m_2DCaps.Caps = (CKRST_2DCAPS_WINDOWED | CKRST_2DCAPS_3D | CKRST_2DCAPS_GDI);
     HMONITOR hMonitor = pD3D->GetAdapterMonitor(AdapterIndex);
     MONITORINFOEXA Info;
