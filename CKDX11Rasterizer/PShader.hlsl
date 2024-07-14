@@ -1,51 +1,5 @@
 #include "Common.hlsl"
 
-static const dword AFLG_ALPHATESTEN = 0x10u;
-static const dword AFLG_ALPHAFUNCMASK = 0xFu;
-
-static const dword LSW_LIGHTINGEN = 1U << 0;
-static const dword LSW_SPECULAREN = 1U << 1;
-static const dword LSW_VRTCOLOREN = 1U << 2;
-
-static const dword LFLG_LIGHTPOINT = 1U;
-static const dword LFLG_LIGHTSPOT = 2U; // unused
-static const dword LFLG_LIGHTDIREC = 3U;
-static const dword LFLG_LIGHTTYPEMASK = 7U;
-static const dword LFLG_LIGHTEN = 1U << 31;
-
-static const dword FFLG_FOGEN = 1U << 31;
-
-static const int MAX_ACTIVE_LIGHTS = 16;
-static const int MAX_TEX_STAGES = 2;
-
-static const dword NULL_TEXTURE_MASK = (1 << (MAX_TEX_STAGES + 1)) - 1;
-
-struct light_t
-{
-    dword type; // highest bit as LIGHTEN
-    float a0;
-    float a1;
-    float a2; // align
-    float4 ambient; // a
-    float4 diffuse; // a
-    float4 specular; // a
-    float4 direction; // a
-    float4 position; // a
-    float range;
-    float falloff;
-    float theta;
-    float phi; // a
-};
-
-struct material_t
-{
-    float4 diffuse;
-    float4 ambient;
-    float4 specular;
-    float4 emissive;
-    float specular_power;
-};
-
 struct texcomb_t
 {
     dword op; //@0, bit 0-3: color op, bit 4-7: alpha op, bit 31: dest
@@ -268,6 +222,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float3 vdir = normalize(view_position - input.worldpos);
     float4 color = float4(1., 1., 1., 1.);
 
+    // Fog
     float ffactor = 1.;
     if (fog_flags & FFLG_FOGEN)
     {
@@ -280,6 +235,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         }
     }
 
+    // Lighting
     float3x4 lighting_colors = float3x4(zero4f, zero4f, zero4f);
     float4x4 lighting_colors_e = float4x4(zero4f, zero4f, zero4f, zero4f);
     if ((global_light_switches & LSW_VRTCOLOREN) != 0U)
@@ -316,6 +272,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     else
         color = input.color;
 
+    // Texture
     int ntex = (fvf & VF_TEX2) ? 2 : 1;
     if (ntex > 1)
     {

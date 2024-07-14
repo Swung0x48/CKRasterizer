@@ -1,3 +1,49 @@
+static const dword AFLG_ALPHATESTEN = 0x10u;
+static const dword AFLG_ALPHAFUNCMASK = 0xFu;
+
+static const dword LSW_LIGHTINGEN = 1U << 0;
+static const dword LSW_SPECULAREN = 1U << 1;
+static const dword LSW_VRTCOLOREN = 1U << 2;
+
+static const dword LFLG_LIGHTPOINT = 1U;
+static const dword LFLG_LIGHTSPOT = 2U; // unused
+static const dword LFLG_LIGHTDIREC = 3U;
+static const dword LFLG_LIGHTTYPEMASK = 7U;
+static const dword LFLG_LIGHTEN = 1U << 31;
+
+static const dword FFLG_FOGEN = 1U << 31;
+
+static const int MAX_ACTIVE_LIGHTS = 16;
+static const int MAX_TEX_STAGES = 2;
+
+static const dword NULL_TEXTURE_MASK = (1 << (MAX_TEX_STAGES + 1)) - 1;
+
+struct light_t
+{
+    dword type; // highest bit as LIGHTEN
+    float a0;
+    float a1;
+    float a2; // align
+    float4 ambient; // a
+    float4 diffuse; // a
+    float4 specular; // a
+    float4 direction; // a
+    float4 position; // a
+    float range;
+    float falloff;
+    float theta;
+    float phi; // a
+};
+
+struct material_t
+{
+    float4 diffuse;
+    float4 ambient;
+    float4 specular;
+    float4 emissive;
+    float specular_power;
+};
+
 struct VS_OUTPUT
 {
     float4 position : SV_POSITION;
@@ -18,10 +64,10 @@ cbuffer VSCBuf: register(b0)
     matrix viewport_mat;
     matrix transposedinvworld_mat;
     matrix transposedinvworldview_mat;
+    material_t vs_material;
     dword vs_fvf;
-    dword _padding1;
-    dword _padding2;
-    dword _padding3;
+    dword vs_global_light_switches;
+    dword _padding0; // a
     uint4 texture_transform_flags;
     matrix texture_transform_mat[2];
     // matrix texture_transform_mat1;

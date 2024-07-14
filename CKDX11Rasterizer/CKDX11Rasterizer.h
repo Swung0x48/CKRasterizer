@@ -236,13 +236,18 @@ typedef struct VSConstantBufferStruct
     VxMatrix ViewportMatrix;
     VxMatrix TransposedInvWorldMatrix;
     VxMatrix TransposedInvWorldViewMatrix;
+    CKMaterialData Material;
     uint32_t FVF = 0;
-    uint32_t _padding1 = 1234;
-    uint32_t _padding2 = 1234;
-    uint32_t _padding3 = 1234;
+    uint32_t GlobalLightSwitches = 0;
+    uint32_t _padding0 = 1234;
     uint32_t TextureTransformFlags[4];
     VxMatrix TexTransformMatrix[MAX_TEX_STAGES];
 } VSConstantBufferStruct;
+
+typedef struct VSLightConstantBufferStruct
+{
+    CKDX11LightConstant Lights[MAX_ACTIVE_LIGHTS];
+} VSLightConstantBufferStruct;
 
 static constexpr uint32_t LFLG_LIGHTEN = 1U << 31;
 

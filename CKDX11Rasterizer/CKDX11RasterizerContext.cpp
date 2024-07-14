@@ -675,6 +675,8 @@ CKBOOL CKDX11RasterizerContext::SetMaterial(CKMaterialData *mat)
     m_CurrentMaterialData = *mat;
     m_PSConstantBufferUpToDate = FALSE;
     m_PSCBuffer.Material = *mat;
+    m_VSConstantBufferUpToDate = FALSE;
+    m_VSCBuffer.Material = *mat;
     return TRUE;
 }
 
@@ -1239,10 +1241,14 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
         case VXRENDERSTATE_LIGHTING:
             m_PSConstantBufferUpToDate = FALSE;
             flag_toggle(&m_PSCBuffer.GlobalLightSwitches, LSW_LIGHTINGEN, Value);
+            m_VSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_VSCBuffer.GlobalLightSwitches, LSW_LIGHTINGEN, Value);
             return TRUE;
         case VXRENDERSTATE_SPECULARENABLE:
             m_PSConstantBufferUpToDate = FALSE;
             flag_toggle(&m_PSCBuffer.GlobalLightSwitches, LSW_SPECULAREN, Value);
+            m_VSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_VSCBuffer.GlobalLightSwitches, LSW_SPECULAREN, Value);
             return TRUE;
         case VXRENDERSTATE_AMBIENT:
             return FALSE;
@@ -1251,6 +1257,8 @@ CKBOOL CKDX11RasterizerContext::InternalSetRenderState(VXRENDERSTATETYPE State, 
         case VXRENDERSTATE_COLORVERTEX:
             m_PSConstantBufferUpToDate = FALSE;
             flag_toggle(&m_PSCBuffer.GlobalLightSwitches, LSW_VRTCOLOREN, Value);
+            m_VSConstantBufferUpToDate = FALSE;
+            flag_toggle(&m_VSCBuffer.GlobalLightSwitches, LSW_VRTCOLOREN, Value);
             return TRUE;
         case VXRENDERSTATE_LOCALVIEWER:
             break;
