@@ -1999,7 +1999,7 @@ void CKDX9RasterizerContext::UpdateDirectXData()
     hr = m_Device->GetDepthStencilSurface(&pZStencilSurface);
     assert(SUCCEEDED(hr));
     m_DirectXData.D3DDevice = m_Device;
-    m_DirectXData.DxVersion = D3DX_VERSION;
+    m_DirectXData.DxVersion = DIRECT3D_VERSION;
     m_DirectXData.D3DViewport = NULL;
     m_DirectXData.DDBackBuffer = pBackBuffer;
     m_DirectXData.DDPrimaryBuffer = NULL;
