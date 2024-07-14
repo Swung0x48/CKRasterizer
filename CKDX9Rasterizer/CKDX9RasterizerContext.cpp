@@ -1319,11 +1319,6 @@ BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &S
     return TRUE;
 }
 
-#include <cstdint>
-#define SBYTEn(x, n) (*((int8_t *)&(x) + n))
-#define LAST_IND(x, part_type) (sizeof(x) / sizeof(part_type) - 1)
-#define LOW_IND(x, part_type) LAST_IND(x, part_type)
-#define SLOBYTE(x) SBYTEn(x, LOW_IND(x, int8_t))
 BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect* Dest, CKRST_CUBEFACE Face)
 {
 #if LOGGING && LOG_COPYTEXTURE
@@ -1368,7 +1363,7 @@ BOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect* Src, VxRect*
     {
         textureSurface->Release();
     }
-    if (FAILED(hr) && SLOBYTE(desc->Flags) < 0)
+    if (FAILED(hr) && (desc->Flags & CKRST_TEXTURE_MANAGED) != 0)
     {
         desc->DxTexture->Release();
         desc->DxTexture = NULL;
