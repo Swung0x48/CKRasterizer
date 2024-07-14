@@ -31,7 +31,9 @@ typedef void TexFromFile;
 
 #include "CKRasterizer.h"
 #include "XBitArray.h"
+#ifdef TRACY_ENABLE
 #include "tracy/Tracy.hpp"
+#endif
 
 //---Implemented in CKDX9PixelFormatUtils.cpp :
 

@@ -8,8 +8,9 @@ set(CMAKE_MODULE_PATH
   "${CMAKE_CURRENT_LIST_DIR}/../buildsystems/cmake"
 )
 
-option(TRACY_ENABLE "" ON)
-if (NOT TARGET Tracy::TracyClient)
+option(TRACY_ENABLE "Enable Tracy" ON)
+
+if (TRACY_ENABLE AND NOT TARGET Tracy::TracyClient)
     add_subdirectory (${CMAKE_CURRENT_LIST_DIR}/../vendor/tracy tracy.out)
 endif()
 
@@ -34,9 +35,11 @@ message(STATUS "DIRECTX9_INCLUDE_DIRS=${DIRECTX9_INCLUDE_DIRS}")
 message(STATUS "DIRECTX9_ROOT_DIR=${DIRECTX9_ROOT_DIR}")
 include_directories(${DIRECTX9_INCLUDE_DIRS})
 add_library(${PROJECT_NAME} SHARED ${CKDX9_RASTERIZER_SRC})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${DIRECTX9_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib)
-target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)
+if (TRACY_ENABLE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE "TRACY_ENABLE")
+    target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)
+endif()
+
 if(DEFINED BALLANCE_DIR)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND "${CMAKE_COMMAND}" -E
 		copy "$<TARGET_FILE:${PROJECT_NAME}>"
