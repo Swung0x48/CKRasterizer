@@ -2,7 +2,7 @@
 #define CKRASTERIZERDX9_H
 
 typedef void TexFromFile;
-// Ensure we are using correct DirectDraw version
+
 #define NBTEMPZBUFFER 256
 
 #ifdef _DEBUG
@@ -10,8 +10,6 @@ typedef void TexFromFile;
 #endif
 
 #include "d3d9.h"
-// DDraw is included here only to get the Total Video memory and Free Video Memory
-#include "ddraw.h"
 
 #include "XBitArray.h"
 #include "CKRasterizer.h"
