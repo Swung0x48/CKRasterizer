@@ -1937,7 +1937,7 @@ BOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, 
     desc->Flags |= (CKRST_TEXTURE_VALID | CKRST_TEXTURE_RENDERTARGET);
     if (Height < 0)
     {
-        desc->Flags != CKRST_TEXTURE_CUBEMAP;
+        desc->Flags |= CKRST_TEXTURE_CUBEMAP;
     }
     m_CurrentTextureIndex = TextureObject;
     return 1;
