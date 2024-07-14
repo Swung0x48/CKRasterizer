@@ -1216,6 +1216,7 @@ BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &S
     IDirect3DSurface9 *pSurfaceLevel = NULL;
 
     desc->DxTexture->GetLevelDesc(actual_miplevel, &SurfaceDesc);
+    /*
     if (SurfaceDesc.Format == D3DFMT_DXT1 || SurfaceDesc.Format == D3DFMT_DXT2 || SurfaceDesc.Format == D3DFMT_DXT3 ||
         SurfaceDesc.Format == D3DFMT_DXT4 || SurfaceDesc.Format == D3DFMT_DXT5)
     {
@@ -1253,6 +1254,7 @@ BOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &S
         }
         return 0;
     }
+    */
     VxImageDescEx src = SurfDesc;
     VxImageDescEx dst;
     if (miplevel != -1 || !desc->MipMapCount)

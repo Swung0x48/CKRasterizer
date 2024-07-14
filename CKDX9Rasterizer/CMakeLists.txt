@@ -14,8 +14,6 @@ if (TRACY_ENABLE AND NOT TARGET Tracy::TracyClient)
     add_subdirectory (${CMAKE_CURRENT_LIST_DIR}/../vendor/tracy tracy.out)
 endif()
 
-find_package(DirectX9 REQUIRED)
-
 include_directories(${VIRTOOLS_SDK_PATH}/Include)
 
 if (NOT TARGET CKRasterizerLib)
@@ -31,10 +29,8 @@ file(GLOB CKDX9_RASTERIZER_SRC
     "*.cpp"
 )
 
-message(STATUS "DIRECTX9_INCLUDE_DIRS=${DIRECTX9_INCLUDE_DIRS}")
-message(STATUS "DIRECTX9_ROOT_DIR=${DIRECTX9_ROOT_DIR}")
-include_directories(${DIRECTX9_INCLUDE_DIRS})
 add_library(${PROJECT_NAME} SHARED ${CKDX9_RASTERIZER_SRC})
+target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib d3d9)
 if (TRACY_ENABLE)
     target_compile_definitions(${PROJECT_NAME} PRIVATE "TRACY_ENABLE")
     target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)
