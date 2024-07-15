@@ -357,8 +357,6 @@ public:
     //--- Contexts
     virtual CKRasterizerContext *CreateContext();
 
-    UINT BytesPerPixel(D3DFORMAT Format);
-
     CKBOOL InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType);
 
     D3DFORMAT FindNearestTextureFormat(CKTextureDesc *desc, D3DFORMAT AdapterFormat, DWORD Usage = 0);
