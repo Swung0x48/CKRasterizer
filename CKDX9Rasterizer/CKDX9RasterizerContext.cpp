@@ -1772,23 +1772,24 @@ int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buf
 {
     HRESULT hr;
     if (!img_desc.Image)
-        return FALSE;
+        return 0;
     if (buffer != VXBUFFER_BACKBUFFER)
-        return FALSE;
+        return 0;
+
     IDirect3DSurface9 *backBuffer;
     hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
     assert(SUCCEEDED(hr));
     if (FAILED(hr) || !backBuffer)
-        return FALSE;
-    D3DSURFACE_DESC desc{};
+        return 0;
+
+    D3DSURFACE_DESC desc = {};
     hr = backBuffer->GetDesc(&desc);
     assert(SUCCEEDED(hr));
-    VxImageDescEx vxdesc;
-    vxdesc.Size = 52;
-    ZeroMemory(&vxdesc.Flags, sizeof(VxImageDescEx) - sizeof(vxdesc.Size));
+
+    VxImageDescEx imgDesc;
     VX_PIXELFORMAT vxpf = D3DFormatToVxPixelFormat(desc.Format);
-    VxPixelFormat2ImageDesc(vxpf, vxdesc);
-    int v29 = 10000, v30 = 10000; // TODO: ?
+    VxPixelFormat2ImageDesc(vxpf, imgDesc);
+
     int left, top, right, bottom, width, height;
     if (rect)
     {
@@ -1799,74 +1800,82 @@ int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buf
         width = rect->left;
         height = bottom;
         if (top < 0)
-            top = 0;
-        if (bottom > v30)
         {
-            bottom = v30;
-            height = v30;
+            top = 0;
+        }
+        if (bottom > desc.Height)
+        {
+            bottom = desc.Height;
+            height = desc.Height;
         }
         if (left < 0)
         {
             left = 0;
             width = 0;
         }
-        if (right > v29)
-            right = v29;
+        if (right > desc.Width)
+        {
+            right = desc.Width;
+        }
     }
     else
     {
-        bottom = v30;
-        right = v29;
+        bottom = desc.Height;
+        right = desc.Width;
         top = 0;
         left = 0;
-        height = v30;
+        height = desc.Height;
         width = 0;
     }
-    int bytesperpixel = img_desc.BitsPerPixel / 8;
-    IDirect3DSurface9 *surface = NULL;
-    D3DLOCKED_RECT LockedRect;
-    if (img_desc.Width == right - left || (img_desc.Height == bottom - top) ||
-        (img_desc.BitsPerPixel == vxdesc.BitsPerPixel))
-    {
-        if (FAILED(m_Device->CreateOffscreenPlainSurface(img_desc.Width, img_desc.Height, desc.Format, D3DPOOL_SCRATCH, &surface, NULL)))
-        {
-            backBuffer->Release();
-            return FALSE;
-        }
 
-        if (FAILED(surface->LockRect(&LockedRect, NULL, D3DLOCK_READONLY)))
-        {
-            surface->Release();
+    int bytesPerPixel = img_desc.BitsPerPixel / 8;
+
+    IDirect3DSurface9 *surface = NULL;
+    if ((img_desc.Width != right - left) ||
+        (img_desc.Height != bottom - top) ||
+        (img_desc.BitsPerPixel != imgDesc.BitsPerPixel) ||
+        FAILED(m_Device->CreateOffscreenPlainSurface(img_desc.Width, img_desc.Height, desc.Format, D3DPOOL_SCRATCH, &surface, NULL)))
+    {
             backBuffer->Release();
-            return FALSE;
-        }
+            return 0;
     }
-    char *v17 = &((char *)LockedRect.pBits)[top * LockedRect.Pitch + width * bytesperpixel];
-    int hi = bottom - top;
+
+    D3DLOCKED_RECT lockedRect;
+    if (FAILED(surface->LockRect(&lockedRect, NULL, D3DLOCK_READONLY)))
+    {
+        surface->Release();
+        backBuffer->Release();
+        return 0;
+    }
+
     if (top < height)
     {
+        BYTE *pBits = &((BYTE *)lockedRect.pBits)[top * lockedRect.Pitch + width * bytesPerPixel];
         BYTE *image = img_desc.Image;
-        do
+        const int lines = bottom - top;
+        for (int i = 0; i < lines; ++i)
         {
-            memcpy(v17, image, 4 * (img_desc.BytesPerLine / 4));
-            char *v19 = (char *)&image[4 * (img_desc.BytesPerLine / 4)];
+            memcpy(pBits, image, 4 * (img_desc.BytesPerLine / 4));
+            BYTE *ptr = (BYTE *)&image[4 * (img_desc.BytesPerLine / 4)];
             image += img_desc.BytesPerLine;
-            memcpy(&v17[4 * (img_desc.BytesPerLine >> 2)], v19, img_desc.BytesPerLine & 3);
-            v17 += LockedRect.Pitch;
-            --hi;
+            memcpy(&pBits[(img_desc.BytesPerLine >> 2) * 4], ptr, img_desc.BytesPerLine & 0x3);
+            pBits += lockedRect.Pitch;
         }
-        while (hi);
     }
-    if (surface)
-    {
-        hr = surface->UnlockRect();
-    }
+
+    hr = surface->UnlockRect();
+    assert(SUCCEEDED(hr));
+
     hr = m_Device->UpdateSurface(backBuffer, NULL, surface, NULL);
     assert(SUCCEEDED(hr));
+
     hr = surface->Release();
     assert(SUCCEEDED(hr));
+
     hr = backBuffer->Release();
-    return SUCCEEDED(hr);
+    assert(SUCCEEDED(hr));
+
+    return img_desc.BytesPerLine * img_desc.Height;
 }
 
 CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, int Height, CKRST_CUBEFACE Face, CKBOOL GenerateMipMap)
