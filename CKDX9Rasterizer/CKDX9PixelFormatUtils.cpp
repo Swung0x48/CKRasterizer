@@ -1,5 +1,5 @@
 #pragma once
-#include "common_include.h"
+#include "CKDX9Rasterizer.h"
 
 D3DFORMAT VxPixelFormatToD3DFormat(VX_PIXELFORMAT pf)
 {
