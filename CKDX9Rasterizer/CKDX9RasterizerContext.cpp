@@ -113,7 +113,7 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
     m_PresentParams.hDeviceWindow = (HWND)Window;
     m_PresentParams.BackBufferWidth = Width;
     m_PresentParams.BackBufferHeight = Height;
-    m_PresentParams.BackBufferCount = 2;
+    m_PresentParams.BackBufferCount = 2; // Triple buffering
     m_PresentParams.Windowed = !Fullscreen;
     m_PresentParams.SwapEffect = D3DSWAPEFFECT_FLIPEX;
     m_PresentParams.EnableAutoDepthStencil = TRUE;
@@ -175,7 +175,6 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
         m_SoftwareVertexProcessing = FALSE;
     }
 
-    // screendump?
     HRESULT hr = m_Owner->m_D3D9->CreateDeviceEx(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
                                                  behaviorFlags, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
     if (FAILED(hr) && m_PresentParams.MultiSampleType != D3DMULTISAMPLE_NONE)
@@ -439,54 +438,10 @@ CKBOOL CKDX9RasterizerContext::BeginScene()
     return SUCCEEDED(hr);
 }
 
-// struct CUSTOMVERTEX
-// {
-//    FLOAT x, y, z;
-//    FLOAT rhw;
-//    DWORD color;
-//    FLOAT tu, tv; // Texture coordinates
-// };
-// // Custom flexible vertex format (FVF) describing the custom vertex structure
-// #define D3DFVF_CUSTOMVERTEX (D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1)
-
 CKBOOL CKDX9RasterizerContext::EndScene()
 {
     if (!m_SceneBegined)
         return TRUE;
-
-    /*CUSTOMVERTEX vertices[] = {
-        {
-            320.0f,
-            50.0f,
-            0.5f,
-            1.0f,
-            D3DCOLOR_XRGB(0, 0, 255),
-        },
-        {
-            520.0f,
-            400.0f,
-            0.5f,
-            1.0f,
-            D3DCOLOR_XRGB(0, 255, 0),
-        },
-        {
-            120.0f,
-            400.0f,
-            0.5f,
-            1.0f,
-            D3DCOLOR_XRGB(255, 0, 0),
-        },
-    };
-    IDirect3DVertexBuffer9 *vb;
-    assert(SUCCEEDED(
-        m_Device->CreateVertexBuffer(3 * sizeof(CUSTOMVERTEX), 0, D3DFVF_CUSTOMVERTEX, D3DPOOL_DEFAULT, &vb, NULL)));
-    void *pVertices = NULL;
-    assert((SUCCEEDED(vb->Lock(0, 3 * sizeof(CUSTOMVERTEX), &pVertices, 0))));
-    memcpy(pVertices, vertices, sizeof(CUSTOMVERTEX) * 3);
-    assert((SUCCEEDED(vb->Unlock())));
-    assert(SUCCEEDED(m_Device->SetStreamSource(0, vb, 0, sizeof(CUSTOMVERTEX))));
-    assert(SUCCEEDED(m_Device->SetFVF(D3DFVF_CUSTOMVERTEX)));
-    assert(SUCCEEDED(m_Device->DrawPrimitive(D3DPT_TRIANGLELIST, 0, 1)));*/
 
     HRESULT hr = m_Device->EndScene();
     m_SceneBegined = FALSE;
@@ -797,8 +752,7 @@ CKBOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAG
                 {
                     HRESULT hr = block->Apply();
 #if LOGGING && LOG_SETTEXURESTAGESTATE
-                    fprintf(stderr, "Applying TextureMinFilterStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage,
-                            hr);
+                    fprintf(stderr, "Applying TextureMinFilterStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage, hr);
 #endif
                     return SUCCEEDED(hr);
                 }
@@ -869,8 +823,7 @@ CKBOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAG
                 {
                     HRESULT hr = block->Apply();
 #if LOGGING && LOG_SETTEXURESTAGESTATE
-                    fprintf(stderr, "Applying TextureMapBlendStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage,
-                            hr);
+                    fprintf(stderr, "Applying TextureMapBlendStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage, hr);
 #endif
                     return SUCCEEDED(hr);
                 }
@@ -1167,6 +1120,7 @@ CKBOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE T
         case CKRST_OBJ_SPRITE:
             {
                 result = CreateSprite(ObjIndex, static_cast<CKSpriteDesc *>(DesiredFormat));
+#if LOGGING
                 CKSpriteDesc *desc = m_Sprites[ObjIndex];
                 fprintf(stderr, "idx: %d\n", ObjIndex);
                 for (auto it = desc->Textures.Begin(); it != desc->Textures.End(); ++it)
@@ -1174,6 +1128,7 @@ CKBOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE T
                     fprintf(stderr, "(%d,%d) WxH: %dx%d, SWxSH: %dx%d\n", it->x, it->y, it->w, it->h, it->sw, it->sh);
                 }
                 fprintf(stderr, "---\n");
+#endif
                 break;
             }
         case CKRST_OBJ_VERTEXBUFFER:
@@ -1227,7 +1182,7 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
 {
 #if LOGGING && LOG_LOADTEXTURE
     texture_used[Texture] = 1;
-    // fprintf(stderr, "load texture %d %dx%d %d\n", Texture, SurfDesc.Width, SurfDesc.Height, miplevel);
+    fprintf(stderr, "load texture %d %dx%d %d\n", Texture, SurfDesc.Width, SurfDesc.Height, miplevel);
 #endif
     if (Texture >= m_Textures.Size())
         return FALSE;
