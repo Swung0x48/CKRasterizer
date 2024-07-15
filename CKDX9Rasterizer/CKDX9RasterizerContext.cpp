@@ -1899,7 +1899,7 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
             CKTextureDesc *desc = m_Textures[m_CurrentTextureIndex];
             if (desc)
             {
-                desc->Flags &= (~CKRST_TEXTURE_RENDERTARGET);
+                desc->Flags &= ~CKRST_TEXTURE_RENDERTARGET;
                 m_CurrentTextureIndex = 0;
             }
             return SUCCEEDED(hr);
@@ -1914,23 +1914,21 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
     if (m_DefaultBackBuffer)
         return FALSE;
 
-    CKDX9TextureDesc *desc = NULL;
-    if (m_Textures[TextureObject])
+    CKBOOL cubemap = FALSE;
+    if (Height < 0)
     {
-        desc = new CKDX9TextureDesc;
-        if (desc)
-        {
-            desc->Flags = 0;
-            desc->Format.Size = 52;
-            ZeroMemory(&desc->Format.Flags, 0x30);
-            desc->MipMapCount = 0;
-            desc->DxTexture = NULL;
-            desc->DxRenderTexture = NULL;
-        }
+        cubemap = TRUE;
+        Height = Width;
+    }
+
+    if (!m_Textures[TextureObject])
+    {
+        CKDX9TextureDesc *desc = new CKDX9TextureDesc;
+        desc->Format.Width = (Width != 0) ? Width : 256;
+        desc->Format.Height = (Height != 0) ? Height : 256;
         m_Textures[TextureObject] = desc;
     }
-    desc->Format.Width = (Width > 0) ? Width : 256;
-    desc->Format.Height = (Height > 0) ? Height : 256;
+    CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[TextureObject]);
 
     HRESULT hr = m_Device->GetRenderTarget(0, &m_DefaultBackBuffer);
     if (FAILED(hr) || !m_DefaultBackBuffer)
@@ -1950,11 +1948,11 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         assert(SUCCEEDED(hr));
     }
 
-    if (Height < 0 || desc->DxRenderTexture && desc->DxTexture)
+    if ((cubemap || desc->DxRenderTexture) && desc->DxTexture)
     {
         IDirect3DSurface9 *surface = NULL;
         D3DRESOURCETYPE type = desc->DxTexture->GetType();
-        if (Height < 0)
+        if (cubemap)
         {
             if (type == D3DRTYPE_CUBETEXTURE)
             {
@@ -1968,12 +1966,14 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
             hr = desc->DxTexture->GetSurfaceLevel(0, &surface);
             assert(SUCCEEDED(hr));
         }
+
         IDirect3DSurface9 *zbuffer = GetTempZBuffer(desc->Format.Width, desc->Format.Height);
         D3DSURFACE_DESC surfaceDesc = {};
         if (surface)
         {
             hr = surface->GetDesc(&surfaceDesc);
             assert(SUCCEEDED(hr));
+
             hr = (surfaceDesc.Usage & D3DUSAGE_RENDERTARGET) ? m_Device->SetRenderTarget(0, surface) : -1;
             surface->Release();
             if (SUCCEEDED(hr))
@@ -1995,30 +1995,40 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
     desc->DxTexture = NULL;
     desc->DxRenderTexture = NULL;
     desc->MipMapCount = 0;
-    if (Height < 0)
+
+    if (cubemap)
     {
         hr = m_Device->CreateCubeTexture(desc->Format.Width, 1, D3DUSAGE_RENDERTARGET, m_PresentParams.BackBufferFormat,
                                          D3DPOOL_DEFAULT, &desc->DxCubeTexture, NULL);
+        if (FAILED(hr))
+        {
+            desc->Flags &= ~CKRST_TEXTURE_VALID;
+            hr = m_DefaultBackBuffer->Release();
+            assert(SUCCEEDED(hr));
+            m_DefaultBackBuffer = NULL;
+            return FALSE;
+        }
     }
     else
     {
         hr = m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, 1, D3DUSAGE_RENDERTARGET,
                                      m_PresentParams.BackBufferFormat, D3DPOOL_DEFAULT, &desc->DxTexture, NULL);
-    }
-    if (FAILED(hr))
-    {
-        desc->Flags &= ~CKRST_TEXTURE_VALID;
-        hr = m_DefaultBackBuffer->Release();
+        if (FAILED(hr))
+        {
+            desc->Flags &= ~CKRST_TEXTURE_VALID;
+            hr = m_DefaultBackBuffer->Release();
+            assert(SUCCEEDED(hr));
+            m_DefaultBackBuffer = NULL;
+            return FALSE;
+        }
+
+        hr = m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, 1, D3DUSAGE_RENDERTARGET,
+                                    m_PresentParams.BackBufferFormat, D3DPOOL_DEFAULT, &desc->DxRenderTexture, NULL);
         assert(SUCCEEDED(hr));
-        m_DefaultBackBuffer = NULL;
-        return FALSE;
     }
-    hr = m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, 1, D3DUSAGE_RENDERTARGET,
-                                 m_PresentParams.BackBufferFormat, D3DPOOL_DEFAULT, &desc->DxRenderTexture, NULL);
-    assert(SUCCEEDED(hr));
 
     IDirect3DSurface9 *surface = NULL;
-    if (Height < 0)
+    if (cubemap)
     {
         hr = desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, 0, &surface);
         assert(SUCCEEDED(hr));
@@ -2035,7 +2045,7 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         surface->Release();
     if (FAILED(hr))
     {
-        desc->Flags &= ~1u;
+        desc->Flags &= ~CKRST_TEXTURE_VALID;
         m_DefaultBackBuffer->Release();
         m_DefaultBackBuffer = NULL;
         m_DefaultDepthBuffer->Release();
@@ -2045,13 +2055,11 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
 
     D3DFormatToTextureDesc(m_PresentParams.BackBufferFormat, desc);
     desc->Flags &= ~CKRST_TEXTURE_MANAGED;
-    desc->Flags |= (CKRST_TEXTURE_VALID | CKRST_TEXTURE_RENDERTARGET);
-    if (Height < 0)
-    {
+    desc->Flags |= CKRST_TEXTURE_VALID | CKRST_TEXTURE_RENDERTARGET;
+    if (cubemap)
         desc->Flags |= CKRST_TEXTURE_CUBEMAP;
-    }
-    m_CurrentTextureIndex = TextureObject;
 
+    m_CurrentTextureIndex = TextureObject;
     return TRUE;
 }
 
