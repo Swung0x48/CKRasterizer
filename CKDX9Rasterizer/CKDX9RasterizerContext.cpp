@@ -2331,7 +2331,7 @@ CKBOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc
     desc->m_VertexFormat = vfmt;
     desc->m_Flags = DesiredFormat->m_Flags;
     desc->DxBuffer = vb;
-    desc->m_Flags |= 1;
+    desc->m_Flags |= CKRST_VB_VALID;
     m_VertexBuffers[VB] = desc;
     return TRUE;
 }
@@ -2353,7 +2353,7 @@ CKBOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *
     {
         CKDX9IndexBufferDesc *desc = static_cast<CKDX9IndexBufferDesc *>(DesiredFormat);
         desc->DxBuffer = buffer;
-        desc->m_Flags |= 1;
+        desc->m_Flags |= CKRST_VB_VALID;
         return TRUE;
     }
 
@@ -2367,7 +2367,7 @@ CKBOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *
     desc->m_MaxIndexCount = DesiredFormat->m_MaxIndexCount;
     desc->m_Flags = DesiredFormat->m_Flags;
     desc->DxBuffer = buffer;
-    desc->m_Flags |= 1;
+    desc->m_Flags |= CKRST_VB_VALID;
     m_IndexBuffers[IB] = desc;
     return TRUE;
 }
