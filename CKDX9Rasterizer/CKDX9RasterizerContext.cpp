@@ -1926,7 +1926,7 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
             surface->Release();
             if (SUCCEEDED(hr))
             {
-                desc->Flags &= 0x7f;
+                desc->Flags &= ~CKRST_TEXTURE_MANAGED;
                 desc->Flags |= (CKRST_TEXTURE_RENDERTARGET | CKRST_TEXTURE_VALID);
                 m_CurrentTextureIndex = TextureObject;
                 desc->MipMapCount = 0;
@@ -1935,7 +1935,7 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         }
     }
 
-    desc->Flags &= ~1u;
+    desc->Flags &= ~CKRST_TEXTURE_VALID;
     if (desc->DxTexture)
         desc->DxTexture->Release();
     if (desc->DxRenderTexture)
@@ -1955,7 +1955,7 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
     }
     if (FAILED(hr))
     {
-        desc->Flags &= ~1u;
+        desc->Flags &= ~CKRST_TEXTURE_VALID;
         hr = m_DefaultBackBuffer->Release();
         assert(SUCCEEDED(hr));
         m_DefaultBackBuffer = NULL;
@@ -1992,7 +1992,7 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
     }
 
     D3DFormatToTextureDesc(m_PresentParams.BackBufferFormat, desc);
-    desc->Flags &= 0x7f;
+    desc->Flags &= ~CKRST_TEXTURE_MANAGED;
     desc->Flags |= (CKRST_TEXTURE_VALID | CKRST_TEXTURE_RENDERTARGET);
     if (Height < 0)
     {
