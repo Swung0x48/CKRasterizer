@@ -132,47 +132,57 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
         D3DSCANLINEORDERING_PROGRESSIVE
     };
 
-    DWORD behaviorFlag = D3DCREATE_ENABLE_PRESENTSTATS;
     if (m_Antialias == D3DMULTISAMPLE_NONE)
     {
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
     }
+    else if (m_Antialias < D3DMULTISAMPLE_2_SAMPLES || m_Antialias > D3DMULTISAMPLE_4_SAMPLES)
+    {
+        m_PresentParams.MultiSampleType = D3DMULTISAMPLE_2_SAMPLES;
+    }
     else
     {
-        for (int type = m_Antialias; type > D3DMULTISAMPLE_NONMASKABLE; type--)
+        m_PresentParams.MultiSampleType = (D3DMULTISAMPLE_TYPE)m_Antialias;
+    }
+
+    if (m_PresentParams.MultiSampleType >= D3DMULTISAMPLE_2_SAMPLES)
+    {
+        for (int type = m_PresentParams.MultiSampleType; type >= D3DMULTISAMPLE_2_SAMPLES; --type)
         {
             if (SUCCEEDED(m_Owner->m_D3D9->CheckDeviceMultiSampleType(
-                    driver->m_AdapterIndex,
+                    static_cast<CKDX9RasterizerDriver *>(m_Driver)->m_AdapterIndex,
                     D3DDEVTYPE_HAL,
                     m_PresentParams.BackBufferFormat,
                     m_PresentParams.Windowed,
                     m_PresentParams.MultiSampleType,
                     NULL)))
                 break;
+            m_PresentParams.MultiSampleType = (D3DMULTISAMPLE_TYPE)type;
         }
     }
-    assert(m_PresentParams.MultiSampleType != D3DMULTISAMPLE_NONMASKABLE);
 
+    DWORD behaviorFlags = D3DCREATE_ENABLE_PRESENTSTATS;
     if (!driver->m_IsHTL || driver->m_D3DCaps.VertexShaderVersion < D3DVS_VERSION(1, 0) && m_EnsureVertexShader)
     {
         m_SoftwareVertexProcessing = TRUE;
-        behaviorFlag |= D3DCREATE_SOFTWARE_VERTEXPROCESSING;
+        behaviorFlags |= D3DCREATE_SOFTWARE_VERTEXPROCESSING;
     }
     else
     {
-        behaviorFlag |= D3DCREATE_HARDWARE_VERTEXPROCESSING;
+        behaviorFlags |= D3DCREATE_HARDWARE_VERTEXPROCESSING;
         if (driver->m_D3DCaps.DevCaps & D3DDEVCAPS_PUREDEVICE)
-            behaviorFlag |= D3DCREATE_PUREDEVICE;
+            behaviorFlags |= D3DCREATE_PUREDEVICE;
         m_SoftwareVertexProcessing = FALSE;
     }
+
     // screendump?
     HRESULT hr = m_Owner->m_D3D9->CreateDeviceEx(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
-                                                 behaviorFlag, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
-    if (FAILED(hr) && m_PresentParams.MultiSampleType)
+                                                 behaviorFlags, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
+    if (FAILED(hr) && m_PresentParams.MultiSampleType != D3DMULTISAMPLE_NONE)
     {
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
         hr = m_Owner->m_D3D9->CreateDeviceEx(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
-                                             behaviorFlag, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
+                                             behaviorFlags, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
     }
 
     if (Fullscreen)
@@ -200,15 +210,15 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
     if (SUCCEEDED(m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer)))
     {
         VxImageDescEx desc;
-        D3DSURFACE_DESC pDesc;
-        pBackBuffer->GetDesc(&pDesc);
+        D3DSURFACE_DESC surfaceDesc;
+        pBackBuffer->GetDesc(&surfaceDesc);
         pBackBuffer->Release();
         pBackBuffer = NULL;
-        m_PixelFormat = D3DFormatToVxPixelFormat(pDesc.Format);
+        m_PixelFormat = D3DFormatToVxPixelFormat(surfaceDesc.Format);
         VxPixelFormat2ImageDesc(m_PixelFormat, desc);
         m_Bpp = desc.BitsPerPixel;
-        m_Width = pDesc.Width;
-        m_Height = pDesc.Height;
+        m_Width = surfaceDesc.Width;
+        m_Height = surfaceDesc.Height;
     }
 
     IDirect3DSurface9 *pStencilSurface = NULL;
