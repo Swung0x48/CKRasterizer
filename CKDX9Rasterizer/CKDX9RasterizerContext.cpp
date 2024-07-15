@@ -1429,7 +1429,6 @@ CKBOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect *Src, VxRec
     return FALSE;
 }
 
-// TODO: check this
 CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *dst)
 {
     if (Sprite >= m_Sprites.Size())
@@ -1441,27 +1440,27 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
 
     // if (sprite->Textures.Size() < 16)
     //     return FALSE;
-    if (src->GetWidth() <= 0.0)
+    if (src->GetWidth() <= 0.0f)
         return FALSE;
-    if (src->right < 0.0)
+    if (src->right < 0.0f)
         return FALSE;
     if (sprite->Format.Width < src->left)
         return FALSE;
-    if (src->GetHeight() < 0.0)
+    if (src->GetHeight() < 0.0f)
         return FALSE;
-    if (src->bottom < 0.0)
+    if (src->bottom < 0.0f)
         return FALSE;
     if (sprite->Format.Height <= src->top)
         return FALSE;
-    if (dst->GetWidth() <= 0.0)
+    if (dst->GetWidth() <= 0.0f)
         return FALSE;
-    if (dst->right < 0.0)
+    if (dst->right < 0.0f)
         return FALSE;
     if (m_Width <= dst->left)
         return FALSE;
-    if (dst->left <= 0.0)
+    if (dst->left <= 0.0f)
         return FALSE;
-    if (dst->bottom < 0.0)
+    if (dst->bottom < 0.0f)
         return FALSE;
     if (m_Height <= dst->top)
         return FALSE;
@@ -1481,23 +1480,25 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
     assert(SUCCEEDED(hr));
     hr = m_Device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
     assert(SUCCEEDED(hr));
-    CKBOOL ret = SetRenderState(VXRENDERSTATE_ZWRITEENABLE, 0);
+
+    CKBOOL ret;
+    ret = SetRenderState(VXRENDERSTATE_ZWRITEENABLE, FALSE);
     assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_TEXTUREPERSPECTIVE, 0);
+    ret = SetRenderState(VXRENDERSTATE_TEXTUREPERSPECTIVE, FALSE);
     assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_FILLMODE, 3);
+    ret = SetRenderState(VXRENDERSTATE_FILLMODE, VXFILL_SOLID);
     assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_ZENABLE, 0);
+    ret = SetRenderState(VXRENDERSTATE_ZENABLE, FALSE);
     assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_LIGHTING, 0);
+    ret = SetRenderState(VXRENDERSTATE_LIGHTING, FALSE);
     assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_CULLMODE, 1);
+    ret = SetRenderState(VXRENDERSTATE_CULLMODE, VXCULL_NONE);
     assert(ret);
     ret = SetRenderState(VXRENDERSTATE_WRAP0, 0);
     assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_CLIPPING, 0);
+    ret = SetRenderState(VXRENDERSTATE_CLIPPING, FALSE);
     assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, 0);
+    ret = SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, FALSE);
     assert(ret);
 
     D3DVIEWPORT9 viewport;
@@ -1505,8 +1506,8 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
     viewport.Width = m_Width;
     viewport.X = 0;
     viewport.Y = 0;
-    viewport.MinZ = 0.0;
-    viewport.MaxZ = 1.0;
+    viewport.MinZ = 0.0f;
+    viewport.MaxZ = 1.0f;
     hr = m_Device->SetViewport(&viewport);
     assert(SUCCEEDED(hr));
 
@@ -1536,43 +1537,78 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
     CKVertex *vbData = static_cast<CKVertex *>(pBuf);
     for (auto texture = sprite->Textures.Begin(); texture != sprite->Textures.End(); texture++, vbData += 4)
     {
-        float tu2 = 1.0, tv2 = 1.0;
-        if (texture->w != texture->sw)
-            tu2 = (float)texture->w / (float)texture->sw;
-        if (texture->h != texture->sh)
-            tv2 = (float)texture->h / (float)texture->sh;
-        // TODO
+        float tx = texture->x;
+        float ty = texture->y;
+        float tr = tx + texture->w;
+        float tb = ty + texture->h;
+        if (tx <= src->right && ty <= src->bottom && tr >= src->left && tb >= src->top)
+        {
+            float tu2 = 1.0f;
+            if (texture->w != texture->sw)
+                tu2 = (float)texture->w / (float)texture->sw;
 
-        vbData[0].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
-        vbData[1].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
-        vbData[2].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
-        vbData[3].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
-        vbData[0].Specular = A_MASK;
-        vbData[1].Specular = A_MASK;
-        vbData[2].Specular = A_MASK;
-        vbData[3].Specular = A_MASK;
-        float tu1 = 0.25 / (texture->sw * widthRatio) + dst->GetWidth();
-        float tv1 = 0.25 / (texture->sh * heightRatio) + dst->GetHeight();
-        vbData[0].tu = tu1;
-        vbData[0].tv = tv1;
-        vbData[1].tu = tu1;
-        vbData[1].tv = tv2;
-        vbData[2].tu = tu2;
-        vbData[2].tv = tv2;
-        vbData[3].tu = tu2;
-        vbData[3].tv = tv1;
-        vbData[0].V = VxVector4((dst->left - src->left) * widthRatio + dst->left,
-                                (dst->top - src->top) * heightRatio + dst->top, 0.0, 1.0);
-        vbData[1].V = VxVector4(vbData[0].V.x, (texture->y + texture->h - src->top) * heightRatio + dst->top, 0.0, 1.0);
-        vbData[2].V = VxVector4((texture->x + texture->w - src->left) * widthRatio + dst->left,
-                                (texture->y + texture->h - src->top) * heightRatio + dst->top, 0.0, 1.0);
-        vbData[3].V = VxVector4(vbData[2].V.x, vbData[0].V.y, 0.0, 1.0);
+            float tv2 = 1.0f;
+            if (texture->h != texture->sh)
+                tv2 = (float)texture->h / (float)texture->sh;
+            
+            if (src->right < tr)
+            {
+                tr = src->right;
+                tu2 = (src->right - tx) / texture->sw;
+            }
+
+            if (src->bottom < tb)
+            {
+                tb = src->bottom;
+                tv2 = (src->bottom - ty) / texture->sh;
+            }
+
+            float tu = 0.0f;
+            if (src->left <= tx)
+            {
+                tu = (src->left - tx) / texture->sw;
+                tx = src->left;
+            }
+
+            float tv = 0.0f;
+            if (src->top <= ty)
+            {
+                tv = (src->top - ty) / texture->sh;
+                ty = src->top;
+            }
+
+            float tu1 = 0.25f / (float)(texture->sw * widthRatio) + tu;
+            float tv1 = 0.25f / (float)(texture->sh * heightRatio) + tv;
+
+            vbData[0].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
+            vbData[1].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
+            vbData[2].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
+            vbData[3].Diffuse = (R_MASK | G_MASK | B_MASK | A_MASK);
+            vbData[0].Specular = A_MASK;
+            vbData[1].Specular = A_MASK;
+            vbData[2].Specular = A_MASK;
+            vbData[3].Specular = A_MASK;
+            vbData[0].tu = tu1;
+            vbData[0].tv = tv1;
+            vbData[1].tu = tu1;
+            vbData[1].tv = tv2;
+            vbData[2].tu = tu2;
+            vbData[2].tv = tv2;
+            vbData[3].tu = tu2;
+            vbData[3].tv = tv1;
+            vbData[0].V = VxVector4((tx - src->left) * widthRatio + dst->left, (ty - src->top) * heightRatio + dst->top, 0.0f, 1.0f);
+            vbData[1].V = VxVector4(vbData[0].V.x, (tb - src->top) * heightRatio + dst->top, 0.0f, 1.0f);
+            vbData[2].V = VxVector4((tr - src->left) * widthRatio + dst->left, vbData[1].V.y, 0.0f, 1.0f);
+            vbData[3].V = VxVector4(vbData[2].V.x, vbData[0].V.y, 0.0f, 1.0f);
+        }
     }
 
     hr = vb->DxBuffer->Unlock();
     assert(SUCCEEDED(hr));
+
     m_CurrentVertexBufferCache = NULL;
     SetupStreams(vb->DxBuffer, CKRST_VF_TLVERTEX, 32);
+
     for (auto texture = sprite->Textures.Begin(); texture != sprite->Textures.End(); ++texture)
     {
         if (texture->x <= src->right && texture->y <= src->bottom && texture->x + texture->w >= src->left && texture->y + texture->h >= src->top)
