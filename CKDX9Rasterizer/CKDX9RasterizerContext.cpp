@@ -694,7 +694,7 @@ CKBOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
         (desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture])) != NULL && desc->DxTexture != NULL)
     {
         hr = m_Device->SetTexture(Stage, desc->DxTexture);
-        /*if (Stage == 0)
+        if (Stage == 0)
         {
             hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
             assert(SUCCEEDED(hr));
@@ -708,12 +708,12 @@ CKBOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
             assert(SUCCEEDED(hr));
             m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_CURRENT);
             assert(SUCCEEDED(hr));
-        }*/
+        }
     }
     else
     {
         hr = m_Device->SetTexture(Stage, NULL);
-        /*if (Stage == 0)
+        if (Stage == 0)
         {
             hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
             assert(SUCCEEDED(hr));
@@ -723,7 +723,7 @@ CKBOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
             assert(SUCCEEDED(hr));
             hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
             assert(SUCCEEDED(hr));
-        }*/
+        }
     }
 
     return SUCCEEDED(hr);
