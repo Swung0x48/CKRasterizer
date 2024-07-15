@@ -275,10 +275,14 @@ CKBOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height,
         ReleaseStateBlocks();
         FlushNonManagedObjects();
         ClearStreamCache();
-        if (m_PresentParams.MultiSampleType == D3DMULTISAMPLE_NONE && m_Antialias != D3DMULTISAMPLE_NONE)
+
+        if (m_Antialias == 0)
         {
-            m_PresentParams.MultiSampleType =
-                (m_Antialias < 2 || m_Antialias > 16) ? D3DMULTISAMPLE_2_SAMPLES : (D3DMULTISAMPLE_TYPE)m_Antialias;
+            m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
+        }
+        else if (m_PresentParams.MultiSampleType == D3DMULTISAMPLE_NONE)
+        {
+            m_PresentParams.MultiSampleType = (m_Antialias < 2 || m_Antialias > 16) ? D3DMULTISAMPLE_2_SAMPLES : (D3DMULTISAMPLE_TYPE)m_Antialias;
             for (int type = m_PresentParams.MultiSampleType; type >= D3DMULTISAMPLE_2_SAMPLES; --type)
             {
                 if (SUCCEEDED(m_Owner->m_D3D9->CheckDeviceMultiSampleType(
@@ -291,9 +295,10 @@ CKBOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height,
                     break;
                 m_PresentParams.MultiSampleType = (D3DMULTISAMPLE_TYPE)type;
             }
+
+            if (m_PresentParams.MultiSampleType < D3DMULTISAMPLE_2_SAMPLES)
+                m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
         }
-        if (m_PresentParams.MultiSampleType < D3DMULTISAMPLE_2_SAMPLES || m_Antialias == D3DMULTISAMPLE_NONE)
-            m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
 
         HRESULT hr = m_Device->Reset(&m_PresentParams);
         if (hr == D3DERR_DEVICELOST)
