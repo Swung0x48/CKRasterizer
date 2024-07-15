@@ -1,7 +1,7 @@
 #include "CKDX9Rasterizer.h"
+
 #include <intrin.h>
 #include <CKContext.h>
-#include <CKRenderManager.h>
 
 static const D3DFORMAT AdapterFormats[] = {
     D3DFMT_A8R8G8B8,
@@ -61,7 +61,6 @@ CKDX9RasterizerDriver::~CKDX9RasterizerDriver() {}
 
 CKRasterizerContext *CKDX9RasterizerDriver::CreateContext()
 {
-    rst_ckctx->GetRenderManager()->SetRenderOptions("UseIndexBuffers", 1);
     CKDX9RasterizerContext *context = new CKDX9RasterizerContext();
     context->m_Driver = this;
     context->m_Owner = static_cast<CKDX9Rasterizer *>(m_Owner);
@@ -195,8 +194,6 @@ CKBOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevTyp
                                          (int)DisplayMode.RefreshRate});
             }
         }
-        // pretend we have a 640x480 @ 16bpp mode for compatibility reasons
-        m_DisplayModes.PushBack({640, 480, 16, (int)DisplayMode.RefreshRate});
     }
 
     HRESULT hr = pD3D->GetDeviceCaps(AdapterIndex, D3DDEVTYPE_HAL, &m_D3DCaps);
