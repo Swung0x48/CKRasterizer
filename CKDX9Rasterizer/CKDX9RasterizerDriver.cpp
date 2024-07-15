@@ -11,7 +11,7 @@ static const D3DFORMAT AdapterFormats[] = {
     D3DFMT_A1R5G5B5
 };
 
-static const D3DFORMAT texture_formats[] = {
+static const D3DFORMAT TextureFormats[] = {
     D3DFMT_R8G8B8,
     D3DFMT_A8R8G8B8,
     D3DFMT_X8R8G8B8,
@@ -170,28 +170,28 @@ CKBOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevTyp
 
     IDirect3D9Ex *pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
     pD3D->GetAdapterIdentifier(AdapterIndex, D3DENUM_WHQL_LEVEL, &m_D3DIdentifier);
-    D3DDISPLAYMODE DisplayMode;
-    pD3D->GetAdapterDisplayMode(AdapterIndex, &DisplayMode);
+    D3DDISPLAYMODE displayMode;
+    pD3D->GetAdapterDisplayMode(AdapterIndex, &displayMode);
 
-    for (D3DFORMAT Format : AdapterFormats)
+    for (D3DFORMAT format : AdapterFormats)
     {
-        UINT AdapterModeCount = pD3D->GetAdapterModeCount(AdapterIndex, Format);
-        if (AdapterModeCount > 0)
+        UINT adapterModeCount = pD3D->GetAdapterModeCount(AdapterIndex, format);
+        if (adapterModeCount > 0)
         {
-            m_RenderFormats.PushBack(Format);
+            m_RenderFormats.PushBack(format);
         }
-        for (UINT i = 0; i < AdapterModeCount; ++i)
+        for (UINT i = 0; i < adapterModeCount; ++i)
         {
-            pD3D->EnumAdapterModes(AdapterIndex, Format, i, &DisplayMode);
-            int width = DisplayMode.Width;
-            int height = DisplayMode.Height;
-            if (DisplayMode.Width >= 640 && DisplayMode.Height >= 400)
+            pD3D->EnumAdapterModes(AdapterIndex, format, i, &displayMode);
+            int width = displayMode.Width;
+            int height = displayMode.Height;
+            if (displayMode.Width >= 640 && displayMode.Height >= 400)
             {
                 // TODO: ???
                 // persumably: populate m_RenderFormats, m_DisplayModes, m_TextureFormats
                 m_DisplayModes.PushBack({width, height,
-                                         (int)BytesPerPixel(DisplayMode.Format) * 8,
-                                         (int)DisplayMode.RefreshRate});
+                                         (int)BytesPerPixel(displayMode.Format) * 8,
+                                         (int)displayMode.RefreshRate});
             }
         }
     }
@@ -248,9 +248,8 @@ CKBOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevTyp
     m_2DCaps.Family = CKRST_DIRECTX;
     m_2DCaps.Caps = (CKRST_2DCAPS_3D | CKRST_2DCAPS_GDI);
 
-    DWORD Caps2 = m_D3DCaps.Caps2;
     if (AdapterIndex == 0)
-        m_2DCaps.Caps = (CKRST_2DCAPS_WINDOWED | CKRST_2DCAPS_3D | CKRST_2DCAPS_GDI);
+        m_2DCaps.Caps |= CKRST_2DCAPS_WINDOWED;
 
     HMONITOR hMonitor = pD3D->GetAdapterMonitor(AdapterIndex);
     MONITORINFOEXA Info;
@@ -292,17 +291,17 @@ D3DFORMAT CKDX9RasterizerDriver::FindNearestTextureFormat(CKTextureDesc *desc, D
 
     if (!m_TextureFormats.Size())
     {
-        for (auto fmt : texture_formats)
-            if (SUCCEEDED(pD3D->CheckDeviceFormat(m_AdapterIndex, D3DDEVTYPE_HAL, AdapterFormat, Usage, D3DRTYPE_TEXTURE, fmt)))
+        for (auto format : TextureFormats)
+            if (SUCCEEDED(pD3D->CheckDeviceFormat(m_AdapterIndex, D3DDEVTYPE_HAL, AdapterFormat, Usage, D3DRTYPE_TEXTURE, format)))
             {
                 CKTextureDesc d;
-                D3DFormatToTextureDesc(fmt, &d);
+                D3DFormatToTextureDesc(format, &d);
                 m_TextureFormats.PushBack(d);
             }
     }
-    auto origfmt = TextureDescToD3DFormat(desc);
-    if (SUCCEEDED(pD3D->CheckDeviceFormat(m_AdapterIndex, D3DDEVTYPE_HAL, AdapterFormat, Usage, D3DRTYPE_TEXTURE, origfmt)))
-        return origfmt;
+    auto origFormat = TextureDescToD3DFormat(desc);
+    if (SUCCEEDED(pD3D->CheckDeviceFormat(m_AdapterIndex, D3DDEVTYPE_HAL, AdapterFormat, Usage, D3DRTYPE_TEXTURE, origFormat)))
+        return origFormat;
 
     CKTextureDesc *best = NULL;
     unsigned int bestdiff = ~0U;
@@ -326,53 +325,52 @@ D3DFORMAT CKDX9RasterizerDriver::FindNearestTextureFormat(CKTextureDesc *desc, D
 
 D3DFORMAT CKDX9RasterizerDriver::FindNearestRenderTargetFormat(int Bpp, CKBOOL Windowed)
 {
-    D3DDISPLAYMODE DisplayMode;
+    D3DDISPLAYMODE displayMode;
     IDirect3D9 *pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
 
-    HRESULT result = pD3D->GetAdapterDisplayMode(
-        m_AdapterIndex, &DisplayMode); // pD3D->GetAdapterDisplayMode(m_AdapterIndex, &DisplayMode, NULL);
-    if (FAILED(result))
+    HRESULT hr = pD3D->GetAdapterDisplayMode(m_AdapterIndex, &displayMode);
+    if (FAILED(hr))
         return D3DFMT_UNKNOWN;
 
-    if (SUCCEEDED(pD3D->CheckDeviceType(m_AdapterIndex, D3DDEVTYPE_HAL, DisplayMode.Format, D3DFMT_X8R8G8B8, Windowed)))
+    if (SUCCEEDED(pD3D->CheckDeviceType(m_AdapterIndex, D3DDEVTYPE_HAL, displayMode.Format, D3DFMT_X8R8G8B8, Windowed)))
         return D3DFMT_X8R8G8B8;
-    if (SUCCEEDED(pD3D->CheckDeviceType(m_AdapterIndex, D3DDEVTYPE_HAL, DisplayMode.Format, D3DFMT_X1R5G5B5, Windowed)))
+    if (SUCCEEDED(pD3D->CheckDeviceType(m_AdapterIndex, D3DDEVTYPE_HAL, displayMode.Format, D3DFMT_X1R5G5B5, Windowed)))
         return D3DFMT_X1R5G5B5;
-    if (SUCCEEDED(pD3D->CheckDeviceType(m_AdapterIndex, D3DDEVTYPE_HAL, DisplayMode.Format, D3DFMT_R5G6B5, Windowed)))
+    if (SUCCEEDED(pD3D->CheckDeviceType(m_AdapterIndex, D3DDEVTYPE_HAL, displayMode.Format, D3DFMT_R5G6B5, Windowed)))
         return D3DFMT_R5G6B5;
     return D3DFMT_UNKNOWN;
 }
 
 D3DFORMAT CKDX9RasterizerDriver::FindNearestDepthFormat(D3DFORMAT pf, int ZBpp, int StencilBpp)
 {
-    VxImageDescEx Desc;
+    VxImageDescEx desc;
     VX_PIXELFORMAT vxpf = D3DFormatToVxPixelFormat(pf);
-    VxPixelFormat2ImageDesc(vxpf, Desc);
+    VxPixelFormat2ImageDesc(vxpf, desc);
     if (ZBpp <= 0)
-        ZBpp = Desc.BitsPerPixel;
-    D3DFORMAT Formats16[] = {
+        ZBpp = desc.BitsPerPixel;
+    D3DFORMAT formats16[] = {
         D3DFMT_D15S1,
         D3DFMT_D16,
         D3DFMT_UNKNOWN
     };
-    D3DFORMAT Formats32[] = {
+    D3DFORMAT formats32[] = {
         D3DFMT_D24S8,
         D3DFMT_D24X4S4,
         D3DFMT_D32,
         D3DFMT_D24X8,
         D3DFMT_UNKNOWN
     };
-    D3DFORMAT *Formats = NULL;
+    D3DFORMAT *formats = NULL;
     if (ZBpp <= 16)
-        Formats = Formats16;
+        formats = formats16;
     else if (ZBpp <= 32)
-        Formats = Formats32;
-    for (D3DFORMAT *Format = Formats; *Format != D3DFMT_UNKNOWN; ++Format)
+        formats = formats32;
+    for (D3DFORMAT *format = formats; *format != D3DFMT_UNKNOWN; ++format)
     {
-        if (CheckDeviceFormat(pf, *Format) && CheckDepthStencilMatch(pf, *Format))
-            return *Format;
+        if (CheckDeviceFormat(pf, *format) && CheckDepthStencilMatch(pf, *format))
+            return *format;
     }
-    return (ZBpp == 16) ? Formats16[0] : Formats32[0];
+    return (ZBpp == 16) ? formats16[0] : formats32[0];
 }
 
 CKBOOL CKDX9RasterizerDriver::CheckDeviceFormat(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat)
