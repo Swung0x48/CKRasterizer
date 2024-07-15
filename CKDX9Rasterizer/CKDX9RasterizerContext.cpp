@@ -1376,7 +1376,7 @@ CKBOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect *Src, VxRec
                                               m_PresentParams.BackBufferFormat, D3DPOOL_DEFAULT, &desc->DxTexture, NULL)))
         {
             D3DFormatToTextureDesc(m_PresentParams.BackBufferFormat, desc);
-            desc->Flags &= 0x7F;
+            desc->Flags &= ~CKRST_TEXTURE_MANAGED;
             desc->Flags |= (CKRST_TEXTURE_RENDERTARGET | CKRST_TEXTURE_VALID);
             desc->DxTexture->GetSurfaceLevel(0, &textureSurface);
             hr = m_Device->UpdateSurface(backBuffer, &srcRect, textureSurface, &pt);
