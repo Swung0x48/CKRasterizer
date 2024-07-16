@@ -250,9 +250,19 @@ public:
     //--- to a structure containing its specific data
     virtual void *GetImplementationSpecificData() { return &m_DirectXData; }
 
+    //--- For web content the render context can be transparent (no clear of back buffer but instead
+    //--- a copy of what is currently on screen)
+    virtual void SetTransparentMode(CKBOOL Trans);
+    virtual void RestoreScreenBackup();
+
+    //--- User Clip Plane Function
     virtual CKBOOL SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane &PlaneEquation);
     virtual CKBOOL GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane &PlaneEquation);
 
+    //--------- Load a cube map texture face
+    virtual CKBOOL LoadCubeMapTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, CKRST_CUBEFACE Face, int miplevel = -1);
+
+    //--- Index Buffers
     virtual void *LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount,
                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);

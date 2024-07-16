@@ -2072,6 +2072,20 @@ int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buf
     return img_desc.BytesPerLine * img_desc.Height;
 }
 
+void CKDX9RasterizerContext::SetTransparentMode(CKBOOL Trans)
+{
+    m_TransparentMode = Trans;
+    if (!Trans)
+        ReleaseScreenBackup();
+}
+
+void CKDX9RasterizerContext::RestoreScreenBackup()
+{
+    if (m_ScreenBackup)
+        m_ScreenBackup->Release();
+    m_ScreenBackup = NULL;
+}
+
 CKBOOL CKDX9RasterizerContext::SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane &PlaneEquation)
 {
     return SUCCEEDED(m_Device->SetClipPlane(ClipPlaneIndex, (const float *)&PlaneEquation));
@@ -2080,6 +2094,133 @@ CKBOOL CKDX9RasterizerContext::SetUserClipPlane(CKDWORD ClipPlaneIndex, const Vx
 CKBOOL CKDX9RasterizerContext::GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane &PlaneEquation)
 {
     return SUCCEEDED(m_Device->GetClipPlane(ClipPlaneIndex, (float *)&PlaneEquation));
+}
+
+CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, CKRST_CUBEFACE Face, int miplevel)
+{
+    if (Texture >= m_Textures.Size())
+        return FALSE;
+
+    CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture]);
+    if (!desc || !desc->DxCubeTexture)
+        return FALSE;
+
+    if ((desc->Flags & CKRST_TEXTURE_RENDERTARGET) != 0)
+        return TRUE;
+
+    if ((desc->Flags & CKRST_TEXTURE_CUBEMAP) == 0)
+        return FALSE;
+
+    int actualMipLevel = (miplevel < 0) ? 0 : miplevel;
+    D3DSURFACE_DESC surfaceDesc;
+    desc->DxCubeTexture->GetLevelDesc(actualMipLevel, &surfaceDesc);
+
+    IDirect3DSurface9 *pSurface = NULL;
+    /*
+    if (surfaceDesc.Format == D3DFMT_DXT1 ||
+        surfaceDesc.Format == D3DFMT_DXT2 ||
+        surfaceDesc.Format == D3DFMT_DXT3 ||
+        surfaceDesc.Format == D3DFMT_DXT4 ||
+        surfaceDesc.Format == D3DFMT_DXT5)
+    {
+        IDirect3DSurface9 *pCubeMapSurface = NULL;
+        desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, actualMipLevel, &pCubeMapSurface);
+        if (!pCubeMapSurface)
+            return FALSE;
+
+        RECT srcRect{0, 0, SurfDesc.Height, SurfDesc.Width};
+        VX_PIXELFORMAT vxpf = VxImageDesc2PixelFormat(SurfDesc);
+        D3DFORMAT format = VxPixelFormatToD3DFormat(vxpf);
+        D3DXLoadSurfaceFromMemory(pCubeMapSurface, NULL, NULL, SurfDesc.Image, format, SurfDesc.BytesPerLine, NULL,
+                                    &srcRect, D3DX_FILTER_LINEAR, 0);
+
+        HRESULT hr;
+        CKDWORD mipMapCount = m_Textures[Texture]->MipMapCount;
+        if (miplevel == -1 && mipMapCount > 0)
+        {
+            for (int i = 1; i < mipMapCount + 1; ++i)
+            {
+                desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, i, &pSurface);
+                hr = D3DXLoadSurfaceFromSurface(pSurface, NULL, NULL, pCubeMapSurface, NULL, NULL, D3DX_FILTER_BOX, 0);
+                pCubeMapSurface->Release();
+            }
+        }
+        else
+        {
+            pSurface = pCubeMapSurface;
+        }
+
+        if (pSurface)
+            pSurface->Release();
+        return SUCCEEDED(hr);
+    }
+    */
+
+    VxImageDescEx src = SurfDesc;
+    VxImageDescEx dst;
+    if (miplevel != -1 || desc->MipMapCount == 0)
+        pSurface = NULL;
+    CKBYTE *image = NULL;
+
+    if (pSurface)
+    {
+        image = m_Driver->m_Owner->AllocateObjects(surfaceDesc.Width * surfaceDesc.Height);
+        if (surfaceDesc.Width != src.Width || surfaceDesc.Height != src.Height)
+        {
+            dst.Width = src.Width;
+            dst.Height = src.Height;
+            dst.BitsPerPixel = 32;
+            dst.BytesPerLine = 4 * surfaceDesc.Width;
+            dst.AlphaMask = A_MASK;
+            dst.RedMask = R_MASK;
+            dst.GreenMask = G_MASK;
+            dst.BlueMask = B_MASK;
+            dst.Image = image;
+            VxDoBlit(src, dst);
+            src = dst;
+        }
+    }
+
+    D3DLOCKED_RECT lockRect;
+    HRESULT hr = desc->DxCubeTexture->LockRect((D3DCUBEMAP_FACES)Face, actualMipLevel, &lockRect, NULL, 0);
+    if (FAILED(hr))
+        return FALSE;
+
+    LoadSurface(surfaceDesc, lockRect, src);
+
+    hr = desc->DxCubeTexture->UnlockRect((D3DCUBEMAP_FACES)Face, actualMipLevel);
+    assert(SUCCEEDED(hr));
+
+    if (pSurface)
+    {
+        dst = src;
+        for (int i = 1; i < desc->MipMapCount + 1; ++i)
+        {
+            VxGenerateMipMap(dst, image);
+            
+            if (dst.Width > 1)
+                dst.Width >>= 1;
+            if (dst.Height > 1)
+                dst.Height >>= 1;
+            dst.BytesPerLine = 4 * dst.Width;
+            dst.Image = image;
+
+            desc->DxCubeTexture->GetLevelDesc(i, &surfaceDesc);
+
+            hr = desc->DxCubeTexture->LockRect((D3DCUBEMAP_FACES)Face, i, &lockRect, NULL, NULL);
+            if (FAILED(hr))
+                return FALSE;
+
+            LoadSurface(surfaceDesc, lockRect, dst);
+
+            desc->DxCubeTexture->UnlockRect((D3DCUBEMAP_FACES)Face, i);
+
+            if (dst.Width <= 1)
+                return TRUE;
+        }
+    }
+
+    return TRUE;
 }
 
 void *CKDX9RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
