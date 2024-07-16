@@ -1200,64 +1200,68 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
 
     IDirect3DSurface9 *pSurface = NULL;
     /*
-    if (SurfaceDesc.Format == D3DFMT_DXT1 || SurfaceDesc.Format == D3DFMT_DXT2 || SurfaceDesc.Format == D3DFMT_DXT3 ||
-        SurfaceDesc.Format == D3DFMT_DXT4 || SurfaceDesc.Format == D3DFMT_DXT5)
+    if (surfaceDesc.Format == D3DFMT_DXT1 ||
+        surfaceDesc.Format == D3DFMT_DXT2 ||
+        surfaceDesc.Format == D3DFMT_DXT3 ||
+        surfaceDesc.Format == D3DFMT_DXT4 ||
+        surfaceDesc.Format == D3DFMT_DXT5)
     {
         IDirect3DSurface9 *pSurfaceLevel = NULL;
         desc->DxTexture->GetSurfaceLevel(actualMipLevel, &pSurfaceLevel);
-        if (pSurfaceLevel)
-        {
-            RECT srcRect{0, 0, SurfDesc.Height, SurfDesc.Width};
-            D3DFORMAT format = VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(SurfDesc));
-            D3DXLoadSurfaceFromMemory(pSurfaceLevel, NULL, NULL, SurfDesc.Image, format, SurfDesc.BytesPerLine, NULL,
-                                      &srcRect, D3DX_FILTER_LINEAR, 0);
+        if (!pSurfaceLevel)
+            return FALSE;
 
-            CKDWORD mipMapCount = m_Textures[Texture]->MipMapCount;
-            HRESULT hr;
-            if (miplevel == -1 && mipMapCount > 0)
+        RECT srcRect{0, 0, SurfDesc.Height, SurfDesc.Width};
+        D3DFORMAT format = VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(SurfDesc));
+        D3DXLoadSurfaceFromMemory(pSurfaceLevel, NULL, NULL, SurfDesc.Image, format, SurfDesc.BytesPerLine, NULL,
+                                    &srcRect, D3DX_FILTER_LINEAR, 0);
+
+        HRESULT hr;
+        CKDWORD mipMapCount = m_Textures[Texture]->MipMapCount;
+        if (miplevel == -1 && mipMapCount > 0)
+        {
+            for (int i = 1; i < mipMapCount + 1; ++i)
             {
-                for (int i = 1; i < mipMapCount + 1; ++i)
-                {
-                    desc->DxTexture->GetSurfaceLevel(i, &pSurface);
-                    hr = D3DXLoadSurfaceFromSurface(pSurface, NULL, NULL, pSurfaceLevel, NULL, NULL, D3DX_FILTER_BOX, 0);
-                    pSurfaceLevel->Release();
-                }
+                desc->DxTexture->GetSurfaceLevel(i, &pSurface);
+                hr = D3DXLoadSurfaceFromSurface(pSurface, NULL, NULL, pSurfaceLevel, NULL, NULL, D3DX_FILTER_BOX, 0);
+                pSurfaceLevel->Release();
             }
-            else
-            {
-                pSurface = pSurfaceLevel;
-            }
-            if (pSurface)
-                pSurface->Release();
-#if LOGGING && LOG_LOADTEXTURE
-            if (FAILED(hr))
-                fprintf(stderr, "LoadTexture (DXTC) failed with %x\n", hr);
-#endif
-            return SUCCEEDED(hr);
         }
-        return 0;
+        else
+        {
+            pSurface = pSurfaceLevel;
+        }
+
+        if (pSurface)
+            pSurface->Release();
+
+#if LOGGING && LOG_LOADTEXTURE
+        if (FAILED(hr))
+            fprintf(stderr, "LoadTexture (DXTC) failed with %x\n", hr);
+#endif
+        return SUCCEEDED(hr);
     }
     */
+
     VxImageDescEx src = SurfDesc;
     VxImageDescEx dst;
-    if (miplevel != -1 || !desc->MipMapCount)
+    if (miplevel != -1 || desc->MipMapCount == 0)
         pSurface = NULL;
     CKBYTE *image = NULL;
+
     if (pSurface)
     {
         image = m_Driver->m_Owner->AllocateObjects(surfaceDesc.Width * surfaceDesc.Height);
         if (surfaceDesc.Width != src.Width || surfaceDesc.Height != src.Height)
         {
-            dst.Size = sizeof(VxImageDescEx);
-            ZeroMemory(&dst.Flags, sizeof(VxImageDescEx) - sizeof(dst.Size));
             dst.Width = src.Width;
             dst.Height = src.Height;
             dst.BitsPerPixel = 32;
-            dst.BytesPerLine = 4 * SurfDesc.Width;
-            dst.AlphaMask = 0xFF000000;
-            dst.RedMask = 0xFF0000;
-            dst.GreenMask = 0xFF00;
-            dst.BlueMask = 0xFF;
+            dst.BytesPerLine = 4 * surfaceDesc.Width;
+            dst.AlphaMask = A_MASK;
+            dst.RedMask = R_MASK;
+            dst.GreenMask = G_MASK;
+            dst.BlueMask = B_MASK;
             dst.Image = image;
             VxDoBlit(src, dst);
             src = dst;
@@ -1265,8 +1269,7 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
     }
 
     D3DLOCKED_RECT lockRect;
-    HRESULT hr = desc->DxTexture->LockRect(actualMipLevel, &lockRect, NULL, 0);
-    if (FAILED(hr))
+    if (FAILED(desc->DxTexture->LockRect(actualMipLevel, &lockRect, NULL, 0)))
     {
 #if LOGGING && LOG_LOADTEXTURE
         fprintf(stderr, "LoadTexture (Locking) failed with %x\n", hr);
@@ -1275,23 +1278,28 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
     }
 
     LoadSurface(surfaceDesc, lockRect, src);
-    hr = desc->DxTexture->UnlockRect(actualMipLevel);
+
+    HRESULT hr = desc->DxTexture->UnlockRect(actualMipLevel);
     assert(SUCCEEDED(hr));
+
     if (pSurface)
     {
         dst = src;
         for (int i = 1; i < desc->MipMapCount + 1; ++i)
         {
             VxGenerateMipMap(dst, image);
-            dst.BytesPerLine = 4 * dst.Width;
+
             if (dst.Width > 1)
                 dst.Width >>= 1;
             if (dst.Height > 1)
                 dst.Height >>= 1;
+            dst.BytesPerLine = 4 * dst.Width;
             dst.Image = image;
 
-            hr = desc->DxTexture->LockRect(i, &lockRect, NULL, NULL);
-            if (FAILED(hr))
+            if (FAILED(desc->DxTexture->GetLevelDesc(i, &surfaceDesc)))
+                break;
+
+            if (FAILED(desc->DxTexture->LockRect(i, &lockRect, NULL, NULL)))
             {
 #if LOGGING && LOG_LOADTEXTURE
                 fprintf(stderr, "LoadTexture (Mipmap generation) failed with %x\n", hr);
@@ -1300,6 +1308,7 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
             }
 
             LoadSurface(surfaceDesc, lockRect, dst);
+
             desc->DxTexture->UnlockRect(i);
         }
     }
