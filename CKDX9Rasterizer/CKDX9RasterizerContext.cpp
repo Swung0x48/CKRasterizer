@@ -2079,13 +2079,6 @@ void CKDX9RasterizerContext::SetTransparentMode(CKBOOL Trans)
         ReleaseScreenBackup();
 }
 
-void CKDX9RasterizerContext::RestoreScreenBackup()
-{
-    if (m_ScreenBackup)
-        m_ScreenBackup->Release();
-    m_ScreenBackup = NULL;
-}
-
 CKBOOL CKDX9RasterizerContext::SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane &PlaneEquation)
 {
     return SUCCEEDED(m_Device->SetClipPlane(ClipPlaneIndex, (const float *)&PlaneEquation));

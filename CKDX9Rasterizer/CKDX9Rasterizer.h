@@ -253,7 +253,6 @@ public:
     //--- For web content the render context can be transparent (no clear of back buffer but instead
     //--- a copy of what is currently on screen)
     virtual void SetTransparentMode(CKBOOL Trans);
-    virtual void RestoreScreenBackup();
 
     //--- User Clip Plane Function
     virtual CKBOOL SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane &PlaneEquation);
