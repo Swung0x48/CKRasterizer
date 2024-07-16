@@ -267,10 +267,6 @@ public:
                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);
 
-    //---- To Enable more direct creation of system objects	without
-    //---- CK2_3D holding a copy of the texture
-    virtual CKBOOL CreateTextureFromFile(CKDWORD Texture, const char *Filename, TexFromFile *param);
-
 protected:
     //-----------------------
     void UpdateDirectXData();

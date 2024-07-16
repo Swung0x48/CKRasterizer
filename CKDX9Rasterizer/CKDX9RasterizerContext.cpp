@@ -2251,11 +2251,6 @@ CKBOOL CKDX9RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
     return SUCCEEDED(ib->DxBuffer->Unlock());
 }
 
-CKBOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char *Filename, TexFromFile *param)
-{
-    return FALSE;
-}
-
 void CKDX9RasterizerContext::UpdateDirectXData()
 {
     IDirect3DSurface9 *pBackBuffer = NULL;
