@@ -225,11 +225,6 @@ public:
     //--- Creation of Textures, Sprites and Vertex Buffer
     CKBOOL CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat) override;
 
-    //--- Vertex Buffers
-    virtual void *LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
-                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
-    virtual CKBOOL UnlockVertexBuffer(CKDWORD VB);
-
     //--- Textures
     virtual CKBOOL LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel = -1);
     virtual CKBOOL CopyToTexture(CKDWORD Texture, VxRect *Src, VxRect *Dest, CKRST_CUBEFACE Face = CKRST_CUBEFACE_XPOS);
@@ -240,10 +235,19 @@ public:
     //--- Sprites
     virtual CKBOOL DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *dst);
 
-    //--- Utils
+    //--- Vertex Buffers
+    virtual void *LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
+                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
+    virtual CKBOOL UnlockVertexBuffer(CKDWORD VB);
+
+    //--- Copy the content of this rendering context to a memory buffer	(CopyToMemoryBuffer)
+    //--- or Updates this rendering context with the content of a memory buffer	(CopyFromMemoryBuffer)
     virtual int CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc);
     virtual int CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, const VxImageDescEx &img_desc);
 
+    //-------------------------------------------------------------
+    //--- Each implementation can return here a pointer
+    //--- to a structure containing its specific data
     virtual void *GetImplementationSpecificData() { return &m_DirectXData; }
 
     virtual CKBOOL SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane &PlaneEquation);
