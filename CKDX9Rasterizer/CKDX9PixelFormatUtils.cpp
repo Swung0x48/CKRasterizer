@@ -76,7 +76,7 @@ D3DFORMAT TextureDescToD3DFormat(CKTextureDesc *desc)
 
 void D3DFormatToTextureDesc(D3DFORMAT ddpf, CKTextureDesc *desc)
 {
-    desc->Flags = (CKRST_TEXTURE_VALID | CKRST_TEXTURE_RGB | CKRST_TEXTURE_ALPHA); // 0x1801
-    VX_PIXELFORMAT VxPixelFormat = D3DFormatToVxPixelFormat(ddpf);
-    VxPixelFormat2ImageDesc(VxPixelFormat, desc->Format);
+    desc->Flags = CKRST_TEXTURE_VALID | CKRST_TEXTURE_RGB | CKRST_TEXTURE_ALPHA;
+    VX_PIXELFORMAT vxpf = D3DFormatToVxPixelFormat(ddpf);
+    VxPixelFormat2ImageDesc(vxpf, desc->Format);
 }

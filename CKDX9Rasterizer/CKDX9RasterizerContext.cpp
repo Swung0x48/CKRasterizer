@@ -919,6 +919,7 @@ CKBOOL CKDX9RasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
 {
     if (VShaderIndex >= m_VertexShaders.Size())
         return FALSE;
+
     CKVertexShaderDesc *desc = m_VertexShaders[VShaderIndex];
     m_CurrentVertexShaderCache = VShaderIndex;
     m_CurrentVertexFormatCache = 0;
