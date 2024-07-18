@@ -1,15 +1,11 @@
 #ifndef CKRASTERIZERDX9_H
 #define CKRASTERIZERDX9_H
 
-typedef void TexFromFile;
-
-#define NBTEMPZBUFFER 256
-
 #ifdef _DEBUG
 #define D3D_DEBUG_INFO
 #endif
 
-#include "d3d9.h"
+#include <d3d9.h>
 
 #include "XBitArray.h"
 #include "CKRasterizer.h"
@@ -17,6 +13,10 @@ typedef void TexFromFile;
 #ifdef TRACY_ENABLE
 #include "tracy/Tracy.hpp"
 #endif
+
+#define NBTEMPZBUFFER 256
+
+typedef void TexFromFile;
 
 //---Implemented in CKDX9PixelFormatUtils.cpp :
 
