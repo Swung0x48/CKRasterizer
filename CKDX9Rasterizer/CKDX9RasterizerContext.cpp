@@ -2455,7 +2455,7 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
         //     }
         // }
         
-        hr = m_Device->SetFVF(m_CurrentVertexShaderCache);
+        hr = m_Device->SetFVF(m_CurrentVertexFormatCache);
         assert(SUCCEEDED(hr));
     }
     else if (VFormat != m_CurrentVertexFormatCache)
