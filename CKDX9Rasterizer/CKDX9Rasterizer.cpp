@@ -35,6 +35,27 @@ PLUGIN_EXPORT void CKRasterizerGetInfo(CKRasterizerInfo *info)
     info->Desc = "DirectX 9 Rasterizer";
 }
 
+CKBOOL CKDX9VertexShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format)
+{
+    Owner = Ctx;
+    m_FunctionSize = Format->m_FunctionSize;
+    if (m_FunctionSize >= m_FunctionData.Size())
+        m_FunctionData.Resize(m_FunctionSize);
+    memcpy(&m_FunctionData[0], Format->m_Function, Format->m_FunctionSize);
+    return 1;
+}
+
+CKDX9VertexShaderDesc::~CKDX9VertexShaderDesc() = default;
+
+CKBOOL CKDX9PixelShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKDWORD *Function)
+{
+    Owner = Ctx;
+    m_Function = Function;
+    return SUCCEEDED(Ctx->m_Device->SetPixelShader(DxShader));
+}
+
+CKDX9PixelShaderDesc::~CKDX9PixelShaderDesc() = default;
+
 CKDX9Rasterizer::CKDX9Rasterizer() : m_D3D9(NULL), m_Init(FALSE), m_BlendStages() {}
 
 CKDX9Rasterizer::~CKDX9Rasterizer() {}
