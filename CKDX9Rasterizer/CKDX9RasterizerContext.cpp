@@ -927,10 +927,12 @@ CKBOOL CKDX9RasterizerContext::SetPixelShader(CKDWORD PShaderIndex)
 {
     if (PShaderIndex >= m_PixelShaders.Size())
         return FALSE;
+
     CKDX9PixelShaderDesc *desc = static_cast<CKDX9PixelShaderDesc *>(m_PixelShaders[PShaderIndex]);
-    if (desc)
-        return SUCCEEDED(m_Device->GetPixelShader(&desc->DxShader));
-    return FALSE;
+    if (!desc)
+        return FALSE;
+
+    return SUCCEEDED(m_Device->SetPixelShader(desc->DxShader));
 }
 
 CKBOOL CKDX9RasterizerContext::SetVertexShaderConstant(CKDWORD Register, const void *Data, CKDWORD CstCount)
