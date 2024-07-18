@@ -2740,12 +2740,15 @@ void CKDX9RasterizerContext::FlushNonManagedObjects()
     for (int i = 0; i < m_Textures.Size(); ++i)
     {
         if (m_Textures[i] && (m_Textures[i]->Flags & CKRST_TEXTURE_MANAGED) == 0)
+        {
             delete m_Textures[i];
+            m_Textures[i] = NULL;
+        }
     }
 
     ReleaseTempZBuffers();
     FlushObjects(60);
-    return ReleaseIndexBuffers();
+    ReleaseIndexBuffers();
 }
 
 void CKDX9RasterizerContext::ReleaseStateBlocks()
