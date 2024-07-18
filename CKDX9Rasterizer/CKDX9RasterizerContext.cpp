@@ -2341,44 +2341,45 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
     ZoneScopedN(__FUNCTION__);
 #endif
 
+    HRESULT hr;
     int ibstart = 0;
+
     if (indices)
     {
         CKDX9IndexBufferDesc *desc = m_IndexBuffer[Clip];
-        int length = indexcount + 100;
-        HRESULT hr = D3DERR_INVALIDCALL;
-        if (!desc || desc->m_MaxIndexCount < indexcount || !desc->DxBuffer)
+        if (!desc || indexcount > desc->m_MaxIndexCount || !desc->DxBuffer)
         {
             if (desc)
             {
-                if (desc->DxBuffer)
-                    desc->DxBuffer->Release();
                 delete desc;
                 desc = NULL;
             }
-            if (length <= 10000)
-                length = 10000;
-            desc = new CKDX9IndexBufferDesc;
-            desc->DxBuffer = NULL;
-            desc->m_MaxIndexCount = 0;
-            desc->m_CurrentICount = 0;
-            desc->m_Flags = 0;
 
-            DWORD usage = (D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY |
-                           (m_SoftwareVertexProcessing ? D3DUSAGE_SOFTWAREPROCESSING : 0));
-            hr = m_Device->CreateIndexBuffer(2 * length, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT, &desc->DxBuffer, NULL);
+            desc = new CKDX9IndexBufferDesc;
+
+            int maxIndexCount = indexcount + 100;
+            if (maxIndexCount <= 10000)
+                maxIndexCount = 10000;
+
+            DWORD usage = D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY;
+            if (m_SoftwareVertexProcessing)
+                usage |= D3DUSAGE_SOFTWAREPROCESSING;
+
+            hr = m_Device->CreateIndexBuffer(2 * maxIndexCount, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT, &desc->DxBuffer, NULL);
             assert(SUCCEEDED(hr));
-            desc->m_MaxIndexCount = length;
+
+            desc->m_MaxIndexCount = maxIndexCount;
             m_IndexBuffer[Clip] = desc;
         }
-        void *pbData = NULL;
 
+        void *pbData = NULL;
         if (indexcount + desc->m_CurrentICount <= desc->m_MaxIndexCount)
         {
 #ifdef TRACY_ENABLE
             ZoneScopedN("Lock");
 #endif
             hr = desc->DxBuffer->Lock(2 * desc->m_CurrentICount, 2 * indexcount, &pbData, D3DLOCK_NOOVERWRITE);
+            assert(SUCCEEDED(hr));
             ibstart = desc->m_CurrentICount;
             desc->m_CurrentICount += indexcount;
         }
@@ -2388,33 +2389,36 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
             ZoneScopedN("Lock");
 #endif
             hr = desc->DxBuffer->Lock(0, 2 * indexcount, &pbData, D3DLOCK_DISCARD);
+            assert(SUCCEEDED(hr));
             desc->m_CurrentICount = indexcount;
         }
         if (pbData)
         {
             memcpy(pbData, indices, 2 * indexcount);
         }
+
         hr = desc->DxBuffer->Unlock();
+        assert(SUCCEEDED(hr));
     }
 
     SetupStreams(VB->DxBuffer, VB->m_VertexFormat, VB->m_VertexSize);
-    int primitiveCount = indexcount;
+
     if (indexcount == 0)
-        primitiveCount = VertexCount;
+        indexcount = VertexCount;
     switch (pType)
     {
         case VX_LINELIST:
-            primitiveCount /= 2;
+            indexcount /= 2;
             break;
         case VX_LINESTRIP:
-            primitiveCount--;
+            indexcount -= 1;
             break;
         case VX_TRIANGLELIST:
-            primitiveCount /= 3;
+            indexcount /= 3;
             break;
         case VX_TRIANGLESTRIP:
         case VX_TRIANGLEFAN:
-            primitiveCount -= 2;
+            indexcount -= 2;
             break;
         default:
             break;
@@ -2422,14 +2426,14 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
 
     if (!indices || pType == VX_POINTLIST)
     {
-        HRESULT hr = m_Device->DrawPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, primitiveCount);
+        hr = m_Device->DrawPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, indexcount);
         return SUCCEEDED(hr);
     }
 
-    if (FAILED(m_Device->SetIndices(m_IndexBuffer[Clip]->DxBuffer)))
-        return FALSE;
+    hr = m_Device->SetIndices(m_IndexBuffer[Clip]->DxBuffer);
+    assert(SUCCEEDED(hr));
 
-    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, 0, VertexCount, ibstart, primitiveCount));
+    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, 0, VertexCount, ibstart, indexcount));
 }
 
 void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize)
