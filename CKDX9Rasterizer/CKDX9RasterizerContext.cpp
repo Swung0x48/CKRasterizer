@@ -2388,8 +2388,34 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 #ifdef TRACY_ENABLE
     ZoneScopedN(__FUNCTION__);
 #endif
-    // TODO: Utilize cache
     HRESULT hr;
+
+    if (m_CurrentVertexShaderCache != 0)
+    {
+        // auto it = m_VertexShaders.At(m_CurrentVertexShaderCache);
+        // if (it != m_VertexShaders.End())
+        // {
+        //     CKDX9VertexShaderDesc *desc = (CKDX9VertexShaderDesc *)*it;
+        //     if (!desc->DxShader)
+        //     {
+        //         m_Device->CreateVertexShader((DWORD *)desc->m_FunctionData.Begin(), &desc->DxShader);
+        //     }
+        //     if (desc->DxShader)
+        //     {
+        //         m_Device->SetVertexShader(desc->DxShader);
+        //     }
+        // }
+        
+        hr = m_Device->SetFVF(m_CurrentVertexShaderCache);
+        assert(SUCCEEDED(hr));
+    }
+    else if (VFormat != m_CurrentVertexFormatCache)
+    {
+        m_CurrentVertexFormatCache = VFormat;
+        hr = m_Device->SetFVF(VFormat);
+        assert(SUCCEEDED(hr));
+    }
+
     if (Buffer != m_CurrentVertexBufferCache || m_CurrentVertexSizeCache != VSize)
     {
         hr = m_Device->SetStreamSource(0, NULL, 0, 0);
@@ -2400,9 +2426,6 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
         m_CurrentVertexBufferCache = Buffer;
         m_CurrentVertexShaderCache = VSize;
     }
-
-    hr = m_Device->SetFVF(VFormat);
-    assert(SUCCEEDED(hr));
 }
 
 CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat)
