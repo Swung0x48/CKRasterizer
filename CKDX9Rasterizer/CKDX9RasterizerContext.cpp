@@ -2641,18 +2641,23 @@ void CKDX9RasterizerContext::FlushNonManagedObjects()
     HRESULT hr;
     if (m_Device)
     {
-        // IDirect3DIndexBuffer9 *ib;
-        // assert(SUCCEEDED(m_Device->GetIndices(&ib)));
-        // assert(SUCCEEDED(m_Device->GetStreamSource(0, NULL, NULL, NULL)));
+        hr = m_Device->SetIndices(NULL);
+        assert(SUCCEEDED(hr));
+
+        hr = m_Device->SetStreamSource(0, NULL, NULL, NULL);
+        assert(SUCCEEDED(hr));
 
         if (m_DefaultBackBuffer && m_DefaultDepthBuffer)
         {
             hr = m_Device->SetRenderTarget(0, m_DefaultBackBuffer);
             assert(SUCCEEDED(hr));
+
             hr = m_Device->SetDepthStencilSurface(m_DefaultDepthBuffer);
             assert(SUCCEEDED(hr));
+
             m_DefaultBackBuffer->Release();
             m_DefaultBackBuffer = NULL;
+
             m_DefaultDepthBuffer->Release();
             m_DefaultDepthBuffer = NULL;
         }
