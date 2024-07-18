@@ -2585,14 +2585,15 @@ CKBOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc
     if (DesiredFormat->m_Flags & CKRST_VB_WRITEONLY)
         usage |= D3DUSAGE_WRITEONLY;
 
-    IDirect3DVertexBuffer9 *vb = NULL;
-    if (FAILED(m_Device->CreateVertexBuffer(DesiredFormat->m_MaxVertexCount * vsize, usage, vfmt, D3DPOOL_DEFAULT, &vb, NULL)))
+    IDirect3DVertexBuffer9 *buffer = NULL;
+    if (FAILED(m_Device->CreateVertexBuffer(DesiredFormat->m_MaxVertexCount * vsize, usage, vfmt, D3DPOOL_DEFAULT, &buffer, NULL)))
         return FALSE;
 
     if (m_VertexBuffers[VB] == DesiredFormat)
     {
-        CKDX9VertexBufferDesc *dx9Desc = static_cast<CKDX9VertexBufferDesc *>(DesiredFormat);
-        dx9Desc->DxBuffer = vb;
+        CKDX9VertexBufferDesc *desc = static_cast<CKDX9VertexBufferDesc *>(DesiredFormat);
+        desc->DxBuffer = buffer;
+        desc->m_Flags |= CKRST_VB_VALID;
         return TRUE;
     }
 
@@ -2607,7 +2608,7 @@ CKBOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc
     desc->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount;
     desc->m_VertexFormat = vfmt;
     desc->m_Flags = DesiredFormat->m_Flags;
-    desc->DxBuffer = vb;
+    desc->DxBuffer = buffer;
     desc->m_Flags |= CKRST_VB_VALID;
     m_VertexBuffers[VB] = desc;
     return TRUE;
