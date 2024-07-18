@@ -1741,7 +1741,7 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
         }
     }
 
-    hr = m_Device->GetStreamSource(0, NULL, NULL, NULL);
+    hr = m_Device->SetStreamSource(0, NULL, NULL, NULL);
     assert(SUCCEEDED(hr));
 
     hr = m_Device->SetViewport((const D3DVIEWPORT9 *)&m_ViewportData);
