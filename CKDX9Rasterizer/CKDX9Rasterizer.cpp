@@ -1,5 +1,13 @@
 #include "CKDX9Rasterizer.h"
 
+#include "CKD3DX9.h"
+
+PFN_D3DXAssembleShader D3DXAssembleShader = NULL;
+PFN_D3DXDisassembleShader D3DXDisassembleShader = NULL;
+PFN_D3DXLoadSurfaceFromSurface D3DXLoadSurfaceFromSurface = NULL;
+PFN_D3DXLoadSurfaceFromMemory D3DXLoadSurfaceFromMemory = NULL;
+PFN_D3DXCreateTextureFromFileExA D3DXCreateTextureFromFileExA = NULL;
+
 CKRasterizer *CKDX9RasterizerStart(WIN_HANDLE AppWnd)
 {
     HMODULE handle = LoadLibraryA("d3d9.dll");
@@ -75,6 +83,25 @@ XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
         m_D3D9 = NULL;
         return FALSE;
     }
+
+	// Load D3DX
+	if (!D3DXAssembleShader ||
+        !D3DXDisassembleShader ||
+        !D3DXLoadSurfaceFromSurface ||
+        !D3DXLoadSurfaceFromMemory ||
+        !D3DXCreateTextureFromFileExA)
+	{
+		HMODULE module = LoadLibrary(TEXT("d3dx9_43.dll"));
+		if (module)
+		{
+			D3DXAssembleShader = reinterpret_cast<PFN_D3DXAssembleShader>(GetProcAddress(module, "D3DXAssembleShader"));
+			D3DXDisassembleShader = reinterpret_cast<PFN_D3DXDisassembleShader>(GetProcAddress(module, "D3DXDisassembleShader"));
+			D3DXLoadSurfaceFromSurface = reinterpret_cast<PFN_D3DXLoadSurfaceFromSurface>(GetProcAddress(module, "D3DXLoadSurfaceFromSurface"));
+            D3DXLoadSurfaceFromMemory = reinterpret_cast<PFN_D3DXLoadSurfaceFromMemory>(GetProcAddress(module, "D3DXLoadSurfaceFromMemory"));
+            D3DXCreateTextureFromFileExA = reinterpret_cast<PFN_D3DXCreateTextureFromFileExA>(GetProcAddress(module, "D3DXCreateTextureFromFileExA"));
+		}
+	}
+
     UINT count = m_D3D9->GetAdapterCount();
     for (UINT i = 0; i < count; ++i)
     {

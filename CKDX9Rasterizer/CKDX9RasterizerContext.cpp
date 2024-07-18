@@ -1,5 +1,7 @@
 #include "CKDX9Rasterizer.h"
 
+#include "CKD3DX9.h"
+
 #define LOGGING 0
 #define STEP 0
 #define LOG_LOADTEXTURE 0
@@ -1168,17 +1170,21 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
     if ((desc->Flags & (CKRST_TEXTURE_CUBEMAP | CKRST_TEXTURE_RENDERTARGET)) != 0)
         return TRUE;
 
+    HRESULT hr;
+
     int actualMipLevel = (miplevel < 0) ? 0 : miplevel;
     D3DSURFACE_DESC surfaceDesc;
-    desc->DxTexture->GetLevelDesc(actualMipLevel, &surfaceDesc);
+    hr = desc->DxTexture->GetLevelDesc(actualMipLevel, &surfaceDesc);
+    assert(SUCCEEDED(hr));
 
     IDirect3DSurface9 *pSurface = NULL;
-    /*
-    if (surfaceDesc.Format == D3DFMT_DXT1 ||
+
+    if ((surfaceDesc.Format == D3DFMT_DXT1 ||
         surfaceDesc.Format == D3DFMT_DXT2 ||
         surfaceDesc.Format == D3DFMT_DXT3 ||
         surfaceDesc.Format == D3DFMT_DXT4 ||
-        surfaceDesc.Format == D3DFMT_DXT5)
+        surfaceDesc.Format == D3DFMT_DXT5) &&
+        (D3DXLoadSurfaceFromSurface && D3DXLoadSurfaceFromMemory))
     {
         IDirect3DSurface9 *pSurfaceLevel = NULL;
         desc->DxTexture->GetSurfaceLevel(actualMipLevel, &pSurfaceLevel);
@@ -1187,10 +1193,9 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
 
         RECT srcRect{0, 0, SurfDesc.Height, SurfDesc.Width};
         D3DFORMAT format = VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(SurfDesc));
-        D3DXLoadSurfaceFromMemory(pSurfaceLevel, NULL, NULL, SurfDesc.Image, format, SurfDesc.BytesPerLine, NULL,
-                                    &srcRect, D3DX_FILTER_LINEAR, 0);
+        hr = D3DXLoadSurfaceFromMemory(pSurfaceLevel, NULL, NULL, SurfDesc.Image, format, SurfDesc.BytesPerLine, NULL, &srcRect, D3DX_FILTER_LINEAR, 0);
+        assert(SUCCEEDED(hr));
 
-        HRESULT hr;
         CKDWORD mipMapCount = m_Textures[Texture]->MipMapCount;
         if (miplevel == -1 && mipMapCount > 0)
         {
@@ -1198,6 +1203,7 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
             {
                 desc->DxTexture->GetSurfaceLevel(i, &pSurface);
                 hr = D3DXLoadSurfaceFromSurface(pSurface, NULL, NULL, pSurfaceLevel, NULL, NULL, D3DX_FILTER_BOX, 0);
+                assert(SUCCEEDED(hr));
                 pSurfaceLevel->Release();
             }
         }
@@ -1215,7 +1221,6 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
 #endif
         return SUCCEEDED(hr);
     }
-    */
 
     VxImageDescEx src = SurfDesc;
     VxImageDescEx dst;
@@ -1253,7 +1258,7 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
 
     LoadSurface(surfaceDesc, lockRect, src);
 
-    HRESULT hr = desc->DxTexture->UnlockRect(actualMipLevel);
+    hr = desc->DxTexture->UnlockRect(actualMipLevel);
     assert(SUCCEEDED(hr));
 
     if (pSurface)
@@ -1283,7 +1288,8 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
 
             LoadSurface(surfaceDesc, lockRect, dst);
 
-            desc->DxTexture->UnlockRect(i);
+            hr = desc->DxTexture->UnlockRect(i);
+            assert(SUCCEEDED(hr));
         }
     }
 
@@ -2106,17 +2112,21 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
     if ((desc->Flags & CKRST_TEXTURE_CUBEMAP) == 0)
         return FALSE;
 
+    HRESULT hr;
+
     int actualMipLevel = (miplevel < 0) ? 0 : miplevel;
     D3DSURFACE_DESC surfaceDesc;
-    desc->DxCubeTexture->GetLevelDesc(actualMipLevel, &surfaceDesc);
+    hr = desc->DxCubeTexture->GetLevelDesc(actualMipLevel, &surfaceDesc);
+    assert(SUCCEEDED(hr));
 
     IDirect3DSurface9 *pSurface = NULL;
-    /*
-    if (surfaceDesc.Format == D3DFMT_DXT1 ||
+
+    if ((surfaceDesc.Format == D3DFMT_DXT1 ||
         surfaceDesc.Format == D3DFMT_DXT2 ||
         surfaceDesc.Format == D3DFMT_DXT3 ||
         surfaceDesc.Format == D3DFMT_DXT4 ||
-        surfaceDesc.Format == D3DFMT_DXT5)
+        surfaceDesc.Format == D3DFMT_DXT5) &&
+        (D3DXLoadSurfaceFromSurface && D3DXLoadSurfaceFromMemory))
     {
         IDirect3DSurface9 *pCubeMapSurface = NULL;
         desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, actualMipLevel, &pCubeMapSurface);
@@ -2126,10 +2136,9 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
         RECT srcRect{0, 0, SurfDesc.Height, SurfDesc.Width};
         VX_PIXELFORMAT vxpf = VxImageDesc2PixelFormat(SurfDesc);
         D3DFORMAT format = VxPixelFormatToD3DFormat(vxpf);
-        D3DXLoadSurfaceFromMemory(pCubeMapSurface, NULL, NULL, SurfDesc.Image, format, SurfDesc.BytesPerLine, NULL,
-                                    &srcRect, D3DX_FILTER_LINEAR, 0);
+        hr = D3DXLoadSurfaceFromMemory(pCubeMapSurface, NULL, NULL, SurfDesc.Image, format, SurfDesc.BytesPerLine, NULL, &srcRect, D3DX_FILTER_LINEAR, 0);
+        assert(SUCCEEDED(hr));
 
-        HRESULT hr;
         CKDWORD mipMapCount = m_Textures[Texture]->MipMapCount;
         if (miplevel == -1 && mipMapCount > 0)
         {
@@ -2137,6 +2146,7 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
             {
                 desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, i, &pSurface);
                 hr = D3DXLoadSurfaceFromSurface(pSurface, NULL, NULL, pCubeMapSurface, NULL, NULL, D3DX_FILTER_BOX, 0);
+                assert(SUCCEEDED(hr));
                 pCubeMapSurface->Release();
             }
         }
@@ -2149,7 +2159,6 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
             pSurface->Release();
         return SUCCEEDED(hr);
     }
-    */
 
     VxImageDescEx src = SurfDesc;
     VxImageDescEx dst;
@@ -2177,7 +2186,7 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
     }
 
     D3DLOCKED_RECT lockRect;
-    HRESULT hr = desc->DxCubeTexture->LockRect((D3DCUBEMAP_FACES)Face, actualMipLevel, &lockRect, NULL, 0);
+    hr = desc->DxCubeTexture->LockRect((D3DCUBEMAP_FACES)Face, actualMipLevel, &lockRect, NULL, 0);
     if (FAILED(hr))
         return FALSE;
 
@@ -2208,7 +2217,8 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
 
             LoadSurface(surfaceDesc, lockRect, dst);
 
-            desc->DxCubeTexture->UnlockRect((D3DCUBEMAP_FACES)Face, i);
+            hr = desc->DxCubeTexture->UnlockRect((D3DCUBEMAP_FACES)Face, i);
+            assert(SUCCEEDED(hr));
 
             if (dst.Width <= 1)
                 return TRUE;
