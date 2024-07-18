@@ -16,7 +16,12 @@
 
 #define NBTEMPZBUFFER 256
 
-typedef void TexFromFile;
+struct TexFromFile
+{
+    VX_PIXELFORMAT Format;
+    CKBOOL NoMipMap;
+    D3DCOLOR ColorKey;
+};
 
 //---Implemented in CKDX9PixelFormatUtils.cpp :
 

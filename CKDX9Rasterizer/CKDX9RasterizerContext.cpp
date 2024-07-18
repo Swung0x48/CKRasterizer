@@ -2258,7 +2258,45 @@ CKBOOL CKDX9RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 
 CKBOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char *Filename, TexFromFile *param)
 {
-    return FALSE;
+    if (!Filename)
+        return FALSE;
+
+    if (!D3DXCreateTextureFromFileExA)
+        return FALSE;
+
+    D3DFORMAT format = VxPixelFormatToD3DFormat(param->Format);
+    if (format == D3DFMT_UNKNOWN)
+        format = D3DFMT_A8R8G8B8;
+
+    int mipLevel = -1;
+    if (!param->NoMipMap)
+        mipLevel = 1;
+
+    IDirect3DTexture9 *pTexture = NULL;
+    D3DXCreateTextureFromFileExA(m_Device, Filename, D3DX_DEFAULT, D3DX_DEFAULT, mipLevel, 0, format, D3DPOOL_DEFAULT,
+                                 D3DX_DEFAULT, D3DX_DEFAULT, param->ColorKey, NULL, NULL, &pTexture);
+    if (!pTexture)
+        return FALSE;
+
+    HRESULT hr;
+    D3DSURFACE_DESC surfaceDesc = {};
+    hr = pTexture->GetLevelDesc(0, &surfaceDesc);
+    assert(SUCCEEDED(hr));
+
+    CKDX9TextureDesc *desc = (CKDX9TextureDesc *)m_Textures[Texture];
+    if (desc)
+        delete desc;
+
+    desc = new CKDX9TextureDesc;
+    desc->DxTexture = pTexture;
+    D3DFormatToTextureDesc(surfaceDesc.Format, desc);
+    desc->Flags = CKRST_TEXTURE_VALID | CKRST_TEXTURE_RGB;
+    desc->Format.Width = surfaceDesc.Width;
+    desc->Format.Height = surfaceDesc.Height;
+    desc->MipMapCount = pTexture->GetLevelCount() - 1;
+    m_Textures[Texture] = desc;
+
+    return TRUE;
 }
 
 void CKDX9RasterizerContext::UpdateDirectXData()
