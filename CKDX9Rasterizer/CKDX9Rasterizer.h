@@ -140,7 +140,6 @@ typedef struct CKDX9VertexShaderDesc : public CKVertexShaderDesc
 public:
     LPDIRECT3DVERTEXSHADER9 DxShader;
     CKDX9RasterizerContext *Owner;
-    XArray<BYTE> m_FunctionData;
 
 public:
     CKBOOL Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format);
@@ -162,12 +161,12 @@ public:
     CKDX9RasterizerContext *Owner;
 
 public:
-    CKBOOL Create(CKDX9RasterizerContext *Ctx, CKDWORD *Function);
+    CKBOOL Create(CKDX9RasterizerContext *Ctx, CKPixelShaderDesc *Format);
     virtual ~CKDX9PixelShaderDesc();
     CKDX9PixelShaderDesc()
     {
-        DxShader = 0;
-        Owner = 0;
+        DxShader = NULL;
+        Owner = NULL;
     }
 
 } CKDX9PixelShaderDesc;

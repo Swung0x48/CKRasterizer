@@ -2525,20 +2525,19 @@ CKBOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShade
     }
 
     if (shader)
+    {
         delete shader;
-    m_VertexShaders[VShader] = NULL;
+        m_VertexShaders[VShader] = NULL;
+    }
 
     CKDX9VertexShaderDesc *desc = new CKDX9VertexShaderDesc;
     if (!desc)
         return FALSE;
-    desc->m_Function = NULL;
-    desc->m_FunctionData.Clear();
-    desc->DxShader = NULL;
-    desc->Owner = NULL;
+
+    m_VertexShaders[VShader] = desc;
     if (!desc->Create(this, DesiredFormat))
         return FALSE;
 
-    m_VertexShaders[VShader] = desc;
     return TRUE;
 }
 
@@ -2550,26 +2549,27 @@ CKBOOL CKDX9RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderD
     if (PShader >= m_PixelShaders.Size() || !DesiredFormat)
         return FALSE;
 
-    if (DesiredFormat == m_PixelShaders[PShader])
+    CKPixelShaderDesc *shader = m_PixelShaders[PShader];
+    if (DesiredFormat == shader)
     {
         CKDX9PixelShaderDesc *desc = static_cast<CKDX9PixelShaderDesc *>(DesiredFormat);
-        return desc->Create(this, DesiredFormat->m_Function);
+        return desc->Create(this, DesiredFormat);
     }
 
-    if (m_PixelShaders[PShader])
-        delete m_PixelShaders[PShader];
+    if (shader)
+    {
+        delete shader;
+        m_PixelShaders[PShader] = NULL;
+    }
 
     CKDX9PixelShaderDesc *desc = new CKDX9PixelShaderDesc;
     if (!desc)
         return FALSE;
-    desc->m_Function = NULL;
-    desc->DxShader = NULL;
-    desc->Owner = NULL;
-
-    if (!desc->Create(this, DesiredFormat->m_Function))
-        return FALSE;
 
     m_PixelShaders[PShader] = desc;
+    if (!desc->Create(this, DesiredFormat))
+        return FALSE;
+
     return TRUE;
 }
 

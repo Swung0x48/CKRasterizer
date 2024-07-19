@@ -142,21 +142,36 @@ void CKDX9Rasterizer::InitBlendStages()
 
 CKBOOL CKDX9VertexShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format)
 {
-    Owner = Ctx;
-    m_FunctionSize = Format->m_FunctionSize;
-    if (m_FunctionSize >= m_FunctionData.Size())
-        m_FunctionData.Resize(m_FunctionSize);
-    memcpy(&m_FunctionData[0], Format->m_Function, Format->m_FunctionSize);
-    return 1;
+    if (Format != this)
+    {
+        Owner = Ctx;
+        m_Function = Format->m_Function;
+        m_FunctionSize = Format->m_FunctionSize;
+    }
+
+    SAFERELEASE(DxShader);
+    return SUCCEEDED(Ctx->m_Device->CreateVertexShader(m_Function, &DxShader));
 }
 
-CKDX9VertexShaderDesc::~CKDX9VertexShaderDesc() = default;
-
-CKBOOL CKDX9PixelShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKDWORD *Function)
+CKDX9VertexShaderDesc::~CKDX9VertexShaderDesc()
 {
-    Owner = Ctx;
-    m_Function = Function;
-    return SUCCEEDED(Ctx->m_Device->SetPixelShader(DxShader));
+    SAFERELEASE(DxShader);
 }
 
-CKDX9PixelShaderDesc::~CKDX9PixelShaderDesc() = default;
+CKBOOL CKDX9PixelShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKPixelShaderDesc *Format)
+{
+    if (Format != this)
+    {
+        Owner = Ctx;
+        m_Function = Format->m_Function;
+        m_FunctionSize = Format->m_FunctionSize;
+    }
+
+    SAFERELEASE(DxShader);
+    return SUCCEEDED(Ctx->m_Device->CreatePixelShader(m_Function, &DxShader));
+}
+
+CKDX9PixelShaderDesc::~CKDX9PixelShaderDesc()
+{
+    SAFERELEASE(DxShader);
+}
