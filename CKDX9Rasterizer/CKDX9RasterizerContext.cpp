@@ -2471,13 +2471,10 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 
     if (Buffer != m_CurrentVertexBufferCache || m_CurrentVertexSizeCache != VSize)
     {
-        hr = m_Device->SetStreamSource(0, NULL, 0, 0);
-        assert(SUCCEEDED(hr));
-
         hr = m_Device->SetStreamSource(0, Buffer, 0, VSize);
         assert(SUCCEEDED(hr));
         m_CurrentVertexBufferCache = Buffer;
-        m_CurrentVertexShaderCache = VSize;
+        m_CurrentVertexSizeCache = VSize;
     }
 }
 
