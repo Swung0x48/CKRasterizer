@@ -63,7 +63,7 @@ CKBOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevTyp
     m_AdapterIndex = AdapterIndex;
     m_Inited = TRUE;
 
-    IDirect3D9Ex *pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
+    auto *pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
 
     if (FAILED(pD3D->GetAdapterIdentifier(AdapterIndex, D3DENUM_WHQL_LEVEL, &m_D3DIdentifier)))
         return FALSE;
@@ -219,13 +219,21 @@ CKBOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevTyp
     if ((m_D3DCaps.DevCaps & D3DDEVCAPS_HWTRANSFORMANDLIGHT) != 0)
     {
         m_IsHTL = TRUE;
+#ifdef USE_D3D9EX
+        m_Desc << " (T&L DX9Ex)";
+#else
         m_Desc << " (T&L DX9)";
+#endif
         m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_HARDWARETL;
     }
     else
     {
         m_IsHTL = FALSE;
+#ifdef USE_D3D9EX
+        m_Desc << " (Hardware DX9Ex)";
+#else
         m_Desc << " (Hardware DX9)";
+#endif
         m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_HARDWARE;
     }
     m_CapsUpToDate = TRUE;
@@ -234,7 +242,7 @@ CKBOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevTyp
 
 D3DFORMAT CKDX9RasterizerDriver::FindNearestTextureFormat(CKTextureDesc *desc, D3DFORMAT AdapterFormat, DWORD Usage)
 {
-    IDirect3D9Ex *pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
+    auto *pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
 
     if (!m_TextureFormats.Size())
     {

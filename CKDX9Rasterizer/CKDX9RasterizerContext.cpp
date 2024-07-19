@@ -111,7 +111,11 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
     m_PresentParams.BackBufferHeight = Height;
     m_PresentParams.BackBufferCount = 2; // Triple buffering
     m_PresentParams.Windowed = !Fullscreen;
+#ifdef USE_D3D9EX
     m_PresentParams.SwapEffect = D3DSWAPEFFECT_FLIPEX;
+#else
+    m_PresentParams.SwapEffect = D3DSWAPEFFECT_DISCARD;
+#endif
     m_PresentParams.EnableAutoDepthStencil = TRUE;
     m_PresentParams.FullScreen_RefreshRateInHz = Fullscreen ? RefreshRate : D3DPRESENT_RATE_DEFAULT;
     m_PresentParams.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
@@ -171,14 +175,25 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
         m_SoftwareVertexProcessing = FALSE;
     }
 
-    HRESULT hr = m_Owner->m_D3D9->CreateDeviceEx(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
-                                                 behaviorFlags, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
+    HRESULT hr;
+
+#ifdef USE_D3D9EX
+    hr = m_Owner->m_D3D9->CreateDeviceEx(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
+                                         behaviorFlags, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
     if (FAILED(hr) && m_PresentParams.MultiSampleType != D3DMULTISAMPLE_NONE)
     {
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
         hr = m_Owner->m_D3D9->CreateDeviceEx(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
                                              behaviorFlags, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
     }
+#else
+    hr = m_Owner->m_D3D9->CreateDevice(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow, behaviorFlags, &m_PresentParams, &m_Device);
+    if (FAILED(hr) && m_PresentParams.MultiSampleType != D3DMULTISAMPLE_NONE)
+    {
+        m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
+        hr = m_Owner->m_D3D9->CreateDevice(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow, behaviorFlags, &m_PresentParams, &m_Device);
+    }
+#endif
 
     if (Fullscreen)
     {
@@ -371,7 +386,11 @@ CKBOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
         }
     }
 
+#ifdef USE_D3D9EX
     hr = m_Device->PresentEx(NULL, NULL, NULL, NULL, D3DPRESENT_INTERVAL_DEFAULT);
+#else
+    hr = m_Device->Present(NULL, NULL, NULL, D3DPRESENT_INTERVAL_DEFAULT);
+#endif
     if (hr == D3DERR_DEVICELOST)
     {
         hr = m_Device->TestCooperativeLevel();

@@ -7,6 +7,7 @@ project(${PROJECT_NAME})
 
 list(INSERT CMAKE_MODULE_PATH 0 "${CMAKE_CURRENT_LIST_DIR}/../buildsystems/cmake")
 
+option(USE_D3D9EX "Use DirectX 9Ex" ON)
 option(ENABLE_TRACY "Enable Tracy" ON)
 
 if (ENABLE_TRACY AND NOT TARGET Tracy::TracyClient)
@@ -23,6 +24,11 @@ aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR} CKDX9_RASTERIZER_SOURCES)
 
 add_library(${PROJECT_NAME} SHARED ${CKDX9_RASTERIZER_SOURCES})
 target_link_libraries(${PROJECT_NAME} PRIVATE CKRasterizerLib d3d9)
+
+if (USE_D3D9EX)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE "USE_D3D9EX")
+endif ()
+
 if (ENABLE_TRACY)
     target_compile_definitions(${PROJECT_NAME} PRIVATE "ENABLE_TRACY")
     target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)

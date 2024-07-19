@@ -314,7 +314,12 @@ protected:
     LPDIRECT3DSURFACE9 GetTempZBuffer(int Width, int Height);
 
 public:
+#ifdef USE_D3D9EX
     IDirect3DDevice9Ex *m_Device;
+#else
+    IDirect3DDevice9 *m_Device;
+#endif
+    
     D3DPRESENT_PARAMETERS m_PresentParams;
     VxDirectXData m_DirectXData;
     CKBOOL m_SoftwareVertexProcessing;
@@ -414,7 +419,11 @@ public:
 
 public:
     CKBOOL m_Init;
+#ifdef USE_D3D9EX
     IDirect3D9Ex *m_D3D9;
+#else
+    IDirect3D9 *m_D3D9;
+#endif
 
     // Stage Blends
     void InitBlendStages();

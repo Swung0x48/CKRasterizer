@@ -55,15 +55,19 @@ XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
     this->m_MainWindow = AppWnd;
     this->m_Init = TRUE;
 
-    HRESULT hr = E_FAIL;
-
     // Create the D3D object, which is needed to create the D3DDevice.
-    hr = Direct3DCreate9Ex(D3D_SDK_VERSION, &m_D3D9);
+#ifdef USE_D3D9EX
+    HRESULT hr = Direct3DCreate9Ex(D3D_SDK_VERSION, &m_D3D9);
     if (FAILED(hr))
     {
         m_D3D9 = NULL;
         return FALSE;
     }
+#else
+    m_D3D9 = Direct3DCreate9(D3D_SDK_VERSION);
+    if (!m_D3D9)
+        return FALSE;
+#endif
 
 	// Load D3DX
 	if (!D3DXDeclaratorFromFVF ||
