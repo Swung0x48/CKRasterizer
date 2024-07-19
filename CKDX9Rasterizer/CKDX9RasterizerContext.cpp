@@ -24,11 +24,16 @@ static int vbbat = 0;
 static int vbibbat = 0;
 #endif
 
-CKDX9RasterizerContext::CKDX9RasterizerContext() :
-    m_Device(NULL), m_PresentParams(), m_DirectXData(), m_SoftwareVertexProcessing(FALSE), m_CurrentTextureIndex(0),
-    m_IndexBuffer(), m_DefaultBackBuffer(NULL), m_DefaultDepthBuffer(NULL), m_InCreateDestroy(TRUE), m_ScreenBackup(NULL),
-    m_CurrentVertexShaderCache(0), m_CurrentVertexFormatCache(0), m_CurrentVertexBufferCache(NULL),
-    m_CurrentVertexSizeCache(0), m_TranslatedRenderStates(), m_TempZBuffers() {}
+CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver *driver) :
+    CKRasterizerContext(), m_Device(NULL), m_PresentParams(), m_DirectXData(), m_SoftwareVertexProcessing(FALSE),
+    m_CurrentTextureIndex(0), m_IndexBuffer(), m_DefaultBackBuffer(NULL), m_DefaultDepthBuffer(NULL),
+    m_InCreateDestroy(TRUE), m_ScreenBackup(NULL), m_CurrentVertexShaderCache(0), m_CurrentVertexFormatCache(0),
+    m_CurrentVertexBufferCache(NULL), m_CurrentVertexSizeCache(0), m_TranslatedRenderStates(), m_TempZBuffers()
+{
+    assert(driver != NULL);
+    m_Driver = driver;
+    m_Owner = static_cast<CKDX9Rasterizer *>(driver->m_Owner);
+}
 
 CKDX9RasterizerContext::~CKDX9RasterizerContext()
 {

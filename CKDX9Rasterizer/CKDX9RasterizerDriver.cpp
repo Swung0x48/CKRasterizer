@@ -53,9 +53,7 @@ CKDX9RasterizerDriver::~CKDX9RasterizerDriver() {}
 
 CKRasterizerContext *CKDX9RasterizerDriver::CreateContext()
 {
-    CKDX9RasterizerContext *context = new CKDX9RasterizerContext();
-    context->m_Driver = this;
-    context->m_Owner = static_cast<CKDX9Rasterizer *>(m_Owner);
+    CKDX9RasterizerContext *context = new CKDX9RasterizerContext(this);
     m_Contexts.PushBack(context);
     return context;
 }

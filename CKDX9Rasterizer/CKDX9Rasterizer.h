@@ -179,7 +179,7 @@ class CKDX9RasterizerContext : public CKRasterizerContext
 {
 public:
     //--- Construction/destruction
-    CKDX9RasterizerContext();
+    CKDX9RasterizerContext(CKDX9RasterizerDriver *driver);
     virtual ~CKDX9RasterizerContext();
 
     //--- Creation
