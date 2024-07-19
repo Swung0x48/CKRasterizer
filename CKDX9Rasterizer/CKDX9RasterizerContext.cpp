@@ -366,35 +366,26 @@ CKBOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
     if (m_SceneBegined)
         EndScene();
 
-    // g_Vsync = vsync;
-    if (vsync && !m_Fullscreen)
+    HRESULT hr;
+    D3DRASTER_STATUS status;
+    if (m_CurrentTextureIndex == 0 && vsync && !m_Fullscreen)
     {
-        D3DRASTER_STATUS RasterStatus;
-        HRESULT hr = m_Device->GetRasterStatus(0, &RasterStatus);
-        while (SUCCEEDED(hr) && RasterStatus.InVBlank)
+        status.InVBlank = FALSE;
+        hr = m_Device->GetRasterStatus(0, &status);
+        while (SUCCEEDED(hr) && !status.InVBlank)
         {
-            hr = m_Device->GetRasterStatus(0, &RasterStatus);
+            hr = m_Device->GetRasterStatus(0, &status);
         }
     }
 
-    HRESULT hr = S_OK;
-    /*if (m_Driver->m_Owner->m_FullscreenContext == this)
-        hr = m_Device->PresentEx(NULL, NULL, NULL, NULL, D3DPRESENT_FORCEIMMEDIATE);
-    else
-    {
-        if (!m_TransparentMode)
-        {
-            RECT sourceRect{0, 0, (LONG)m_Width, (LONG)m_Height};
-            RECT destRect{(LONG)m_PosX, (LONG)m_PosY, (LONG)(m_PosX + m_Width), (LONG)(m_PosY + m_Height)};
-            hr = m_Device->PresentEx(&sourceRect, &destRect, NULL, NULL, D3DPRESENT_FORCEIMMEDIATE);
-        }
-    }*/
-    hr = m_Device->PresentEx(NULL, NULL, NULL, NULL, 0);
+    hr = m_Device->PresentEx(NULL, NULL, NULL, NULL, D3DPRESENT_INTERVAL_DEFAULT);
     if (hr == D3DERR_DEVICELOST)
     {
         hr = m_Device->TestCooperativeLevel();
         if (hr == D3DERR_DEVICENOTRESET)
-            Resize(m_PosX, m_PosY, m_Width, m_Height, 0);
+        {
+            Resize(m_PosX, m_PosY, m_Width, m_Height);
+        }
     }
 
 #if LOGGING && LOG_LOADTEXTURE
