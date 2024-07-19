@@ -2524,7 +2524,7 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
     fprintf(stderr, "create texture %d %dx%d %x\n", Texture, DesiredFormat->Format.Width, DesiredFormat->Format.Height, DesiredFormat->Flags);
 #endif
 
-    CKDX9TextureDesc *desc = new CKDX9TextureDesc();
+    CKDX9TextureDesc *desc = new CKDX9TextureDesc;
     desc->Flags = DesiredFormat->Flags;
     desc->Format = DesiredFormat->Format;
     desc->MipMapCount = DesiredFormat->MipMapCount;
@@ -2549,7 +2549,7 @@ CKBOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShade
     fprintf(stderr, "create vertex shader %d\n", VShader);
 #endif
     if (VShader >= m_VertexShaders.Size() || !DesiredFormat)
-        return 0;
+        return FALSE;
 
     CKVertexShaderDesc *shader = m_VertexShaders[VShader];
     if (DesiredFormat == shader)
@@ -2612,8 +2612,8 @@ CKBOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
         return FALSE;
 
-    DWORD vfmt = DesiredFormat->m_VertexFormat;
-    DWORD vsize = DesiredFormat->m_VertexSize;
+    DWORD fvf = DesiredFormat->m_VertexFormat;
+    DWORD size = DesiredFormat->m_VertexSize;
     DWORD usage = 0;
     if (DesiredFormat->m_Flags & CKRST_VB_DYNAMIC)
         usage |= D3DUSAGE_DYNAMIC;
@@ -2621,7 +2621,7 @@ CKBOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc
         usage |= D3DUSAGE_WRITEONLY;
 
     IDirect3DVertexBuffer9 *buffer = NULL;
-    if (FAILED(m_Device->CreateVertexBuffer(DesiredFormat->m_MaxVertexCount * vsize, usage, vfmt, D3DPOOL_DEFAULT, &buffer, NULL)))
+    if (FAILED(m_Device->CreateVertexBuffer(DesiredFormat->m_MaxVertexCount * size, usage, fvf, D3DPOOL_DEFAULT, &buffer, NULL)))
         return FALSE;
 
     if (m_VertexBuffers[VB] == DesiredFormat)
@@ -2639,9 +2639,9 @@ CKBOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc
     if (!desc)
         return FALSE;
     desc->m_CurrentVCount = DesiredFormat->m_CurrentVCount;
-    desc->m_VertexSize = vsize;
+    desc->m_VertexSize = size;
     desc->m_MaxVertexCount = DesiredFormat->m_MaxVertexCount;
-    desc->m_VertexFormat = vfmt;
+    desc->m_VertexFormat = fvf;
     desc->m_Flags = DesiredFormat->m_Flags;
     desc->DxBuffer = buffer;
     desc->m_Flags |= CKRST_VB_VALID;
