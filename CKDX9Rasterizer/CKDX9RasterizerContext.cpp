@@ -460,6 +460,7 @@ CKBOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
             lightData.Type = D3DLIGHT_DIRECTIONAL;
             break;
         case VX_LIGHTPOINT:
+        case VX_LIGHTPARA:
             lightData.Type = D3DLIGHT_POINT;
             break;
         case VX_LIGHTSPOT:
@@ -494,17 +495,17 @@ CKBOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
     lightData.Theta = data->InnerSpotCone;
     lightData.Phi = data->OuterSpotCone;
 
-    /*if (data && Light < 0x80)
+    // Make spot light work more like it did in Direct3D 8
+	if (lightData.Type == D3DLIGHT_SPOT)
+	{
+		// Theta must be in the range from 0 through the value specified by Phi
+		if (lightData.Theta <= lightData.Phi)
+			lightData.Theta /= 1.75f;
+	}
+
+    if (data && Light < 128)
         m_CurrentLightData[Light] = *data;
-    CKLightData lightData = *data;
-    if (data->Type != VX_LIGHTPARA)
-        lightData.Type = VX_LIGHTPOINT;
-    else if (data->Type == VX_LIGHTSPOT)
-    {
-        lightData.InnerSpotCone = 3.14;
-        if (lightData.OuterSpotCone < lightData.InnerSpotCone)
-            lightData.OuterSpotCone = lightData.InnerSpotCone;
-    }*/
+
     ConvertAttenuationModelFromDX5(lightData.Attenuation0, lightData.Attenuation1, lightData.Attenuation2, data->Range);
     return SUCCEEDED(m_Device->SetLight(Light, &lightData));
 }
