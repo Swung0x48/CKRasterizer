@@ -623,7 +623,7 @@ CKBOOL CKDX9RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
 
 CKBOOL CKDX9RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *Value)
 {
-    if (m_StateCache[State].Flag != 0)
+    if (m_StateCache[State].Valid)
     {
         *Value = m_StateCache[State].Value;
         return TRUE;
