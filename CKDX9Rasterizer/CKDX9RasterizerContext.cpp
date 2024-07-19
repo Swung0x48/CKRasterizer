@@ -36,6 +36,7 @@ CKDX9RasterizerContext::~CKDX9RasterizerContext()
     ReleaseIndexBuffers();
     FlushObjects(CKRST_OBJ_ALL);
     ReleaseScreenBackup();
+    ReleaseVertexDeclarations();
     if (m_DefaultBackBuffer)
         m_DefaultBackBuffer->Release();
     if (m_DefaultDepthBuffer)
@@ -2443,29 +2444,61 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 #endif
     HRESULT hr;
 
-    if (m_CurrentVertexShaderCache != 0)
+    CKBOOL fixed = FALSE;
+
+    if (m_CurrentVertexShaderCache != 0 && m_CurrentVertexShaderCache < m_VertexShaders.Size())
     {
-        // auto it = m_VertexShaders.At(m_CurrentVertexShaderCache);
-        // if (it != m_VertexShaders.End())
-        // {
-        //     CKDX9VertexShaderDesc *desc = (CKDX9VertexShaderDesc *)*it;
-        //     if (!desc->DxShader)
-        //     {
-        //         m_Device->CreateVertexShader((DWORD *)desc->m_FunctionData.Begin(), &desc->DxShader);
-        //     }
-        //     if (desc->DxShader)
-        //     {
-        //         m_Device->SetVertexShader(desc->DxShader);
-        //     }
-        // }
-        
-        hr = m_Device->SetFVF(m_CurrentVertexFormatCache);
-        assert(SUCCEEDED(hr));
+        CKDX9VertexShaderDesc *desc = (CKDX9VertexShaderDesc *)m_VertexShaders[m_CurrentVertexShaderCache];
+        if (desc->DxShader)
+        {
+            IDirect3DVertexDeclaration9 *pDecl = nullptr;
+
+            auto it = m_VertexDeclarations.Find(VFormat);
+            if (it != m_VertexDeclarations.End())
+            {
+                pDecl = *it;
+            }
+            else
+            {
+                if (CreateVertexDeclaration(VFormat, &pDecl))
+                {
+                    m_VertexDeclarations.Insert(VFormat, pDecl);
+                }
+                else
+                {
+                    fixed = TRUE;
+                }
+            }
+
+            if (!fixed)
+            {
+                hr = m_Device->SetVertexDeclaration(pDecl);
+                assert(SUCCEEDED(hr));
+
+                hr = m_Device->SetVertexShader(desc->DxShader);
+                assert(SUCCEEDED(hr));
+            }
+        }
+        else
+        {
+            fixed = TRUE;
+        }
     }
-    else if (VFormat != m_CurrentVertexFormatCache)
+    else
     {
-        m_CurrentVertexFormatCache = VFormat;
-        hr = m_Device->SetFVF(VFormat);
+        fixed = TRUE;
+    }
+
+    if (fixed)
+    {
+        m_CurrentVertexShaderCache = 0;
+        if (VFormat != m_CurrentVertexFormatCache)
+            m_CurrentVertexFormatCache = VFormat;
+
+        hr = m_Device->SetVertexShader(NULL);
+        assert(SUCCEEDED(hr));
+
+        hr = m_Device->SetFVF(m_CurrentVertexFormatCache);
         assert(SUCCEEDED(hr));
     }
 
@@ -2651,6 +2684,27 @@ CKBOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *
     return TRUE;
 }
 
+CKBOOL CKDX9RasterizerContext::CreateVertexDeclaration(CKDWORD VFormat, LPDIRECT3DVERTEXDECLARATION9 *ppDecl)
+{
+    if (!D3DXDeclaratorFromFVF)
+        return FALSE;
+
+    HRESULT hr;
+
+    D3DVERTEXELEMENT9 declarator[MAX_FVF_DECL_SIZE];
+    hr = D3DXDeclaratorFromFVF(VFormat, declarator);
+    if (FAILED(hr))
+        return FALSE;
+
+    IDirect3DVertexDeclaration9 *pDecl = nullptr;
+    hr = m_Device->CreateVertexDeclaration(declarator, &pDecl);
+    if (FAILED(hr))
+        return FALSE;
+
+    *ppDecl = pDecl;
+    return TRUE;
+}
+
 void CKDX9RasterizerContext::FlushCaches()
 {
     FlushRenderStateCache();
@@ -2803,6 +2857,16 @@ void CKDX9RasterizerContext::ReleaseScreenBackup()
     if (m_ScreenBackup)
         m_ScreenBackup->Release();
     m_ScreenBackup = NULL;
+}
+
+void CKDX9RasterizerContext::ReleaseVertexDeclarations()
+{
+    for (auto it = m_VertexDeclarations.Begin(); it != m_VertexDeclarations.End(); ++it)
+    {
+        LPDIRECT3DVERTEXDECLARATION9 decl = *it;
+        SAFERELEASE(decl);
+    }
+    m_VertexDeclarations.Clear();
 }
 
 CKDWORD CKDX9RasterizerContext::DX9PresentInterval(DWORD PresentInterval) { return 0; }

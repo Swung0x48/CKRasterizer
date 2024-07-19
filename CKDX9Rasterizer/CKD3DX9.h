@@ -9,6 +9,8 @@
 
 #include <d3d9.h>
 
+#define MAX_FVF_DECL_SIZE MAXD3DDECLLENGTH + 1
+
 #define D3DXASM_DEBUG 0x0001
 #define D3DXASM_SKIPVALIDATION 0x0010
 
@@ -54,7 +56,6 @@ enum D3DXIMAGE_FILEFORMAT
     D3DXIFF_HDR = 7, // high dynamic range formats
     D3DXIFF_PFM = 8, //
     D3DXIFF_FORCE_DWORD = 0x7fffffff
-
 };
 
 struct D3DXMACRO
@@ -89,6 +90,8 @@ DECLARE_INTERFACE_(ID3DXBuffer, IUnknown)
     STDMETHOD_(DWORD, GetBufferSize)(THIS) PURE;
 };
 
+typedef HRESULT(WINAPI *PFN_D3DXDeclaratorFromFVF)(DWORD FVF, D3DVERTEXELEMENT9 pDeclarator[MAX_FVF_DECL_SIZE]);
+typedef HRESULT(WINAPI *PFN_D3DXFVFFromDeclarator)(CONST D3DVERTEXELEMENT9 *pDeclarator, DWORD *pFVF);
 typedef HRESULT(WINAPI *PFN_D3DXAssembleShader)(LPCSTR pSrcData, UINT SrcDataLen, const D3DXMACRO *pDefines,
                                                 LPD3DXINCLUDE pInclude, DWORD Flags, LPD3DXBUFFER *ppShader,
                                                 LPD3DXBUFFER *ppErrorMsgs);
@@ -109,6 +112,8 @@ typedef HRESULT(WINAPI *PFN_D3DXCreateTextureFromFileExA)(LPDIRECT3DDEVICE9 pDev
                                                           D3DCOLOR ColorKey, D3DXIMAGE_INFO *pSrcInfo,
                                                           PALETTEENTRY *pPalette, LPDIRECT3DTEXTURE9 *ppTexture);
 
+extern PFN_D3DXDeclaratorFromFVF D3DXDeclaratorFromFVF;
+extern PFN_D3DXFVFFromDeclarator D3DXFVFFromDeclarator;
 extern PFN_D3DXAssembleShader D3DXAssembleShader;
 extern PFN_D3DXDisassembleShader D3DXDisassembleShader;
 extern PFN_D3DXLoadSurfaceFromSurface D3DXLoadSurfaceFromSurface;

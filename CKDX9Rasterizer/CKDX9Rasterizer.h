@@ -8,6 +8,7 @@
 #include <d3d9.h>
 
 #include "XBitArray.h"
+#include "XNHashTable.h"
 #include "CKRasterizer.h"
 
 #ifdef TRACY_ENABLE
@@ -287,6 +288,7 @@ protected:
     CKBOOL CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat);
     CKBOOL CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat);
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
+    CKBOOL CreateVertexDeclaration(CKDWORD VFormat, LPDIRECT3DVERTEXDECLARATION9 *ppDecl);
 
     //---- Cleanup
     void FlushCaches();
@@ -295,6 +297,8 @@ protected:
     void ReleaseIndexBuffers();
     void ClearStreamCache();
     void ReleaseScreenBackup();
+    void ReleaseVertexDeclarations();
+
     CKDWORD DX9PresentInterval(DWORD PresentInterval);
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
 
@@ -360,6 +364,8 @@ public:
     LPDIRECT3DSURFACE9 m_TempZBuffers[NBTEMPZBUFFER];
 
     CKDX9Rasterizer *m_Owner;
+
+    XNHashTable<LPDIRECT3DVERTEXDECLARATION9, DWORD> m_VertexDeclarations;
 };
 
 /*****************************************************************
