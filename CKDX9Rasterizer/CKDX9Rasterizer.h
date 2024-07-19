@@ -11,7 +11,7 @@
 #include "XNHashTable.h"
 #include "CKRasterizer.h"
 
-#ifdef TRACY_ENABLE
+#ifdef ENABLE_TRACY
 #include "tracy/Tracy.hpp"
 #endif
 

@@ -414,7 +414,7 @@ CKBOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
 
 CKBOOL CKDX9RasterizerContext::BeginScene()
 {
-#ifdef TRACY_ENABLE
+#ifdef ENABLE_TRACY
     FrameMark;
 #endif
     if (m_SceneBegined)
@@ -942,7 +942,7 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD *indice
     ++directbat;
 #endif
 
-#ifdef TRACY_ENABLE
+#ifdef ENABLE_TRACY
     ZoneScopedN(__FUNCTION__);
 #endif
 
@@ -972,7 +972,7 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD *indice
     CKDWORD startIndex = 0;
     if (vertexBufferDesc->m_CurrentVCount + data->VertexCount <= vertexBufferDesc->m_MaxVertexCount)
     {
-#ifdef TRACY_ENABLE
+#ifdef ENABLE_TRACY
         ZoneScopedN("Lock");
 #endif
         hr = vertexBufferDesc->DxBuffer->Lock(vertexSize * vertexBufferDesc->m_CurrentVCount,
@@ -982,7 +982,7 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD *indice
     }
     else
     {
-#ifdef TRACY_ENABLE
+#ifdef ENABLE_TRACY
         ZoneScopedN("Lock");
 #endif
         hr = vertexBufferDesc->DxBuffer->Lock(0, vertexSize * data->VertexCount, &ppbData, D3DLOCK_DISCARD);
@@ -1012,7 +1012,7 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Ve
     ++vbbat;
 #endif
 
-#ifdef TRACY_ENABLE
+#ifdef ENABLE_TRACY
     ZoneScopedN(__FUNCTION__);
 #endif
 
@@ -1044,7 +1044,7 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD 
     ++vbibbat;
 #endif
 
-#ifdef TRACY_ENABLE
+#ifdef ENABLE_TRACY
     ZoneScopedN(__FUNCTION__);
 #endif
 
@@ -2315,7 +2315,7 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
                                                        CKDWORD StartIndex, CKDWORD VertexCount, WORD *indices,
                                                        int indexcount, CKBOOL Clip)
 {
-#ifdef TRACY_ENABLE
+#ifdef ENABLE_TRACY
     ZoneScopedN(__FUNCTION__);
 #endif
 
@@ -2353,7 +2353,7 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
         void *pbData = NULL;
         if (indexcount + desc->m_CurrentICount <= desc->m_MaxIndexCount)
         {
-#ifdef TRACY_ENABLE
+#ifdef ENABLE_TRACY
             ZoneScopedN("Lock");
 #endif
             hr = desc->DxBuffer->Lock(2 * desc->m_CurrentICount, 2 * indexcount, &pbData, D3DLOCK_NOOVERWRITE);
@@ -2363,7 +2363,7 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
         }
         else
         {
-#ifdef TRACY_ENABLE
+#ifdef ENABLE_TRACY
             ZoneScopedN("Lock");
 #endif
             hr = desc->DxBuffer->Lock(0, 2 * indexcount, &pbData, D3DLOCK_DISCARD);
@@ -2416,7 +2416,7 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
 
 void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize)
 {
-#ifdef TRACY_ENABLE
+#ifdef ENABLE_TRACY
     ZoneScopedN(__FUNCTION__);
 #endif
     HRESULT hr;
