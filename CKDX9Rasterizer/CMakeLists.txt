@@ -9,9 +9,9 @@ list(INSERT CMAKE_MODULE_PATH 0 "${CMAKE_CURRENT_LIST_DIR}/../buildsystems/cmake
 
 option(USE_D3D9EX "Use DirectX 9Ex" ON)
 option(ENABLE_TRIPLE_BUFFER "Enable triple buffering" ON)
-option(ENABLE_TRACY "Enable Tracy" ON)
+option(TRACY_ENABLE "Enable Tracy" ON)
 
-if (ENABLE_TRACY AND NOT TARGET Tracy::TracyClient)
+if (TRACY_ENABLE AND NOT TARGET Tracy::TracyClient)
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../vendor/tracy tracy.out)
 endif ()
 
@@ -34,8 +34,8 @@ if (ENABLE_TRIPLE_BUFFER)
     target_compile_definitions(${PROJECT_NAME} PRIVATE "ENABLE_TRIPLE_BUFFER")
 endif ()
 
-if (ENABLE_TRACY)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE "ENABLE_TRACY")
+if (TRACY_ENABLE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE "TRACY_ENABLE")
     target_link_libraries(${PROJECT_NAME} PUBLIC Tracy::TracyClient)
 endif ()
 
