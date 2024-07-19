@@ -479,14 +479,6 @@ CKBOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
     lightData.Theta = data->InnerSpotCone;
     lightData.Phi = data->OuterSpotCone;
 
-    // Make spot light work more like it did in Direct3D 8
-	if (lightData.Type == D3DLIGHT_SPOT)
-	{
-		// Theta must be in the range from 0 through the value specified by Phi
-		if (lightData.Theta <= lightData.Phi)
-			lightData.Theta /= 1.75f;
-	}
-
     if (data && Light < 128)
         m_CurrentLightData[Light] = *data;
 
