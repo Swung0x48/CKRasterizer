@@ -363,9 +363,9 @@ public:
     // texture rendering
     LPDIRECT3DSURFACE9 m_TempZBuffers[NBTEMPZBUFFER];
 
-    CKDX9Rasterizer *m_Owner;
-
     XNHashTable<LPDIRECT3DVERTEXDECLARATION9, DWORD> m_VertexDeclarations;
+
+    CKDX9Rasterizer *m_Owner;
 };
 
 /*****************************************************************

@@ -25,8 +25,8 @@ static int vbibbat = 0;
 #endif
 
 CKDX9RasterizerContext::CKDX9RasterizerContext() :
-    m_Device(NULL), m_PresentParams(), m_DirectXData(), m_SoftwareVertexProcessing(0), m_CurrentTextureIndex(0),
-    m_IndexBuffer(), m_DefaultBackBuffer(NULL), m_DefaultDepthBuffer(NULL), m_InCreateDestroy(1), m_ScreenBackup(NULL),
+    m_Device(NULL), m_PresentParams(), m_DirectXData(), m_SoftwareVertexProcessing(FALSE), m_CurrentTextureIndex(0),
+    m_IndexBuffer(), m_DefaultBackBuffer(NULL), m_DefaultDepthBuffer(NULL), m_InCreateDestroy(TRUE), m_ScreenBackup(NULL),
     m_CurrentVertexShaderCache(0), m_CurrentVertexFormatCache(0), m_CurrentVertexBufferCache(NULL),
     m_CurrentVertexSizeCache(0), m_TranslatedRenderStates(), m_TempZBuffers() {}
 
@@ -37,23 +37,11 @@ CKDX9RasterizerContext::~CKDX9RasterizerContext()
     FlushObjects(CKRST_OBJ_ALL);
     ReleaseScreenBackup();
     ReleaseVertexDeclarations();
-    if (m_DefaultBackBuffer)
-        m_DefaultBackBuffer->Release();
-    if (m_DefaultDepthBuffer)
-        m_DefaultDepthBuffer->Release();
+    SAFERELEASE(m_DefaultBackBuffer);
+    SAFERELEASE(m_DefaultDepthBuffer);
     if (m_Owner->m_FullscreenContext == this)
         m_Owner->m_FullscreenContext = NULL;
-    if (m_Device)
-        m_Device->Release();
-    m_StateCacheMissMask.Clear();
-    m_StateCacheHitMask.Clear();
-    m_DirtyRects.Clear();
-    m_PixelShaders.Clear();
-    m_VertexShaders.Clear();
-    m_IndexBuffers.Clear();
-    m_VertexBuffers.Clear();
-    m_Sprites.Clear();
-    m_Textures.Clear();
+    SAFERELEASE(m_Device);
 }
 
 int DepthBitPerPixelFromFormat(D3DFORMAT Format, CKDWORD *StencilSize)
@@ -239,11 +227,11 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
 
     UpdateDirectXData();
     FlushCaches();
-    UpdateObjectArrays(m_Driver->m_Owner);
+    UpdateObjectArrays(m_Owner);
     ClearStreamCache();
 
     if (m_Fullscreen)
-        m_Driver->m_Owner->m_FullscreenContext = this;
+        m_Owner->m_FullscreenContext = this;
 
     m_InCreateDestroy = FALSE;
     return TRUE;
@@ -879,7 +867,7 @@ CKBOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAG
                     return TRUE;
                 }
 
-                CKStageBlend *blend = static_cast<CKDX9Rasterizer *>(m_Driver->m_Owner)->m_BlendStages[Value];
+                CKStageBlend *blend = m_Owner->m_BlendStages[Value];
                 if (!blend)
                     return FALSE;
 
@@ -1224,7 +1212,7 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
 
     if (pSurface)
     {
-        image = m_Driver->m_Owner->AllocateObjects(surfaceDesc.Width * surfaceDesc.Height);
+        image = m_Owner->AllocateObjects(surfaceDesc.Width * surfaceDesc.Height);
         if (surfaceDesc.Width != src.Width || surfaceDesc.Height != src.Height)
         {
             dst.Width = src.Width;
@@ -2162,7 +2150,7 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
 
     if (pSurface)
     {
-        image = m_Driver->m_Owner->AllocateObjects(surfaceDesc.Width * surfaceDesc.Height);
+        image = m_Owner->AllocateObjects(surfaceDesc.Width * surfaceDesc.Height);
         if (surfaceDesc.Width != src.Width || surfaceDesc.Height != src.Height)
         {
             dst.Width = src.Width;
