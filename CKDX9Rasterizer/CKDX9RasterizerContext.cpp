@@ -109,7 +109,11 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
     m_PresentParams.hDeviceWindow = (HWND)Window;
     m_PresentParams.BackBufferWidth = Width;
     m_PresentParams.BackBufferHeight = Height;
+#ifdef ENABLE_TRIPLE_BUFFER
     m_PresentParams.BackBufferCount = 2; // Triple buffering
+#else
+    m_PresentParams.BackBufferCount = 1; // Double buffering
+#endif
     m_PresentParams.Windowed = !Fullscreen;
 #ifdef USE_D3D9EX
     m_PresentParams.SwapEffect = D3DSWAPEFFECT_FLIPEX;
