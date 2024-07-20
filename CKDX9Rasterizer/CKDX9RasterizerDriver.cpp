@@ -236,6 +236,7 @@ CKBOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevTyp
 #endif
         m_3DCaps.CKRasterizerSpecificCaps |= CKRST_SPECIFICCAPS_HARDWARE;
     }
+
     m_CapsUpToDate = TRUE;
     return TRUE;
 }
@@ -280,9 +281,9 @@ D3DFORMAT CKDX9RasterizerDriver::FindNearestTextureFormat(CKTextureDesc *desc, D
 
 D3DFORMAT CKDX9RasterizerDriver::FindNearestRenderTargetFormat(int Bpp, CKBOOL Windowed)
 {
-    D3DDISPLAYMODE displayMode;
-    IDirect3D9 *pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
+    auto *pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
 
+    D3DDISPLAYMODE displayMode;
     HRESULT hr = pD3D->GetAdapterDisplayMode(m_AdapterIndex, &displayMode);
     if (FAILED(hr))
         return D3DFMT_UNKNOWN;
