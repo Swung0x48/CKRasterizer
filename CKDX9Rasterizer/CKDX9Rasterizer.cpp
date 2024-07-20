@@ -159,6 +159,9 @@ CKBOOL CKDX9VertexShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKVertexShader
         m_FunctionSize = Format->m_FunctionSize;
     }
 
+    if (!m_Function || m_FunctionSize == 0 || !Ctx || !Ctx->m_Device)
+        return FALSE;
+
     SAFERELEASE(DxShader);
     return SUCCEEDED(Ctx->m_Device->CreateVertexShader(m_Function, &DxShader));
 }
@@ -176,6 +179,9 @@ CKBOOL CKDX9PixelShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKPixelShaderDe
         m_Function = Format->m_Function;
         m_FunctionSize = Format->m_FunctionSize;
     }
+
+    if (!m_Function || m_FunctionSize == 0 || !Ctx || !Ctx->m_Device)
+        return FALSE;
 
     SAFERELEASE(DxShader);
     return SUCCEEDED(Ctx->m_Device->CreatePixelShader(m_Function, &DxShader));
