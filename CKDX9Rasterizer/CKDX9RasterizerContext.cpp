@@ -2793,6 +2793,7 @@ void CKDX9RasterizerContext::FlushNonManagedObjects()
         }
     }
 
+    m_CurrentTextureIndex = 0;
     for (int i = 0; i < m_Textures.Size(); ++i)
     {
         if (m_Textures[i] && (m_Textures[i]->Flags & CKRST_TEXTURE_MANAGED) == 0)
@@ -2803,7 +2804,7 @@ void CKDX9RasterizerContext::FlushNonManagedObjects()
     }
 
     ReleaseTempZBuffers();
-    FlushObjects(60);
+    FlushObjects(CKRST_OBJ_ALL);
     ReleaseIndexBuffers();
 }
 
