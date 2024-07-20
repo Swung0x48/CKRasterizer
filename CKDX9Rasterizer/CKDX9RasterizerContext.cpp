@@ -286,6 +286,8 @@ CKBOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height,
         }
         m_PresentParams.BackBufferWidth = Width;
         m_PresentParams.BackBufferHeight = Height;
+
+        ReleaseVertexDeclarations();
         ReleaseStateBlocks();
         FlushNonManagedObjects();
         ClearStreamCache();
@@ -328,19 +330,21 @@ CKBOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height,
                 }
             }
         }
-        else if (SUCCEEDED(hr))
-        {
-            m_Width = Width;
-            m_Height = Height;
-        }
         else
         {
             m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
             hr = m_Device->Reset(&m_PresentParams);
         }
 
+        if (SUCCEEDED(hr))
+        {
+            m_Width = Width;
+            m_Height = Height;
+        }
+
         UpdateDirectXData();
         FlushCaches();
+
         return SUCCEEDED(hr);
     }
 
