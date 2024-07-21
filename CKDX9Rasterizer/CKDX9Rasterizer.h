@@ -316,9 +316,9 @@ protected:
 
 public:
 #ifdef USE_D3D9EX
-    IDirect3DDevice9Ex *m_Device;
+    LPDIRECT3DDEVICE9EX m_Device;
 #else
-    IDirect3DDevice9 *m_Device;
+    LPDIRECT3DDEVICE9 m_Device;
 #endif
     
     D3DPRESENT_PARAMETERS m_PresentParams;
@@ -421,9 +421,9 @@ public:
 public:
     CKBOOL m_Init;
 #ifdef USE_D3D9EX
-    IDirect3D9Ex *m_D3D9;
+    LPDIRECT3D9EX m_D3D9;
 #else
-    IDirect3D9 *m_D3D9;
+    LPDIRECT3D9 m_D3D9;
 #endif
 
     // Stage Blends
