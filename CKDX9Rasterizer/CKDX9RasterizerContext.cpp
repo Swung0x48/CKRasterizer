@@ -2275,7 +2275,7 @@ CKBOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char
         format = D3DFMT_A8R8G8B8;
 
     int mipLevel = -1;
-    if (!param->NoMipMap)
+    if (param->MipLevels == 0)
         mipLevel = 1;
 
     IDirect3DTexture9 *pTexture = NULL;

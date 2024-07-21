@@ -20,8 +20,9 @@
 struct TexFromFile
 {
     VX_PIXELFORMAT Format;
-    CKBOOL NoMipMap;
-    D3DCOLOR ColorKey;
+    int MipLevels;
+    CKDWORD ColorKey; // 0 : No Color Key, 0xFFRRGGBB (R,G,B) color Key
+    CKBOOL IsDynamic;
 };
 
 //---Implemented in CKDX9PixelFormatUtils.cpp :
