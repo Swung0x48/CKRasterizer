@@ -872,7 +872,7 @@ CKBOOL CKDX12RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
 
 CKBOOL CKDX12RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
-    if (m_StateCache[State].Flag)
+    if (m_StateCache[State].Flags)
         return TRUE;
 
     if (m_StateCache[State].Valid && m_StateCache[State].Value == Value)

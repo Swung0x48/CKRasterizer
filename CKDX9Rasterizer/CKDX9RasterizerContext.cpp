@@ -627,10 +627,10 @@ CKBOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMa
 
 CKBOOL CKDX9RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
-    if (m_StateCache[State].Flag != 0)
+    if (m_StateCache[State].Flags != 0)
         return TRUE;
 
-    if (m_StateCache[State].Valid != 0 && m_StateCache[State].Value == Value)
+    if (m_StateCache[State].Valid && m_StateCache[State].Value == Value)
     {
         ++m_RenderStateCacheHit;
         return TRUE;
@@ -638,7 +638,7 @@ CKBOOL CKDX9RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
 
     ++m_RenderStateCacheMiss;
     m_StateCache[State].Value = Value;
-    m_StateCache[State].Valid = 1;
+    m_StateCache[State].Valid = TRUE;
 
     if (State < m_StateCacheMissMask.Size() && m_StateCacheMissMask.IsSet(State))
         return FALSE;
@@ -658,7 +658,7 @@ CKBOOL CKDX9RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD V
         if (State == VXRENDERSTATE_INVERSEWINDING)
         {
             m_InverseWinding = Value != 0;
-            m_StateCache[VXRENDERSTATE_CULLMODE].Valid = 0;
+            m_StateCache[VXRENDERSTATE_CULLMODE].Valid = FALSE;
         }
         return TRUE;
     }
