@@ -387,6 +387,7 @@ public:
     virtual CKRasterizerContext *CreateContext();
 
     CKBOOL InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType);
+	CKBOOL IsTextureFormatOk(D3DFORMAT TextureFormat, D3DFORMAT AdapterFormat, DWORD Usage = 0);
 
     D3DFORMAT FindNearestTextureFormat(CKTextureDesc *desc, D3DFORMAT AdapterFormat, DWORD Usage = 0);
     D3DFORMAT FindNearestRenderTargetFormat(int Bpp, CKBOOL Windowed);

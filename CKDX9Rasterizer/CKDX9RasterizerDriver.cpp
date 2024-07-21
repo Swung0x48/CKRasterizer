@@ -241,22 +241,28 @@ CKBOOL CKDX9RasterizerDriver::InitializeCaps(int AdapterIndex, D3DDEVTYPE DevTyp
     return TRUE;
 }
 
+CKBOOL CKDX9RasterizerDriver::IsTextureFormatOk(D3DFORMAT TextureFormat, D3DFORMAT AdapterFormat, DWORD Usage)
+{
+    return SUCCEEDED(static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9->CheckDeviceFormat(m_AdapterIndex, D3DDEVTYPE_HAL, AdapterFormat, Usage, D3DRTYPE_TEXTURE, TextureFormat));
+}
+
 D3DFORMAT CKDX9RasterizerDriver::FindNearestTextureFormat(CKTextureDesc *desc, D3DFORMAT AdapterFormat, DWORD Usage)
 {
-    auto *pD3D = static_cast<CKDX9Rasterizer *>(m_Owner)->m_D3D9;
-
     if (!m_TextureFormats.Size())
     {
         for (auto format : TextureFormats)
-            if (SUCCEEDED(pD3D->CheckDeviceFormat(m_AdapterIndex, D3DDEVTYPE_HAL, AdapterFormat, Usage, D3DRTYPE_TEXTURE, format)))
+        {
+            if (IsTextureFormatOk(format, AdapterFormat, Usage))
             {
                 CKTextureDesc d;
                 D3DFormatToTextureDesc(format, &d);
                 m_TextureFormats.PushBack(d);
             }
+        }
     }
+
     auto origFormat = TextureDescToD3DFormat(desc);
-    if (SUCCEEDED(pD3D->CheckDeviceFormat(m_AdapterIndex, D3DDEVTYPE_HAL, AdapterFormat, Usage, D3DRTYPE_TEXTURE, origFormat)))
+    if (IsTextureFormatOk(origFormat, AdapterFormat, Usage))
         return origFormat;
 
     CKTextureDesc *best = NULL;
