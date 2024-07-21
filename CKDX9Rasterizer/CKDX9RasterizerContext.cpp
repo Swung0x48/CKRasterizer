@@ -24,6 +24,48 @@ static int vbbat = 0;
 static int vbibbat = 0;
 #endif
 
+CKBOOL CKDX9VertexShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format)
+{
+    if (Format != this)
+    {
+        Owner = Ctx;
+        m_Function = Format->m_Function;
+        m_FunctionSize = Format->m_FunctionSize;
+    }
+
+    if (!m_Function || m_FunctionSize == 0 || !Ctx || !Ctx->m_Device)
+        return FALSE;
+
+    SAFERELEASE(DxShader);
+    return SUCCEEDED(Ctx->m_Device->CreateVertexShader(m_Function, &DxShader));
+}
+
+CKDX9VertexShaderDesc::~CKDX9VertexShaderDesc()
+{
+    SAFERELEASE(DxShader);
+}
+
+CKBOOL CKDX9PixelShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKPixelShaderDesc *Format)
+{
+    if (Format != this)
+    {
+        Owner = Ctx;
+        m_Function = Format->m_Function;
+        m_FunctionSize = Format->m_FunctionSize;
+    }
+
+    if (!m_Function || m_FunctionSize == 0 || !Ctx || !Ctx->m_Device)
+        return FALSE;
+
+    SAFERELEASE(DxShader);
+    return SUCCEEDED(Ctx->m_Device->CreatePixelShader(m_Function, &DxShader));
+}
+
+CKDX9PixelShaderDesc::~CKDX9PixelShaderDesc()
+{
+    SAFERELEASE(DxShader);
+}
+
 CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver *driver) :
     CKRasterizerContext(), m_Device(NULL), m_PresentParams(), m_DirectXData(), m_SoftwareVertexProcessing(FALSE),
     m_CurrentTextureIndex(0), m_IndexBuffer(), m_DefaultBackBuffer(NULL), m_DefaultDepthBuffer(NULL),
