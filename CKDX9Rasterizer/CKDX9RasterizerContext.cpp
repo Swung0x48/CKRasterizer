@@ -506,53 +506,51 @@ CKBOOL CKDX9RasterizerContext::EndScene()
 
 CKBOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
-    D3DLIGHT9 lightData;
-    switch (data->Type)
-    {
-        case VX_LIGHTDIREC:
-            lightData.Type = D3DLIGHT_DIRECTIONAL;
-            break;
-        case VX_LIGHTPOINT:
-        case VX_LIGHTPARA:
-            lightData.Type = D3DLIGHT_POINT;
-            break;
-        case VX_LIGHTSPOT:
-            lightData.Type = D3DLIGHT_SPOT;
-        default:
-            return FALSE;
-    }
-
-    lightData.Range = data->Range;
-    lightData.Attenuation0 = data->Attenuation0;
-    lightData.Attenuation1 = data->Attenuation1;
-    lightData.Attenuation2 = data->Attenuation2;
-    lightData.Ambient.a = data->Ambient.a;
-    lightData.Ambient.r = data->Ambient.r;
-    lightData.Ambient.g = data->Ambient.g;
-    lightData.Ambient.b = data->Ambient.b;
-    lightData.Diffuse.a = data->Diffuse.a;
-    lightData.Diffuse.r = data->Diffuse.r;
-    lightData.Diffuse.g = data->Diffuse.g;
-    lightData.Diffuse.b = data->Diffuse.b;
-    lightData.Position.x = data->Position.x;
-    lightData.Position.y = data->Position.y;
-    lightData.Position.z = data->Position.z;
-    lightData.Direction.x = data->Direction.x;
-    lightData.Direction.y = data->Direction.y;
-    lightData.Direction.z = data->Direction.z;
-    lightData.Falloff = data->Falloff;
-    lightData.Specular.a = data->Specular.a;
-    lightData.Specular.r = data->Specular.r;
-    lightData.Specular.g = data->Specular.g;
-    lightData.Specular.b = data->Specular.b;
-    lightData.Theta = data->InnerSpotCone;
-    lightData.Phi = data->OuterSpotCone;
-
     if (data && Light < 128)
         m_CurrentLightData[Light] = *data;
 
-    ConvertAttenuationModelFromDX5(lightData.Attenuation0, lightData.Attenuation1, lightData.Attenuation2, data->Range);
-    return SUCCEEDED(m_Device->SetLight(Light, &lightData));
+    D3DLIGHT9 light;
+    light.Type = (D3DLIGHTTYPE)data->Type;
+    light.Range = data->Range;
+    light.Attenuation0 = data->Attenuation0;
+    light.Attenuation1 = data->Attenuation1;
+    light.Attenuation2 = data->Attenuation2;
+    light.Ambient.a = data->Ambient.a;
+    light.Ambient.r = data->Ambient.r;
+    light.Ambient.g = data->Ambient.g;
+    light.Ambient.b = data->Ambient.b;
+    light.Diffuse.a = data->Diffuse.a;
+    light.Diffuse.r = data->Diffuse.r;
+    light.Diffuse.g = data->Diffuse.g;
+    light.Diffuse.b = data->Diffuse.b;
+    light.Position.x = data->Position.x;
+    light.Position.y = data->Position.y;
+    light.Position.z = data->Position.z;
+    light.Direction.x = data->Direction.x;
+    light.Direction.y = data->Direction.y;
+    light.Direction.z = data->Direction.z;
+    light.Falloff = data->Falloff;
+    light.Specular.a = data->Specular.a;
+    light.Specular.r = data->Specular.r;
+    light.Specular.g = data->Specular.g;
+    light.Specular.b = data->Specular.b;
+    light.Theta = data->InnerSpotCone;
+    light.Phi = data->OuterSpotCone;
+
+    if ((data->Type == VX_LIGHTPARA))
+    {
+        light.Type = D3DLIGHT_POINT;
+    }
+    else if (data->Type == VX_LIGHTSPOT)
+    {
+        if (light.Theta > PI)
+            light.Theta = PI;
+        if (light.Phi < light.Theta)
+            light.Phi = light.Theta;
+    }
+
+    ConvertAttenuationModelFromDX5(light.Attenuation0, light.Attenuation1, light.Attenuation2, data->Range);
+    return SUCCEEDED(m_Device->SetLight(Light, &light));
 }
 
 CKBOOL CKDX9RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
