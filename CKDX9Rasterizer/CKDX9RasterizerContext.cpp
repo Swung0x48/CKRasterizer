@@ -2547,33 +2547,99 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 
 CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat)
 {
-    if (Texture >= m_Textures.Size())
+    if (!DesiredFormat)
         return FALSE;
 
-    if (m_Textures[Texture])
-        return TRUE;
+    if (DesiredFormat->MipMapCount == 1)
+        DesiredFormat->MipMapCount = 0;
 
-#if LOGGING && LOG_CREATETEXTURE
-    fprintf(stderr, "create texture %d %dx%d %x\n", Texture, DesiredFormat->Format.Width, DesiredFormat->Format.Height, DesiredFormat->Flags);
-#endif
+    CKDX9RasterizerDriver *driver = static_cast<CKDX9RasterizerDriver *>(m_Driver);
 
-    CKDX9TextureDesc *desc = new CKDX9TextureDesc;
-    desc->Flags = DesiredFormat->Flags;
-    desc->Format = DesiredFormat->Format;
-    desc->MipMapCount = DesiredFormat->MipMapCount;
-    m_Textures[Texture] = desc;
+    D3DFORMAT format = driver->FindNearestTextureFormat(DesiredFormat, m_PresentParams.BackBufferFormat, D3DUSAGE_DYNAMIC);
+    if (format == D3DFMT_UNKNOWN)
+        format = D3DFMT_A8R8G8B8;
 
-    D3DFORMAT format = static_cast<CKDX9RasterizerDriver *>(m_Driver)->FindNearestTextureFormat(desc, m_PresentParams.BackBufferFormat, D3DUSAGE_DYNAMIC);
-    HRESULT hr = m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, desc->MipMapCount ? desc->MipMapCount : 1,
-                                         D3DUSAGE_DYNAMIC, format, D3DPOOL_DEFAULT, &(desc->DxTexture), NULL);
-#if LOGGING && LOG_CREATETEXTURE
-    if (FAILED(hr))
+    int width = DesiredFormat->Format.Width;
+    int height = DesiredFormat->Format.Height;
+
+    CKDWORD flags = DesiredFormat->Flags;
+    CKDWORD textureCaps = driver->m_3DCaps.TextureCaps;
+    if ((textureCaps & CKRST_TEXTURECAPS_POW2) != 0)
     {
-        fprintf(stderr, "create texture failure: src fmt bpp %d a@0x%x r@0x%x g@0x%x b@0x%x dst fmt 0x%x\n",
-                desc->Format.BitsPerPixel, desc->Format.AlphaMask, desc->Format.RedMask, desc->Format.GreenMask, desc->Format.BlueMask, fmt);
+        int n;
+        for (n = 1; n < width; n *= 2)
+            continue;
+        width = n;
+
+        for (n = 1; n < height; n *= 2)
+            continue;
+        height = n;
     }
-#endif
-    return SUCCEEDED(hr);
+
+    if (((flags & CKRST_TEXTURE_CUBEMAP) != 0 || (textureCaps & CKRST_TEXTURECAPS_SQUAREONLY) != 0) && width != height)
+    {
+        if (width <= height)
+            width = height;
+        else
+            height = width;
+    }
+
+    if (width < driver->m_3DCaps.MinTextureWidth)
+        width = driver->m_3DCaps.MinTextureWidth;
+    if (width > driver->m_3DCaps.MaxTextureWidth)
+        width = driver->m_3DCaps.MaxTextureWidth;
+    if (height < driver->m_3DCaps.MinTextureHeight)
+        height = driver->m_3DCaps.MinTextureHeight;
+    if (height > driver->m_3DCaps.MaxTextureHeight)
+        height = driver->m_3DCaps.MaxTextureHeight;
+
+    UINT levels = DesiredFormat->MipMapCount != 0 ? DesiredFormat->MipMapCount : 1;
+    D3DPOOL pool = (flags & CKRST_TEXTURE_MANAGED) != 0 ? D3DPOOL_MANAGED : D3DPOOL_DEFAULT;
+
+    if ((flags & CKRST_TEXTURE_CUBEMAP) == 0)
+    {
+        IDirect3DTexture9 *pTexture = NULL;
+        if (FAILED(m_Device->CreateTexture(width, height, levels, 0, format, pool, &pTexture, NULL)))
+            return FALSE;
+
+        D3DSURFACE_DESC surfaceDesc = {};
+        pTexture->GetLevelDesc(0, &surfaceDesc);
+
+        CKDX9TextureDesc *desc = (CKDX9TextureDesc *)m_Textures[Texture];
+        if (desc)
+            delete desc;
+        desc = new CKDX9TextureDesc;
+        desc->DxTexture = pTexture;
+        D3DFormatToTextureDesc(surfaceDesc.Format, desc);
+        desc->Flags = DesiredFormat->Flags;
+        desc->Format.Width = surfaceDesc.Width;
+        desc->Format.Height = surfaceDesc.Height;
+        desc->MipMapCount = pTexture->GetLevelCount() - 1;
+        m_Textures[Texture] = desc;
+    }
+    else
+    {
+        IDirect3DCubeTexture9 *pCubeTexture = NULL;
+        if (FAILED(m_Device->CreateCubeTexture(width, levels, 0, format, pool, &pCubeTexture, NULL)))
+            return FALSE;
+
+        D3DSURFACE_DESC surfaceDesc = {};
+        pCubeTexture->GetLevelDesc(0, &surfaceDesc);
+
+        CKDX9TextureDesc *desc = (CKDX9TextureDesc *)m_Textures[Texture];
+        if (desc)
+            delete desc;
+        desc = new CKDX9TextureDesc;
+        desc->DxCubeTexture = pCubeTexture;
+        D3DFormatToTextureDesc(surfaceDesc.Format, desc);
+        desc->Flags = DesiredFormat->Flags;
+        desc->Format.Width = surfaceDesc.Width;
+        desc->Format.Height = surfaceDesc.Height;
+        desc->MipMapCount = pCubeTexture->GetLevelCount() - 1;
+        m_Textures[Texture] = desc;
+    }
+
+    return TRUE;
 }
 
 CKBOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat)
