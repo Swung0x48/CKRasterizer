@@ -691,26 +691,20 @@ CKBOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 #if LOGGING && LOG_SETTEXTURE
     fprintf(stderr, "settexture %d %d\n", Texture, Stage);
 #endif
-    CKDX9TextureDesc *desc = NULL;
     HRESULT hr = E_FAIL;
+    CKDX9TextureDesc *desc = NULL;
     if (Texture != 0 && Texture < m_Textures.Size() &&
         (desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture])) != NULL && desc->DxTexture != NULL)
     {
         hr = m_Device->SetTexture(Stage, desc->DxTexture);
         if (Stage == 0)
         {
-            hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
-            assert(SUCCEEDED(hr));
+            m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
             m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
-            assert(SUCCEEDED(hr));
             m_Device->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_CURRENT);
-            assert(SUCCEEDED(hr));
             m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
-            assert(SUCCEEDED(hr));
             m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
-            assert(SUCCEEDED(hr));
             m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_CURRENT);
-            assert(SUCCEEDED(hr));
         }
     }
     else
@@ -718,14 +712,10 @@ CKBOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
         hr = m_Device->SetTexture(Stage, NULL);
         if (Stage == 0)
         {
-            hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
-            assert(SUCCEEDED(hr));
-            hr = m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_DIFFUSE);
-            assert(SUCCEEDED(hr));
-            hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
-            assert(SUCCEEDED(hr));
-            hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
-            assert(SUCCEEDED(hr));
+            m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+            m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_DIFFUSE);
+            m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+            m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
         }
     }
 
@@ -1450,8 +1440,10 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
 
     if (TextureObject >= m_Textures.Size())
         return FALSE;
+
     if (!m_Device)
         return FALSE;
+
     if (m_DefaultBackBuffer)
         return FALSE;
 
@@ -1462,14 +1454,14 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         Height = Width;
     }
 
-    if (!m_Textures[TextureObject])
+    CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[TextureObject]);
+    if (!desc)
     {
-        CKDX9TextureDesc *desc = new CKDX9TextureDesc;
+        desc = new CKDX9TextureDesc;
         desc->Format.Width = (Width != 0) ? Width : 256;
         desc->Format.Height = (Height != 0) ? Height : 256;
         m_Textures[TextureObject] = desc;
     }
-    CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[TextureObject]);
 
     HRESULT hr = m_Device->GetRenderTarget(0, &m_DefaultBackBuffer);
     if (FAILED(hr) || !m_DefaultBackBuffer)
@@ -1544,8 +1536,7 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         if (FAILED(hr))
         {
             desc->Flags &= ~CKRST_TEXTURE_VALID;
-            hr = m_DefaultBackBuffer->Release();
-            assert(SUCCEEDED(hr));
+            m_DefaultBackBuffer->Release();
             m_DefaultBackBuffer = NULL;
             return FALSE;
         }
@@ -1557,8 +1548,7 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         if (FAILED(hr))
         {
             desc->Flags &= ~CKRST_TEXTURE_VALID;
-            hr = m_DefaultBackBuffer->Release();
-            assert(SUCCEEDED(hr));
+            m_DefaultBackBuffer->Release();
             m_DefaultBackBuffer = NULL;
             return FALSE;
         }
