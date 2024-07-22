@@ -2894,17 +2894,18 @@ void CKDX9RasterizerContext::FlushNonManagedObjects()
     }
 
     m_CurrentTextureIndex = 0;
-    for (int i = 0; i < m_Textures.Size(); ++i)
+    for (auto it = m_Textures.Begin(); it != m_Textures.End(); ++it)
     {
-        if (m_Textures[i] && (m_Textures[i]->Flags & CKRST_TEXTURE_MANAGED) == 0)
+        CKTextureDesc *desc = *it;
+        if (desc && (desc->Flags & CKRST_TEXTURE_MANAGED) == 0)
         {
-            delete m_Textures[i];
-            m_Textures[i] = NULL;
+            delete desc;
+            *it = NULL;
         }
     }
 
     ReleaseTempZBuffers();
-    FlushObjects(CKRST_OBJ_ALL);
+    FlushObjects(CKRST_OBJ_VERTEXBUFFER | CKRST_OBJ_INDEXBUFFER | CKRST_OBJ_VERTEXSHADER | CKRST_OBJ_PIXELSHADER);
     ReleaseIndexBuffers();
 }
 
