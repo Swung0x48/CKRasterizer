@@ -1559,10 +1559,9 @@ CKBOOL CKGLRasterizerContext::CopyToTexture(CKDWORD Texture, VxRect *Src, VxRect
     return CKRasterizerContext::CopyToTexture(Texture, Src, Dest, Face);
 }
 
-CKBOOL CKGLRasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, int Height, CKRST_CUBEFACE Face,
-    CKBOOL GenerateMipMap)
+CKBOOL CKGLRasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, int Height, CKRST_CUBEFACE Face)
 {
-    return CKRasterizerContext::SetTargetTexture(TextureObject, Width, Height, Face, GenerateMipMap);
+    return CKRasterizerContext::SetTargetTexture(TextureObject, Width, Height, Face);
 }
 
 CKBOOL CKGLRasterizerContext::LoadSprite(CKDWORD Sprite, const VxImageDescEx &SurfDesc)
