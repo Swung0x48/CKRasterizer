@@ -1603,31 +1603,17 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
     if (!sprite)
         return FALSE;
 
-    // if (sprite->Textures.Size() < 16)
-    //     return FALSE;
-    if (src->GetWidth() <= 0.0f)
+    if (sprite->Textures.IsEmpty())
         return FALSE;
-    if (src->right < 0.0f)
+
+    if (src->GetWidth() <= 0.0f || src->right < 0.0f || sprite->Format.Width <= src->left)
         return FALSE;
-    if (sprite->Format.Width < src->left)
+    if (src->GetHeight() < 0.0f || src->bottom < 0.0f || sprite->Format.Height <= src->top)
         return FALSE;
-    if (src->GetHeight() < 0.0f)
+
+    if (dst->GetWidth() <= 0.0f || dst->right < 0.0f || m_Width <= dst->left)
         return FALSE;
-    if (src->bottom < 0.0f)
-        return FALSE;
-    if (sprite->Format.Height <= src->top)
-        return FALSE;
-    if (dst->GetWidth() <= 0.0f)
-        return FALSE;
-    if (dst->right < 0.0f)
-        return FALSE;
-    if (m_Width <= dst->left)
-        return FALSE;
-    if (dst->left <= 0.0f)
-        return FALSE;
-    if (dst->bottom < 0.0f)
-        return FALSE;
-    if (m_Height <= dst->top)
+    if (dst->GetHeight() <= 0.0f || dst->bottom < 0.0f || m_Height <= dst->top)
         return FALSE;
 
     HRESULT hr;
@@ -1678,21 +1664,21 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
 
     CKDWORD startVertex = 0;
     int count = 4 * sprite->Textures.Size();
-    CKDX9VertexBufferDesc *vb = static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[GetDynamicVertexBuffer(CKRST_VF_TLVERTEX, count, 32, 1)]);
+    CKDX9VertexBufferDesc *vb = static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[GetDynamicVertexBuffer(CKRST_VF_TLVERTEX, count, sizeof(CKVertex), 1)]);
     if (!vb)
         return FALSE;
 
     void *pBuf = NULL;
     if (vb->m_CurrentVCount + count <= vb->m_MaxVertexCount)
     {
-        hr = vb->DxBuffer->Lock(32 * vb->m_CurrentVCount, 32 * count, &pBuf, D3DLOCK_NOOVERWRITE);
+        hr = vb->DxBuffer->Lock(sizeof(CKVertex) * vb->m_CurrentVCount, sizeof(CKVertex) * count, &pBuf, D3DLOCK_NOOVERWRITE);
         assert(SUCCEEDED(hr));
         startVertex = vb->m_CurrentVCount;
         vb->m_CurrentVCount = count + startVertex;
     }
     else
     {
-        hr = vb->DxBuffer->Lock(0, 32 * count, &pBuf, D3DLOCK_DISCARD);
+        hr = vb->DxBuffer->Lock(0, sizeof(CKVertex) * count, &pBuf, D3DLOCK_DISCARD);
         assert(SUCCEEDED(hr));
         vb->m_CurrentVCount = count;
     }
@@ -1710,35 +1696,35 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
         {
             float tu2 = 1.0f;
             if (texture->w != texture->sw)
-                tu2 = (float)texture->w / (float)texture->sw;
+                tu2 = (float)(texture->w / texture->sw);
 
             float tv2 = 1.0f;
             if (texture->h != texture->sh)
-                tv2 = (float)texture->h / (float)texture->sh;
+                tv2 = (float)(texture->h / texture->sh);
             
             if (src->right < tr)
             {
                 tr = src->right;
-                tu2 = (src->right - tx) / texture->sw;
+                tu2 = (float)((src->right - tx) / texture->sw);
             }
 
             if (src->bottom < tb)
             {
                 tb = src->bottom;
-                tv2 = (src->bottom - ty) / texture->sh;
+                tv2 = (float)((src->bottom - ty) / texture->sh);
             }
 
             float tu = 0.0f;
             if (src->left <= tx)
             {
-                tu = (src->left - tx) / texture->sw;
+                tu = (float)((src->left - tx) / texture->sw);
                 tx = src->left;
             }
 
             float tv = 0.0f;
             if (src->top <= ty)
             {
-                tv = (src->top - ty) / texture->sh;
+                tv = (float)((src->top - ty) / texture->sh);
                 ty = src->top;
             }
 
@@ -1772,13 +1758,14 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
     assert(SUCCEEDED(hr));
 
     m_CurrentVertexBufferCache = NULL;
-    SetupStreams(vb->DxBuffer, CKRST_VF_TLVERTEX, 32);
+    SetupStreams(vb->DxBuffer, CKRST_VF_TLVERTEX, sizeof(CKVertex));
 
     for (auto texture = sprite->Textures.Begin(); texture != sprite->Textures.End(); ++texture)
     {
         if (texture->x <= src->right && texture->y <= src->bottom && texture->x + texture->w >= src->left && texture->y + texture->h >= src->top)
         {
-            hr = m_Device->SetTexture(0, static_cast<CKDX9TextureDesc *>(m_Textures[texture->IndexTexture])->DxTexture);
+            CKDX9TextureDesc *desc = (CKDX9TextureDesc *)m_Textures[texture->IndexTexture];
+            hr = m_Device->SetTexture(0, desc->DxTexture);
             assert(SUCCEEDED(hr));
             hr = m_Device->DrawPrimitive(D3DPT_TRIANGLEFAN, startVertex, 2);
             assert(SUCCEEDED(hr));
