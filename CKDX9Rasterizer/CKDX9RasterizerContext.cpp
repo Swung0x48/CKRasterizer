@@ -1460,7 +1460,7 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
             m_DefaultBackBuffer = NULL;
             hr = m_DefaultDepthBuffer->Release();
             assert(SUCCEEDED(hr));
-            m_DefaultBackBuffer = NULL;
+            m_DefaultDepthBuffer = NULL;
             if (m_CurrentTextureIndex >= m_Textures.Size())
                 return SUCCEEDED(hr);
             CKTextureDesc *desc = m_Textures[m_CurrentTextureIndex];
@@ -1572,8 +1572,11 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         if (FAILED(hr))
         {
             desc->Flags &= ~CKRST_TEXTURE_VALID;
-            m_DefaultBackBuffer->Release();
-            m_DefaultBackBuffer = NULL;
+            if (m_DefaultBackBuffer)
+            {
+                m_DefaultBackBuffer->Release();
+                m_DefaultBackBuffer = NULL;
+            }
             return FALSE;
         }
     }
@@ -1584,8 +1587,11 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         if (FAILED(hr))
         {
             desc->Flags &= ~CKRST_TEXTURE_VALID;
-            m_DefaultBackBuffer->Release();
-            m_DefaultBackBuffer = NULL;
+            if (m_DefaultBackBuffer)
+            {
+                m_DefaultBackBuffer->Release();
+                m_DefaultBackBuffer = NULL;
+            }
             return FALSE;
         }
 
@@ -1613,10 +1619,16 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
     if (FAILED(hr))
     {
         desc->Flags &= ~CKRST_TEXTURE_VALID;
-        m_DefaultBackBuffer->Release();
-        m_DefaultBackBuffer = NULL;
-        m_DefaultDepthBuffer->Release();
-        m_DefaultDepthBuffer = NULL;
+        if (m_DefaultBackBuffer)
+        {
+            m_DefaultBackBuffer->Release();
+            m_DefaultBackBuffer = NULL;
+        }
+        if (m_DefaultDepthBuffer)
+        {
+            m_DefaultDepthBuffer->Release();
+            m_DefaultDepthBuffer = NULL;
+        }
         return FALSE;
     }
 
