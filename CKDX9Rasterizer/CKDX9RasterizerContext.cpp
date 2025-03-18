@@ -3010,7 +3010,19 @@ void CKDX9RasterizerContext::ReleaseVertexDeclarations()
     m_VertexDeclarations.Clear();
 }
 
-CKDWORD CKDX9RasterizerContext::DX9PresentInterval(DWORD PresentInterval) { return 0; }
+CKDWORD CKDX9RasterizerContext::DX9PresentInterval(DWORD PresentInterval)
+{
+    // Map the input interval to D3D9 presentation intervals
+    switch (PresentInterval)
+    {
+        case 0: return D3DPRESENT_INTERVAL_IMMEDIATE;
+        case 1: return D3DPRESENT_INTERVAL_ONE;
+        case 2: return D3DPRESENT_INTERVAL_TWO;
+        case 3: return D3DPRESENT_INTERVAL_THREE;
+        case 4: return D3DPRESENT_INTERVAL_FOUR;
+        default: return D3DPRESENT_INTERVAL_DEFAULT;
+    }
+}
 
 CKBOOL CKDX9RasterizerContext::LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc)
 {
