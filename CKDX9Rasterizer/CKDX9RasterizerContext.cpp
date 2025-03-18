@@ -140,7 +140,9 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
         VxScreenToClient(parent, reinterpret_cast<CKPOINT *>(&rect));
         VxScreenToClient(parent, reinterpret_cast<CKPOINT *>(&rect.right));
     }
-    if (Fullscreen)
+
+    LONG prevStyle = 0;
+    if (Fullscreen && Window)
     {
         LONG prevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
         SetWindowLongA((HWND)Window, GWL_STYLE, prevStyle & ~WS_CHILDWINDOW);
@@ -253,6 +255,10 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
 
     if (FAILED(hr))
     {
+        // Restore window styles on failure
+        if (Fullscreen && Window)
+            SetWindowLongA((HWND)Window, GWL_STYLE, prevStyle);
+
         m_InCreateDestroy = FALSE;
         return FALSE;
     }
