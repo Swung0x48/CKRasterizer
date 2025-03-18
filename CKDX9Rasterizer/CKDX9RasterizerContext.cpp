@@ -1342,13 +1342,26 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
 #if LOGGING && LOG_LOADTEXTURE
                 fprintf(stderr, "LoadTexture (Mipmap generation) failed with %x\n", hr);
 #endif
+                if (pSurface)
+                {
+                    pSurface->Release();
+                    pSurface = NULL;
+                }
                 return FALSE;
             }
 
             LoadSurface(surfaceDesc, lockRect, dst);
 
             hr = desc->DxTexture->UnlockRect(i);
-            assert(SUCCEEDED(hr));
+            if (FAILED(hr))
+            {
+                if (pSurface)
+                {
+                    pSurface->Release();
+                    pSurface = NULL;
+                }
+                return FALSE;
+            }
         }
     }
 
