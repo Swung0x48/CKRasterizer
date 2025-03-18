@@ -68,7 +68,7 @@ jobs:
         run: ctest -C ${{env.BUILD_TYPE}}
 
       - name: Release Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{env.PROJECT_NAME}}
           path: ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build/${{env.BUILD_TYPE}}
