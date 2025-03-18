@@ -447,12 +447,29 @@ CKBOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
 #else
     hr = m_Device->Present(NULL, NULL, NULL, D3DPRESENT_INTERVAL_DEFAULT);
 #endif
-    if (hr == D3DERR_DEVICELOST)
+    if (FAILED(hr))
     {
-        hr = m_Device->TestCooperativeLevel();
-        if (hr == D3DERR_DEVICENOTRESET)
+        if (hr == D3DERR_DEVICELOST)
         {
-            Resize(m_PosX, m_PosY, m_Width, m_Height);
+            hr = m_Device->TestCooperativeLevel();
+            if (hr == D3DERR_DEVICENOTRESET)
+            {
+                if (!Resize(m_PosX, m_PosY, m_Width, m_Height))
+                {
+                    // Handle resize failure
+                    return FALSE;
+                }
+            }
+            else
+            {
+                // Device still lost, can't be reset yet
+                return FALSE;
+            }
+        }
+        else
+        {
+            // Other presentation error
+            return FALSE;
         }
     }
 
