@@ -2969,9 +2969,9 @@ void CKDX9RasterizerContext::ReleaseStateBlocks()
             }
         }
 
-        ZeroMemory(m_TextureMinFilterStateBlocks, sizeof(m_TextureMinFilterStateBlocks));
-        ZeroMemory(m_TextureMagFilterStateBlocks, sizeof(m_TextureMagFilterStateBlocks));
-        ZeroMemory(m_TextureMapBlendStateBlocks, sizeof(m_TextureMapBlendStateBlocks));
+        memset(m_TextureMinFilterStateBlocks, 0, sizeof(m_TextureMinFilterStateBlocks));
+        memset(m_TextureMagFilterStateBlocks, 0, sizeof(m_TextureMagFilterStateBlocks));
+        memset(m_TextureMapBlendStateBlocks, 0, sizeof(m_TextureMapBlendStateBlocks));
     }
 }
 
