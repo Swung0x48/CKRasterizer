@@ -1734,12 +1734,15 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
     float widthRatio = dst->GetWidth() / src->GetWidth();
     float heightRatio = dst->GetHeight() / src->GetHeight();
     CKVertex *vbData = static_cast<CKVertex *>(pBuf);
-    for (auto texture = sprite->Textures.Begin(); texture != sprite->Textures.End(); texture++, vbData += 4)
+
+    // First pass: prepare vertex data for visible textures only
+    for (auto texture = sprite->Textures.Begin(); texture != sprite->Textures.End(); ++texture)
     {
         float tx = texture->x;
         float ty = texture->y;
         float tr = tx + texture->w;
         float tb = ty + texture->h;
+        
         if (tx <= src->right && ty <= src->bottom && tr >= src->left && tb >= src->top)
         {
             float tu2 = 1.0f;
@@ -1799,6 +1802,8 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
             vbData[1].V = VxVector4(vbData[0].V.x, (tb - src->top) * heightRatio + dst->top, 0.0f, 1.0f);
             vbData[2].V = VxVector4((tr - src->left) * widthRatio + dst->left, vbData[1].V.y, 0.0f, 1.0f);
             vbData[3].V = VxVector4(vbData[2].V.x, vbData[0].V.y, 0.0f, 1.0f);
+            
+            vbData += 4;
         }
     }
 
@@ -1808,16 +1813,23 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
     m_CurrentVertexBufferCache = NULL;
     SetupStreams(vb->DxBuffer, CKRST_VF_TLVERTEX, sizeof(CKVertex));
 
+    // Second pass: draw each visible texture part
+    int vertexIndex = startVertex;
     for (auto texture = sprite->Textures.Begin(); texture != sprite->Textures.End(); ++texture)
     {
         if (texture->x <= src->right && texture->y <= src->bottom && texture->x + texture->w >= src->left && texture->y + texture->h >= src->top)
         {
             CKDX9TextureDesc *desc = (CKDX9TextureDesc *)m_Textures[texture->IndexTexture];
-            hr = m_Device->SetTexture(0, desc->DxTexture);
-            assert(SUCCEEDED(hr));
-            hr = m_Device->DrawPrimitive(D3DPT_TRIANGLEFAN, startVertex, 2);
-            assert(SUCCEEDED(hr));
+            if (desc)
+            {
+                hr = m_Device->SetTexture(0, desc->DxTexture);
+                assert(SUCCEEDED(hr));
+                hr = m_Device->DrawPrimitive(D3DPT_TRIANGLEFAN, vertexIndex, 2);
+                assert(SUCCEEDED(hr));
+            }
         }
+
+        vertexIndex += 4;
     }
 
     hr = m_Device->SetStreamSource(0, NULL, NULL, NULL);
