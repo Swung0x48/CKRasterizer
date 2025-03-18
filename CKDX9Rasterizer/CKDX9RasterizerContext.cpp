@@ -2284,7 +2284,11 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
 
             hr = desc->DxCubeTexture->LockRect((D3DCUBEMAP_FACES)Face, i, &lockRect, NULL, NULL);
             if (FAILED(hr))
+            {
+                if (pSurface)
+                    pSurface->Release();
                 return FALSE;
+            }
 
             LoadSurface(surfaceDesc, lockRect, dst);
 
