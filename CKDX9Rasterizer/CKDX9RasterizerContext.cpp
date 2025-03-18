@@ -2477,22 +2477,22 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
 
     SetupStreams(VB->DxBuffer, VB->m_VertexFormat, VB->m_VertexSize);
 
-    if (indexcount == 0)
-        indexcount = VertexCount;
+    int primitiveCount = (indexcount == 0) ? VertexCount : indexcount;
+
     switch (pType)
     {
         case VX_LINELIST:
-            indexcount /= 2;
+            primitiveCount /= 2;
             break;
         case VX_LINESTRIP:
-            indexcount -= 1;
+            primitiveCount -= 1;
             break;
         case VX_TRIANGLELIST:
-            indexcount /= 3;
+            primitiveCount /= 3;
             break;
         case VX_TRIANGLESTRIP:
         case VX_TRIANGLEFAN:
-            indexcount -= 2;
+            primitiveCount -= 2;
             break;
         default:
             break;
@@ -2500,14 +2500,14 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
 
     if (!indices || pType == VX_POINTLIST)
     {
-        hr = m_Device->DrawPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, indexcount);
+        hr = m_Device->DrawPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, primitiveCount);
         return SUCCEEDED(hr);
     }
 
     hr = m_Device->SetIndices(m_IndexBuffer[Clip]->DxBuffer);
     assert(SUCCEEDED(hr));
 
-    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, 0, VertexCount, ibstart, indexcount));
+    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, 0, VertexCount, ibstart, primitiveCount));
 }
 
 void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize)
