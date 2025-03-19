@@ -3282,72 +3282,108 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 #ifdef TRACY_ENABLE
     ZoneScopedN(__FUNCTION__);
 #endif
-    HRESULT hr;
 
-    CKBOOL fixed = FALSE;
+    if (!m_Device)
+        return;
 
+    HRESULT hr = S_OK;
+    CKBOOL useFixedPipeline = TRUE;
+
+    // Check if we should use programmable vertex shader
     if (m_CurrentVertexShaderCache != 0 && m_CurrentVertexShaderCache < m_VertexShaders.Size())
     {
-        CKDX9VertexShaderDesc *desc = (CKDX9VertexShaderDesc *)m_VertexShaders[m_CurrentVertexShaderCache];
-        if (desc->DxShader)
-        {
-            IDirect3DVertexDeclaration9 *pDecl = NULL;
+        CKDX9VertexShaderDesc *desc = static_cast<CKDX9VertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShaderCache]);
 
+        // Verify shader exists and is valid
+        if (desc && desc->DxShader)
+        {
+            // Look for existing vertex declaration
+            IDirect3DVertexDeclaration9 *pDecl = NULL;
             auto it = m_VertexDeclarations.Find(VFormat);
+
+            // Use cached declaration if found
             if (it != m_VertexDeclarations.End())
             {
                 pDecl = *it;
             }
+            // Otherwise create a new one
             else
             {
                 if (CreateVertexDeclaration(VFormat, &pDecl))
                 {
-                    m_VertexDeclarations.Insert(VFormat, pDecl);
-                }
-                else
-                {
-                    fixed = TRUE;
+                    // Store for future use if successful
+                    if (pDecl)
+                    {
+                        m_VertexDeclarations.Insert(VFormat, pDecl);
+                    }
                 }
             }
 
-            if (!fixed)
+            // If we have a valid declaration, set up the programmable pipeline
+            if (pDecl)
             {
+                // Set vertex declaration (vertex format for shader)
                 hr = m_Device->SetVertexDeclaration(pDecl);
-                assert(SUCCEEDED(hr));
-
-                hr = m_Device->SetVertexShader(desc->DxShader);
-                assert(SUCCEEDED(hr));
+                if (SUCCEEDED(hr))
+                {
+                    // Set shader
+                    hr = m_Device->SetVertexShader(desc->DxShader);
+                    if (SUCCEEDED(hr))
+                    {
+                        // Successfully set up programmable pipeline
+                        useFixedPipeline = FALSE;
+                    }
+                }
             }
+        }
+    }
+
+    // Fall back to fixed function pipeline if needed
+    if (useFixedPipeline)
+    {
+        // Reset shader state
+        m_CurrentVertexShaderCache = 0;
+
+        // Update format cache if needed
+        if (VFormat != m_CurrentVertexFormatCache)
+        {
+            m_CurrentVertexFormatCache = VFormat;
+        }
+
+        // Disable programmable vertex shader
+        hr = m_Device->SetVertexShader(NULL);
+        if (FAILED(hr))
+        {
+            // If we can't disable the shader, we're in trouble
+            return;
+        }
+
+        // Set Fixed Function Vertex Format (FVF)
+        hr = m_Device->SetFVF(m_CurrentVertexFormatCache);
+        if (FAILED(hr))
+        {
+            // Log error or handle failure
+            return;
+        }
+    }
+
+    // Set vertex buffer if it's changed
+    if (Buffer != m_CurrentVertexBufferCache || m_CurrentVertexSizeCache != VSize)
+    {
+        // Set the vertex buffer as the data source for stream 0
+        hr = m_Device->SetStreamSource(0, Buffer, 0, VSize);
+        if (SUCCEEDED(hr))
+        {
+            // Update cache values on success
+            m_CurrentVertexBufferCache = Buffer;
+            m_CurrentVertexSizeCache = VSize;
         }
         else
         {
-            fixed = TRUE;
+            // Clear cache on failure to force reset next time
+            m_CurrentVertexBufferCache = NULL;
+            m_CurrentVertexSizeCache = 0;
         }
-    }
-    else
-    {
-        fixed = TRUE;
-    }
-
-    if (fixed)
-    {
-        m_CurrentVertexShaderCache = 0;
-        if (VFormat != m_CurrentVertexFormatCache)
-            m_CurrentVertexFormatCache = VFormat;
-
-        hr = m_Device->SetVertexShader(NULL);
-        assert(SUCCEEDED(hr));
-
-        hr = m_Device->SetFVF(m_CurrentVertexFormatCache);
-        assert(SUCCEEDED(hr));
-    }
-
-    if (Buffer != m_CurrentVertexBufferCache || m_CurrentVertexSizeCache != VSize)
-    {
-        hr = m_Device->SetStreamSource(0, Buffer, 0, VSize);
-        assert(SUCCEEDED(hr));
-        m_CurrentVertexBufferCache = Buffer;
-        m_CurrentVertexSizeCache = VSize;
     }
 }
 
