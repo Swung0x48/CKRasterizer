@@ -1551,38 +1551,53 @@ CKBOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect *Src, VxRec
 
 CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, int Height, CKRST_CUBEFACE Face)
 {
+    // End any current scene
     EndScene();
 
+    // Case 1: Restoring the default render target
     if (!TextureObject)
     {
-        if (m_DefaultBackBuffer)
+        if (!m_DefaultBackBuffer)
+            return FALSE;
+        
+        HRESULT hr = m_Device->SetRenderTarget(0, m_DefaultBackBuffer);
+        if (SUCCEEDED(hr))
         {
-            HRESULT hr = m_Device->SetRenderTarget(0, m_DefaultBackBuffer);
-            assert(SUCCEEDED(hr));
+            // Restore default depth buffer
+            if (m_DefaultDepthBuffer)
+            {
+                m_Device->SetDepthStencilSurface(m_DefaultDepthBuffer);
+            }
+            
+            // Reset the current texture's flags
+            if (m_CurrentTextureIndex < m_Textures.Size())
+            {
+                CKTextureDesc *desc = m_Textures[m_CurrentTextureIndex];
+                if (desc)
+                {
+                    desc->Flags &= ~CKRST_TEXTURE_RENDERTARGET;
+                }
+            }
+            
+            // Release the saved buffers
             SAFERELEASE(m_DefaultBackBuffer);
             SAFERELEASE(m_DefaultDepthBuffer);
-            if (m_CurrentTextureIndex >= m_Textures.Size())
-                return SUCCEEDED(hr);
-            CKTextureDesc *desc = m_Textures[m_CurrentTextureIndex];
-            if (desc)
-            {
-                desc->Flags &= ~CKRST_TEXTURE_RENDERTARGET;
-                m_CurrentTextureIndex = 0;
-            }
-            return SUCCEEDED(hr);
+            m_CurrentTextureIndex = 0;
+            
+            return TRUE;
         }
-        return FALSE;
+        else
+        {
+            // Failed to set default render target, keep it for retry later
+            return FALSE;
+        }
     }
 
-    if (TextureObject >= m_Textures.Size())
+    // Input validation
+    if (TextureObject >= m_Textures.Size() || !m_Device || m_DefaultBackBuffer)
         return FALSE;
 
-    if (!m_Device)
-        return FALSE;
-
-    if (m_DefaultBackBuffer)
-        return FALSE;
-
+    // Handle cube map case
     CKBOOL cubemap = FALSE;
     if (Height < 0)
     {
@@ -1590,6 +1605,7 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         Height = Width;
     }
 
+    // Get or create the texture descriptor
     CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[TextureObject]);
     if (!desc)
     {
@@ -1599,128 +1615,197 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         m_Textures[TextureObject] = desc;
     }
 
+    // Capture current render target and depth buffer
     HRESULT hr = m_Device->GetRenderTarget(0, &m_DefaultBackBuffer);
     if (FAILED(hr) || !m_DefaultBackBuffer)
-    {
-        SAFERELEASE(m_DefaultBackBuffer);
         return FALSE;
-    }
 
     hr = m_Device->GetDepthStencilSurface(&m_DefaultDepthBuffer);
-    if (FAILED(hr) || !m_DefaultDepthBuffer)
+    if (FAILED(hr))
     {
-        SAFERELEASE(m_DefaultDepthBuffer);
-        return FALSE;
+        // No depth buffer is ok, but we should clear the pointer
+        m_DefaultDepthBuffer = NULL;
     }
 
+    // Unbind all textures to avoid circular dependencies
     for (int i = 0; i < m_Driver->m_3DCaps.MaxNumberTextureStage; ++i)
     {
-        hr = m_Device->SetTexture(i, NULL);
-        assert(SUCCEEDED(hr));
+        m_Device->SetTexture(i, NULL);
     }
 
+    // Try to use existing texture as render target
+    CKBOOL surfaceSuccess = FALSE;
+    IDirect3DSurface9 *surface = NULL;
+    
     if ((cubemap || desc->DxRenderTexture) && desc->DxTexture)
     {
-        IDirect3DSurface9 *surface = NULL;
-        D3DRESOURCETYPE type = desc->DxTexture->GetType();
         if (cubemap)
         {
+            D3DRESOURCETYPE type = desc->DxTexture->GetType();
             if (type == D3DRTYPE_CUBETEXTURE)
             {
                 hr = desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, 0, &surface);
-                assert(SUCCEEDED(hr));
+                if (SUCCEEDED(hr) && surface)
+                {
+                    D3DSURFACE_DESC surfaceDesc;
+                    hr = surface->GetDesc(&surfaceDesc);
+                    
+                    if (SUCCEEDED(hr) && (surfaceDesc.Usage & D3DUSAGE_RENDERTARGET))
+                    {
+                        surfaceSuccess = TRUE;
+                    }
+                }
             }
         }
         else
         {
             desc->DxRenderTexture = desc->DxTexture;
             hr = desc->DxTexture->GetSurfaceLevel(0, &surface);
-            assert(SUCCEEDED(hr));
-        }
-
-        IDirect3DSurface9 *zbuffer = GetTempZBuffer(desc->Format.Width, desc->Format.Height);
-        D3DSURFACE_DESC surfaceDesc = {};
-        if (surface)
-        {
-            hr = surface->GetDesc(&surfaceDesc);
-            assert(SUCCEEDED(hr));
-
-            hr = (surfaceDesc.Usage & D3DUSAGE_RENDERTARGET) ? m_Device->SetRenderTarget(0, surface) : -1;
-            SAFERELEASE(surface);
-            if (SUCCEEDED(hr))
+            
+            if (SUCCEEDED(hr) && surface)
             {
-                desc->Flags &= ~CKRST_TEXTURE_MANAGED;
-                desc->Flags |= (CKRST_TEXTURE_RENDERTARGET | CKRST_TEXTURE_VALID);
-                m_CurrentTextureIndex = TextureObject;
-                desc->MipMapCount = 0;
-                return TRUE;
+                D3DSURFACE_DESC surfaceDesc;
+                hr = surface->GetDesc(&surfaceDesc);
+                
+                if (SUCCEEDED(hr) && (surfaceDesc.Usage & D3DUSAGE_RENDERTARGET))
+                {
+                    surfaceSuccess = TRUE;
+                }
+            }
+        }
+    }
+    
+    // Create new texture if we couldn't use existing one
+    if (!surfaceSuccess)
+    {
+        // Clean up any surface we might have retrieved
+        SAFERELEASE(surface);
+        
+        // Release previous texture resources
+        desc->Flags &= ~CKRST_TEXTURE_VALID;
+        SAFERELEASE(desc->DxTexture);
+        SAFERELEASE(desc->DxRenderTexture);
+        desc->MipMapCount = 0;
+        
+        // Create appropriate texture type
+        if (cubemap)
+        {
+            hr = m_Device->CreateCubeTexture(
+                desc->Format.Width, 
+                1, 
+                D3DUSAGE_RENDERTARGET, 
+                m_PresentParams.BackBufferFormat,
+                D3DPOOL_DEFAULT, 
+                &desc->DxCubeTexture, 
+                NULL
+            );
+            
+            if (FAILED(hr))
+            {
+                desc->Flags &= ~CKRST_TEXTURE_VALID;
+                SAFERELEASE(m_DefaultBackBuffer);
+                SAFERELEASE(m_DefaultDepthBuffer);
+                return FALSE;
+            }
+            
+            hr = desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, 0, &surface);
+            if (FAILED(hr) || !surface)
+            {
+                desc->Flags &= ~CKRST_TEXTURE_VALID;
+                SAFERELEASE(desc->DxCubeTexture);
+                SAFERELEASE(m_DefaultBackBuffer);
+                SAFERELEASE(m_DefaultDepthBuffer);
+                return FALSE;
+            }
+        }
+        else
+        {
+            hr = m_Device->CreateTexture(
+                desc->Format.Width, 
+                desc->Format.Height, 
+                1, 
+                D3DUSAGE_RENDERTARGET,
+                m_PresentParams.BackBufferFormat, 
+                D3DPOOL_DEFAULT, 
+                &desc->DxTexture, 
+                NULL
+            );
+            
+            if (FAILED(hr))
+            {
+                desc->Flags &= ~CKRST_TEXTURE_VALID;
+                SAFERELEASE(m_DefaultBackBuffer);
+                SAFERELEASE(m_DefaultDepthBuffer);
+                return FALSE;
+            }
+            
+            hr = m_Device->CreateTexture(
+                desc->Format.Width, 
+                desc->Format.Height, 
+                1, 
+                D3DUSAGE_RENDERTARGET,
+                m_PresentParams.BackBufferFormat, 
+                D3DPOOL_DEFAULT, 
+                &desc->DxRenderTexture, 
+                NULL
+            );
+            
+            if (FAILED(hr))
+            {
+                SAFERELEASE(desc->DxTexture);
+                desc->Flags &= ~CKRST_TEXTURE_VALID;
+                SAFERELEASE(m_DefaultBackBuffer);
+                SAFERELEASE(m_DefaultDepthBuffer);
+                return FALSE;
+            }
+            
+            hr = desc->DxRenderTexture->GetSurfaceLevel(0, &surface);
+            if (FAILED(hr) || !surface)
+            {
+                SAFERELEASE(desc->DxTexture);
+                SAFERELEASE(desc->DxRenderTexture);
+                desc->Flags &= ~CKRST_TEXTURE_VALID;
+                SAFERELEASE(m_DefaultBackBuffer);
+                SAFERELEASE(m_DefaultDepthBuffer);
+                return FALSE;
             }
         }
     }
 
-    desc->Flags &= ~CKRST_TEXTURE_VALID;
-    SAFERELEASE(desc->DxTexture);
-    SAFERELEASE(desc->DxRenderTexture);
-    desc->MipMapCount = 0;
-
-    if (cubemap)
-    {
-        hr = m_Device->CreateCubeTexture(desc->Format.Width, 1, D3DUSAGE_RENDERTARGET, m_PresentParams.BackBufferFormat,
-                                         D3DPOOL_DEFAULT, &desc->DxCubeTexture, NULL);
-        if (FAILED(hr))
-        {
-            desc->Flags &= ~CKRST_TEXTURE_VALID;
-            SAFERELEASE(m_DefaultBackBuffer);
-            return FALSE;
-        }
-    }
-    else
-    {
-        hr = m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, 1, D3DUSAGE_RENDERTARGET,
-                                     m_PresentParams.BackBufferFormat, D3DPOOL_DEFAULT, &desc->DxTexture, NULL);
-        if (FAILED(hr))
-        {
-            desc->Flags &= ~CKRST_TEXTURE_VALID;
-            SAFERELEASE(m_DefaultBackBuffer);
-            return FALSE;
-        }
-
-        hr = m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, 1, D3DUSAGE_RENDERTARGET,
-                                     m_PresentParams.BackBufferFormat, D3DPOOL_DEFAULT, &desc->DxRenderTexture, NULL);
-        assert(SUCCEEDED(hr));
-    }
-
-    IDirect3DSurface9 *surface = NULL;
-    if (cubemap)
-    {
-        hr = desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, 0, &surface);
-        assert(SUCCEEDED(hr));
-    }
-    else
-    {
-        hr = desc->DxRenderTexture->GetSurfaceLevel(0, &surface);
-        assert(SUCCEEDED(hr));
-    }
-
+    // Get appropriate depth buffer
     IDirect3DSurface9 *zbuffer = GetTempZBuffer(desc->Format.Width, desc->Format.Height);
+    
+    // Set render target and depth buffer
     hr = m_Device->SetRenderTarget(0, surface);
-    SAFERELEASE(surface);
-    if (FAILED(hr))
+    if (SUCCEEDED(hr))
     {
+        // Set the depth-stencil surface if available
+        if (zbuffer)
+        {
+            m_Device->SetDepthStencilSurface(zbuffer);
+        }
+        
+        // Update texture properties
+        D3DFormatToTextureDesc(m_PresentParams.BackBufferFormat, desc);
+        desc->Flags &= ~CKRST_TEXTURE_MANAGED;
+        desc->Flags |= CKRST_TEXTURE_VALID | CKRST_TEXTURE_RENDERTARGET;
+        
+        if (cubemap)
+            desc->Flags |= CKRST_TEXTURE_CUBEMAP;
+            
+        m_CurrentTextureIndex = TextureObject;
+        SAFERELEASE(surface);
+        return TRUE;
+    }
+    else
+    {
+        // Failed to set render target, clean up
         desc->Flags &= ~CKRST_TEXTURE_VALID;
+        SAFERELEASE(surface);
         SAFERELEASE(m_DefaultBackBuffer);
         SAFERELEASE(m_DefaultDepthBuffer);
         return FALSE;
     }
-
-    D3DFormatToTextureDesc(m_PresentParams.BackBufferFormat, desc);
-    desc->Flags &= ~CKRST_TEXTURE_MANAGED;
-    desc->Flags |= CKRST_TEXTURE_VALID | CKRST_TEXTURE_RENDERTARGET;
-    if (cubemap)
-        desc->Flags |= CKRST_TEXTURE_CUBEMAP;
-
-    m_CurrentTextureIndex = TextureObject;
-    return TRUE;
 }
 
 CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *dst)
