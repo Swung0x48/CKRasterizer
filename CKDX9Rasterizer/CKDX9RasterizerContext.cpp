@@ -1010,35 +1010,93 @@ CKBOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 #if LOGGING && LOG_SETTEXTURE
     fprintf(stderr, "settexture %d %d\n", Texture, Stage);
 #endif
-    HRESULT hr = E_FAIL;
-    CKDX9TextureDesc *desc = NULL;
-    if (Texture != 0 && Texture < m_Textures.Size() &&
-        (desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture])) != NULL && desc->DxTexture != NULL)
+    if (Stage < 0 || Stage >= m_Driver->m_3DCaps.MaxNumberTextureStage)
+        return FALSE;
+
+    if (!m_Device)
+        return FALSE;
+
+    HRESULT hr = S_OK;
+
+    // Case 1: Disabling a texture or using an invalid texture
+    if (Texture == 0 || Texture >= m_Textures.Size() || m_Textures[Texture] == NULL ||
+        !(m_Textures[Texture]->Flags & CKRST_TEXTURE_VALID))
     {
-        hr = m_Device->SetTexture(Stage, desc->DxTexture);
-        if (Stage == 0)
+        // Disable texture for this stage
+        hr = m_Device->SetTexture(Stage, NULL);
+
+        // Stage 0 needs special default settings when texture is removed
+        if (SUCCEEDED(hr) && Stage == 0)
         {
-            m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
-            m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
-            m_Device->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_CURRENT);
-            m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
-            m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
-            m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_CURRENT);
+            // Disable texturing, use diffuse color
+            hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+            if (SUCCEEDED(hr))
+                hr = m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_DIFFUSE);
+
+            if (SUCCEEDED(hr))
+                hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+
+            if (SUCCEEDED(hr))
+                hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
         }
+
+        return SUCCEEDED(hr);
+    }
+
+    // Case 2: Setting a valid texture
+    CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture]);
+
+    // Check if we have a valid texture surface
+    if (!desc->DxTexture)
+        return FALSE;
+
+    // Set the texture based on its type
+    if (desc->Flags & CKRST_TEXTURE_CUBEMAP)
+    {
+        hr = m_Device->SetTexture(Stage, desc->DxCubeTexture);
+    }
+    else if (desc->Flags & CKRST_TEXTURE_VOLUMEMAP)
+    {
+        hr = m_Device->SetTexture(Stage, desc->DxVolumeTexture);
     }
     else
     {
-        hr = m_Device->SetTexture(Stage, NULL);
-        if (Stage == 0)
-        {
-            m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
-            m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_DIFFUSE);
-            m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
-            m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
-        }
+        hr = m_Device->SetTexture(Stage, desc->DxTexture);
     }
 
-    return SUCCEEDED(hr);
+    if (FAILED(hr))
+        return FALSE;
+
+    // Default stage setup for stage 0 (modulation which is most common)
+    if (Stage == 0)
+    {
+        // Default to modulation (texture * vertex color)
+        hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+        if (FAILED(hr))
+            return FALSE;
+
+        hr = m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+        if (FAILED(hr))
+            return FALSE;
+
+        hr = m_Device->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_CURRENT);
+        if (FAILED(hr))
+            return FALSE;
+
+        hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
+        if (FAILED(hr))
+            return FALSE;
+
+        hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+        if (FAILED(hr))
+            return FALSE;
+
+        hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_CURRENT);
+        if (FAILED(hr))
+            return FALSE;
+    }
+
+    return TRUE;
 }
 
 CKBOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
