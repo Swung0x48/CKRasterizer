@@ -363,6 +363,8 @@ public:
     LPDIRECT3DVERTEXBUFFER9 m_CurrentVertexBufferCache;
     CKDWORD m_CurrentVertexSizeCache;
 
+    CKDWORD m_CurrentPixelShaderCache;
+
     XBitArray m_StateCacheHitMask;
     XBitArray m_StateCacheMissMask;
 

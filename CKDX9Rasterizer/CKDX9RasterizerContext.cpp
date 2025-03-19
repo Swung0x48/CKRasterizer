@@ -103,6 +103,7 @@ CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver *driver) :
     m_CurrentVertexFormatCache(0),
     m_CurrentVertexBufferCache(NULL),
     m_CurrentVertexSizeCache(0),
+    m_CurrentPixelShaderCache(0),
     m_StateCacheHitMask(),
     m_StateCacheMissMask(),
     m_Owner(NULL)
@@ -1270,34 +1271,108 @@ CKBOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAG
 
 CKBOOL CKDX9RasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
 {
+    // Handle the case of setting null shader (disabling programmable pipeline)
+    if (VShaderIndex == 0)
+    {
+        m_CurrentVertexShaderCache = 0;
+        m_CurrentVertexFormatCache = 0;
+        return SUCCEEDED(m_Device->SetVertexShader(NULL));
+    }
+
     if (VShaderIndex >= m_VertexShaders.Size())
         return FALSE;
 
-    CKVertexShaderDesc *desc = m_VertexShaders[VShaderIndex];
+    // Get and validate shader descriptor
+    CKDX9VertexShaderDesc *desc = static_cast<CKDX9VertexShaderDesc *>(m_VertexShaders[VShaderIndex]);
+    if (!desc || !desc->DxShader)
+        return FALSE;
+
+    // Cache current shader for optimizing redundant calls
+    if (m_CurrentVertexShaderCache == VShaderIndex)
+        return TRUE; // Already set
+
+    // Update caches
     m_CurrentVertexShaderCache = VShaderIndex;
     m_CurrentVertexFormatCache = 0;
-    return desc != NULL;
+
+    // Actually set the shader on the device
+    return SUCCEEDED(m_Device->SetVertexShader(desc->DxShader));
 }
 
 CKBOOL CKDX9RasterizerContext::SetPixelShader(CKDWORD PShaderIndex)
 {
+    // Handle the case of setting null shader (disabling programmable pipeline)
+    if (PShaderIndex == 0)
+    {
+        if (m_CurrentPixelShaderCache == 0)
+            return TRUE; // Already disabled
+
+        m_CurrentPixelShaderCache = 0;
+        return SUCCEEDED(m_Device->SetPixelShader(NULL));
+    }
+
     if (PShaderIndex >= m_PixelShaders.Size())
         return FALSE;
 
+    // Get and validate shader
     CKDX9PixelShaderDesc *desc = static_cast<CKDX9PixelShaderDesc *>(m_PixelShaders[PShaderIndex]);
-    if (!desc)
+    if (!desc || !desc->DxShader)
         return FALSE;
 
+    // Cache current shader for optimizing redundant calls
+    if (m_CurrentPixelShaderCache == PShaderIndex)
+        return TRUE; // Already set
+
+    // Update cache and set shader
+    m_CurrentPixelShaderCache = PShaderIndex;
     return SUCCEEDED(m_Device->SetPixelShader(desc->DxShader));
 }
 
 CKBOOL CKDX9RasterizerContext::SetVertexShaderConstant(CKDWORD Register, const void *Data, CKDWORD CstCount)
 {
+    if (!Data || CstCount == 0)
+        return FALSE;
+
+    // Check register bounds (typical DX9 limit is 256 constants)
+    if (Register + CstCount > 256)
+        return FALSE;
+
+    // Safe casting - ensure alignment requirement for float data
+    if ((reinterpret_cast<uintptr_t>(Data) & 0x3) != 0)
+    {
+        // Data is not properly aligned for float
+        // Consider creating an aligned copy before setting
+        float *alignedData = new float[CstCount * 4];
+        memcpy(alignedData, Data, CstCount * 4 * sizeof(float));
+        HRESULT hr = m_Device->SetVertexShaderConstantF(Register, alignedData, CstCount);
+        delete[] alignedData;
+        return SUCCEEDED(hr);
+    }
+
     return SUCCEEDED(m_Device->SetVertexShaderConstantF(Register, static_cast<const float *>(Data), CstCount));
 }
 
 CKBOOL CKDX9RasterizerContext::SetPixelShaderConstant(CKDWORD Register, const void *Data, CKDWORD CstCount)
 {
+    if (!Data || CstCount == 0)
+        return FALSE;
+
+    // Check register bounds (typical DX9 limit is 224 constants for PS)
+    if (Register + CstCount > 224)
+        return FALSE;
+
+    // Safe casting - ensure alignment requirement for float data
+    if ((reinterpret_cast<uintptr_t>(Data) & 0x3) != 0)
+    {
+        // Data is not properly aligned for float
+        // Consider creating an aligned copy before setting
+        float *alignedData = new float[CstCount * 4];
+        memcpy(alignedData, Data, CstCount * 4 * sizeof(float));
+        HRESULT hr = m_Device->SetPixelShaderConstantF(Register, alignedData, CstCount);
+        delete[] alignedData;
+        return SUCCEEDED(hr);
+    }
+
     return SUCCEEDED(m_Device->SetPixelShaderConstantF(Register, static_cast<const float *>(Data), CstCount));
 }
 
@@ -4747,6 +4822,7 @@ void CKDX9RasterizerContext::ClearStreamCache()
     m_CurrentVertexSizeCache = 0;
     m_CurrentVertexFormatCache = 0;
     m_CurrentVertexShaderCache = 0;
+    m_CurrentPixelShaderCache = 0;
 
     // Reset device stream sources if device is available
     if (m_Device)
