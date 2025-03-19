@@ -24,6 +24,29 @@ static int vbbat = 0;
 static int vbibbat = 0;
 #endif
 
+static inline CKDWORD GetMsb(CKDWORD num, CKDWORD max)
+{
+#define OPERAND_SIZE (sizeof(CKDWORD) * 8)
+    CKDWORD i = OPERAND_SIZE - 1;
+#ifdef WIN32
+    __asm
+    {
+        mov eax, num
+        bsr eax, eax
+        mov i, eax
+    }
+#else
+    if (num != 0)
+        while (!(num & (1 << (OPERAND_SIZE - 1))))
+        {
+            num <<= 1;
+            --i;
+        }
+#endif
+    return (i > max) ? max : i;
+#undef OPERAND_SIZE
+}
+
 CKBOOL CKDX9VertexShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format)
 {
     if (!Ctx || !Ctx->m_Device)
@@ -4447,33 +4470,93 @@ CKBOOL CKDX9RasterizerContext::LoadSurface(const D3DSURFACE_DESC &ddsd, const D3
     }
 }
 
-#pragma warning(disable : 4035)
-
-_inline unsigned long GetMSB(unsigned long data)
-{
-    _asm
-    {
-        mov eax,data
-        bsr eax,eax
-    }
-}
-
-#pragma warning(default : 4035)
-
 LPDIRECT3DSURFACE9 CKDX9RasterizerContext::GetTempZBuffer(int Width, int Height)
 {
-    CKDWORD index = GetMSB(Height) << 4 | GetMSB(Width);
-    if (index > 0xFF)
+    // Validate inputs and device
+    if (Width <= 0 || Height <= 0 || !m_Device)
         return NULL;
 
+    // Find appropriate power-of-two dimensions to use as index
+    int widthPow2 = 1;
+    while (widthPow2 < Width)
+        widthPow2 <<= 1;
+
+    int heightPow2 = 1;
+    while (heightPow2 < Height)
+        heightPow2 <<= 1;
+
+    // Calculate index in z-buffer array
+    // Use most significant bits for a more evenly distributed index
+    CKDWORD widthLog2 = 0;
+    CKDWORD heightLog2 = 0;
+
+    // Calculate log2 of width and height
+    if (widthPow2 > 1)
+        widthLog2 = GetMsb(widthPow2, 15); // Limit to 4 bits (0-15)
+
+    if (heightPow2 > 1)
+        heightLog2 = GetMsb(heightPow2, 15); // Limit to 4 bits (0-15)
+
+    // Combine into a single index (4 bits width, 4 bits height)
+    CKDWORD index = (heightLog2 << 4) | widthLog2;
+
+    // Ensure index is within bounds
+    if (index >= NBTEMPZBUFFER)
+    {
+        // If index too big, use the largest buffer (at index NBTEMPZBUFFER-1)
+        index = NBTEMPZBUFFER - 1;
+    }
+
+    // Check if we already have a buffer at this index
     LPDIRECT3DSURFACE9 surface = m_TempZBuffers[index];
     if (surface)
-        return surface;
+    {
+        // Verify surface is compatible
+        D3DSURFACE_DESC desc;
+        if (SUCCEEDED(surface->GetDesc(&desc)) && desc.Width >= Width && desc.Height >= Height)
+        {
+            // Buffer is large enough, reuse it
+            return surface;
+        }
 
-    if (FAILED(m_Device->CreateDepthStencilSurface(Width, Height, m_PresentParams.AutoDepthStencilFormat,
-                                                   D3DMULTISAMPLE_NONE, 0, TRUE, &surface, NULL)))
-        return NULL;
+        // Not compatible - release existing buffer
+        SAFERELEASE(m_TempZBuffers[index]);
+    }
 
-    m_TempZBuffers[index] = surface;
-    return surface;
+    // Create a new Z-buffer - use at least the requested dimensions
+    HRESULT hr = m_Device->CreateDepthStencilSurface(
+        widthPow2, heightPow2,
+        m_PresentParams.AutoDepthStencilFormat,
+        m_PresentParams.MultiSampleType, 
+        m_PresentParams.MultiSampleQuality,
+        TRUE, // Discard lock hint for better performance
+        &m_TempZBuffers[index],
+        NULL);
+    if (FAILED(hr))
+    {
+        // Try again with no multisampling
+        hr = m_Device->CreateDepthStencilSurface(
+            widthPow2, heightPow2,
+            m_PresentParams.AutoDepthStencilFormat,
+            D3DMULTISAMPLE_NONE, 
+            0,
+            TRUE,
+            &m_TempZBuffers[index],
+            NULL);
+
+        if (FAILED(hr))
+        {
+            // Final attempt with a known supported depth format
+            hr = m_Device->CreateDepthStencilSurface(
+                widthPow2, heightPow2,
+                D3DFMT_D24S8, // Widely supported format
+                D3DMULTISAMPLE_NONE,
+                0,
+                TRUE,
+                &m_TempZBuffers[index],
+                NULL);
+        }
+    }
+
+    return (SUCCEEDED(hr)) ? m_TempZBuffers[index] : NULL;
 }
