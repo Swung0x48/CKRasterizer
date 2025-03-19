@@ -1475,7 +1475,10 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
 
     HRESULT hr = m_Device->GetRenderTarget(0, &m_DefaultBackBuffer);
     if (FAILED(hr) || !m_DefaultBackBuffer)
+    {
+        SAFERELEASE(m_DefaultBackBuffer);
         return FALSE;
+    }
 
     hr = m_Device->GetDepthStencilSurface(&m_DefaultDepthBuffer);
     if (FAILED(hr) || !m_DefaultDepthBuffer)
