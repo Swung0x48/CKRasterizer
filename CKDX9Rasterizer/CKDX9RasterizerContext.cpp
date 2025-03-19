@@ -3389,96 +3389,170 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 
 CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat)
 {
-    if (!DesiredFormat)
+    if (!DesiredFormat || !m_Device)
         return FALSE;
 
+    if (Texture >= m_Textures.Size())
+        return FALSE;
+
+    // Adjust mipmap count (1 means no mipmaps)
     if (DesiredFormat->MipMapCount == 1)
         DesiredFormat->MipMapCount = 0;
 
+    // Get driver and determine appropriate texture format
     CKDX9RasterizerDriver *driver = static_cast<CKDX9RasterizerDriver *>(m_Driver);
+    if (!driver)
+        return FALSE;
 
-    D3DFORMAT format = driver->FindNearestTextureFormat(DesiredFormat, m_PresentParams.BackBufferFormat, D3DUSAGE_DYNAMIC);
+    // Determine usage flags
+    DWORD usage = 0;
+    if (DesiredFormat->Flags & CKRST_TEXTURE_HINTPROCEDURAL)
+        usage |= D3DUSAGE_DYNAMIC;
+    if (DesiredFormat->Flags & CKRST_TEXTURE_RENDERTARGET)
+        usage |= D3DUSAGE_RENDERTARGET;
+
+    // Find appropriate format for the texture
+    D3DFORMAT format = driver->FindNearestTextureFormat(DesiredFormat, m_PresentParams.BackBufferFormat, usage);
     if (format == D3DFMT_UNKNOWN)
         format = D3DFMT_A8R8G8B8;
 
+    // Calculate dimensions based on hardware capabilities
     int width = DesiredFormat->Format.Width;
     int height = DesiredFormat->Format.Height;
-
     CKDWORD flags = DesiredFormat->Flags;
     CKDWORD textureCaps = driver->m_3DCaps.TextureCaps;
+
+    // Power of 2 adjustment if required
     if ((textureCaps & CKRST_TEXTURECAPS_POW2) != 0)
     {
-        int n;
-        for (n = 1; n < width; n *= 2)
-            continue;
+        // Find next power of 2 for width
+        int n = 1;
+        while (n < width)
+            n <<= 1;
         width = n;
 
-        for (n = 1; n < height; n *= 2)
-            continue;
+        // Find next power of 2 for height
+        n = 1;
+        while (n < height)
+            n <<= 1;
         height = n;
     }
 
+    // Square texture adjustment if required
     if (((flags & CKRST_TEXTURE_CUBEMAP) != 0 || (textureCaps & CKRST_TEXTURECAPS_SQUAREONLY) != 0) && width != height)
     {
-        if (width <= height)
-            width = height;
-        else
-            height = width;
+        // Make dimensions square by taking the larger value
+        width = height = max(width, height);
     }
 
-    if (width < driver->m_3DCaps.MinTextureWidth)
-        width = driver->m_3DCaps.MinTextureWidth;
-    if (width > driver->m_3DCaps.MaxTextureWidth)
-        width = driver->m_3DCaps.MaxTextureWidth;
-    if (height < driver->m_3DCaps.MinTextureHeight)
-        height = driver->m_3DCaps.MinTextureHeight;
-    if (height > driver->m_3DCaps.MaxTextureHeight)
-        height = driver->m_3DCaps.MaxTextureHeight;
+    // Clamp dimensions to hardware limits
+    width = max(width, driver->m_3DCaps.MinTextureWidth);
+    width = min(width, driver->m_3DCaps.MaxTextureWidth);
+    height = max(height, driver->m_3DCaps.MinTextureHeight);
+    height = min(height, driver->m_3DCaps.MaxTextureHeight);
 
-    UINT levels = DesiredFormat->MipMapCount != 0 ? DesiredFormat->MipMapCount : 1;
-    D3DPOOL pool = (flags & CKRST_TEXTURE_MANAGED) != 0 ? D3DPOOL_MANAGED : D3DPOOL_DEFAULT;
+    // Determine mipmap levels and memory pool
+    UINT levels = DesiredFormat->MipMapCount != 0 ? DesiredFormat->MipMapCount + 1 : 1;
 
-    if ((flags & CKRST_TEXTURE_CUBEMAP) == 0)
+    // Choose appropriate memory pool
+    D3DPOOL pool;
+    if (usage & D3DUSAGE_RENDERTARGET)
     {
-        IDirect3DTexture9 *pTexture = NULL;
-        if (FAILED(m_Device->CreateTexture(width, height, levels, 0, format, pool, &pTexture, NULL)))
-            return FALSE;
-
-        D3DSURFACE_DESC surfaceDesc = {};
-        pTexture->GetLevelDesc(0, &surfaceDesc);
-
-        CKDX9TextureDesc *desc = (CKDX9TextureDesc *)m_Textures[Texture];
-        if (desc)
-            delete desc;
-        desc = new CKDX9TextureDesc;
-        desc->DxTexture = pTexture;
-        D3DFormatToTextureDesc(surfaceDesc.Format, desc);
-        desc->Flags = DesiredFormat->Flags;
-        desc->Format.Width = surfaceDesc.Width;
-        desc->Format.Height = surfaceDesc.Height;
-        desc->MipMapCount = pTexture->GetLevelCount() - 1;
-        m_Textures[Texture] = desc;
+        pool = D3DPOOL_DEFAULT; // Render targets must be in default pool
+    }
+    else if (flags & CKRST_TEXTURE_MANAGED)
+    {
+        pool = D3DPOOL_MANAGED; // Managed textures
     }
     else
     {
+        pool = D3DPOOL_DEFAULT; // Default for other textures
+    }
+
+    // Release existing texture if present to prevent memory leaks
+    CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture]);
+    if (desc)
+    {
+        delete desc;
+        desc = NULL;
+        m_Textures[Texture] = NULL;
+    }
+
+    // Create new texture descriptor
+    desc = new CKDX9TextureDesc();
+    if (!desc)
+        return FALSE;
+
+    HRESULT hr = S_OK;
+    BOOL success = FALSE;
+
+    // Create regular texture or cube texture based on flags
+    if ((flags & CKRST_TEXTURE_CUBEMAP) == 0)
+    {
+        // Create regular 2D texture
+        IDirect3DTexture9 *pTexture = NULL;
+        hr = m_Device->CreateTexture(width, height, levels, usage, format, pool, &pTexture, NULL);
+
+        if (SUCCEEDED(hr) && pTexture)
+        {
+            // Get texture properties
+            D3DSURFACE_DESC surfaceDesc = {};
+            hr = pTexture->GetLevelDesc(0, &surfaceDesc);
+            if (SUCCEEDED(hr))
+            {
+                // Set texture descriptor properties
+                desc->DxTexture = pTexture;
+                D3DFormatToTextureDesc(surfaceDesc.Format, desc);
+                desc->Flags = flags;
+                desc->Format.Width = surfaceDesc.Width;
+                desc->Format.Height = surfaceDesc.Height;
+                desc->MipMapCount = pTexture->GetLevelCount() - 1;
+                m_Textures[Texture] = desc;
+                success = TRUE;
+            }
+            else
+            {
+                // Failed to get level description
+                SAFERELEASE(pTexture);
+            }
+        }
+    }
+    else
+    {
+        // Create cube texture
         IDirect3DCubeTexture9 *pCubeTexture = NULL;
-        if (FAILED(m_Device->CreateCubeTexture(width, levels, 0, format, pool, &pCubeTexture, NULL)))
-            return FALSE;
+        hr = m_Device->CreateCubeTexture(width, levels, usage, format, pool, &pCubeTexture, NULL);
+        if (SUCCEEDED(hr) && pCubeTexture)
+        {
+            // Get texture properties
+            D3DSURFACE_DESC surfaceDesc = {};
+            hr = pCubeTexture->GetLevelDesc(0, &surfaceDesc);
 
-        D3DSURFACE_DESC surfaceDesc = {};
-        pCubeTexture->GetLevelDesc(0, &surfaceDesc);
+            if (SUCCEEDED(hr))
+            {
+                // Set texture descriptor properties
+                desc->DxCubeTexture = pCubeTexture;
+                D3DFormatToTextureDesc(surfaceDesc.Format, desc);
+                desc->Flags = flags | CKRST_TEXTURE_CUBEMAP; // Ensure flag is set
+                desc->Format.Width = surfaceDesc.Width;
+                desc->Format.Height = surfaceDesc.Height;
+                desc->MipMapCount = pCubeTexture->GetLevelCount() - 1;
+                m_Textures[Texture] = desc;
+                success = TRUE;
+            }
+            else
+            {
+                // Failed to get level description
+                SAFERELEASE(pCubeTexture);
+            }
+        }
+    }
 
-        CKDX9TextureDesc *desc = (CKDX9TextureDesc *)m_Textures[Texture];
-        if (desc)
-            delete desc;
-        desc = new CKDX9TextureDesc;
-        desc->DxCubeTexture = pCubeTexture;
-        D3DFormatToTextureDesc(surfaceDesc.Format, desc);
-        desc->Flags = DesiredFormat->Flags;
-        desc->Format.Width = surfaceDesc.Width;
-        desc->Format.Height = surfaceDesc.Height;
-        desc->MipMapCount = pCubeTexture->GetLevelCount() - 1;
-        m_Textures[Texture] = desc;
+    // Clean up on failure
+    if (!success)
+    {
+        delete desc;
+        return FALSE;
     }
 
     return TRUE;
