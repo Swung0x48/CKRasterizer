@@ -2653,7 +2653,7 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
         CKDX9VertexShaderDesc *desc = (CKDX9VertexShaderDesc *)m_VertexShaders[m_CurrentVertexShaderCache];
         if (desc->DxShader)
         {
-            IDirect3DVertexDeclaration9 *pDecl = nullptr;
+            IDirect3DVertexDeclaration9 *pDecl = NULL;
 
             auto it = m_VertexDeclarations.Find(VFormat);
             if (it != m_VertexDeclarations.End())
@@ -2964,7 +2964,7 @@ CKBOOL CKDX9RasterizerContext::CreateVertexDeclaration(CKDWORD VFormat, LPDIRECT
     if (FAILED(hr))
         return FALSE;
 
-    IDirect3DVertexDeclaration9 *pDecl = nullptr;
+    IDirect3DVertexDeclaration9 *pDecl = NULL;
     hr = m_Device->CreateVertexDeclaration(declarator, &pDecl);
     if (FAILED(hr))
         return FALSE;
