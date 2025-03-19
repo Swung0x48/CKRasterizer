@@ -1,6 +1,5 @@
 #include "CKDX9Rasterizer.h"
 
-#include <intrin.h>
 #include <CKContext.h>
 
 static const D3DFORMAT TextureFormats[] = {
@@ -46,6 +45,17 @@ static const D3DFORMAT TextureFormats[] = {
     D3DFMT_DXT4,
     D3DFMT_DXT5
 };
+
+inline unsigned int popcount(unsigned int x)
+{
+    unsigned int count = 0;
+    while (x)
+    {
+        count += x & 1;
+        x >>= 1;
+    }
+    return count;
+}
 
 CKDX9RasterizerDriver::CKDX9RasterizerDriver(CKDX9Rasterizer *rst) { m_Owner = rst; }
 
@@ -261,23 +271,23 @@ D3DFORMAT CKDX9RasterizerDriver::FindNearestTextureFormat(CKTextureDesc *desc, D
         }
     }
 
-    auto origFormat = TextureDescToD3DFormat(desc);
+    D3DFORMAT origFormat = TextureDescToD3DFormat(desc);
     if (IsTextureFormatOk(origFormat, AdapterFormat, Usage))
         return origFormat;
 
     CKTextureDesc *best = NULL;
     unsigned int bestdiff = ~0U;
-    for (auto i = m_TextureFormats.Begin(); i != m_TextureFormats.End(); ++i)
+    for (XArray<CKTextureDesc>::Iterator it = m_TextureFormats.Begin(); it != m_TextureFormats.End(); ++it)
     {
-        auto diff = (abs(i->Format.BitsPerPixel - desc->Format.BitsPerPixel) << 4) +
-            __popcnt(i->Format.AlphaMask ^ desc->Format.AlphaMask) +
-            __popcnt(i->Format.RedMask ^ desc->Format.RedMask) +
-            __popcnt(i->Format.GreenMask ^ desc->Format.GreenMask) +
-            __popcnt(i->Format.BlueMask ^ desc->Format.BlueMask);
+        unsigned int diff = (abs(it->Format.BitsPerPixel - desc->Format.BitsPerPixel) << 4) +
+            popcount(it->Format.AlphaMask ^ desc->Format.AlphaMask) +
+            popcount(it->Format.RedMask ^ desc->Format.RedMask) +
+            popcount(it->Format.GreenMask ^ desc->Format.GreenMask) +
+            popcount(it->Format.BlueMask ^ desc->Format.BlueMask);
         if (diff < bestdiff)
         {
             bestdiff = diff;
-            best = i;
+            best = it;
         }
     }
     if (best)
