@@ -922,65 +922,86 @@ CKBOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMa
 
 CKBOOL CKDX9RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
+    if (State >= VXRENDERSTATE_MAXSTATE)
+        return FALSE;
+
+    // Check if this state is locked or disabled
     if (m_StateCache[State].Flags != 0)
         return TRUE;
 
+    // Cache hit check
     if (m_StateCache[State].Valid && m_StateCache[State].Value == Value)
     {
         ++m_RenderStateCacheHit;
         return TRUE;
     }
 
+    // Cache miss
     ++m_RenderStateCacheMiss;
     m_StateCache[State].Value = Value;
     m_StateCache[State].Valid = TRUE;
 
+    // Check if this state is in the miss mask (states to ignore)
     if (State < m_StateCacheMissMask.Size() && m_StateCacheMissMask.IsSet(State))
         return FALSE;
 
+    // Check if this state is in the hit mask (states with special handling)
     if (State < m_StateCacheHitMask.Size() && m_StateCacheHitMask.IsSet(State))
     {
-        static D3DCULL VXCullModes[4] = {D3DCULL_NONE, D3DCULL_NONE, D3DCULL_CW, D3DCULL_CCW};
-        static D3DCULL VXCullModesInverted[4] = {D3DCULL_NONE, D3DCULL_NONE, D3DCULL_CCW, D3DCULL_CW};
+        static const D3DCULL VXCullModes[4] = {D3DCULL_NONE, D3DCULL_NONE, D3DCULL_CW, D3DCULL_CCW};
+        static const D3DCULL VXCullModesInverted[4] = {D3DCULL_NONE, D3DCULL_NONE, D3DCULL_CCW, D3DCULL_CW};
 
         if (State == VXRENDERSTATE_CULLMODE)
         {
-            if (!m_InverseWinding)
-                return SUCCEEDED(m_Device->SetRenderState(D3DRS_CULLMODE, VXCullModes[Value]));
-            else
-                return SUCCEEDED(m_Device->SetRenderState(D3DRS_CULLMODE, VXCullModesInverted[Value]));
+            if (Value >= 4)
+                Value = 0; // Default to VXCULL_NONE
+            return SUCCEEDED(m_Device->SetRenderState(D3DRS_CULLMODE, m_InverseWinding ? VXCullModesInverted[Value] : VXCullModes[Value]));
         }
         if (State == VXRENDERSTATE_INVERSEWINDING)
         {
             m_InverseWinding = Value != 0;
+            // Invalidate cull mode since it depends on inverse winding
             m_StateCache[VXRENDERSTATE_CULLMODE].Valid = FALSE;
         }
         return TRUE;
     }
+
+    if (!m_Device)
+        return FALSE;
+
+    // Set the actual state in D3D (using translated values if needed)
+    // CKDWORD translatedValue = Value;
+    // if (m_TranslatedRenderStates[State])
+    //     translatedValue = m_TranslatedRenderStates[State][Value];
 
     return SUCCEEDED(m_Device->SetRenderState((D3DRENDERSTATETYPE)State, Value));
 }
 
 CKBOOL CKDX9RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *Value)
 {
+    if (!Value || State >= VXRENDERSTATE_MAXSTATE)
+        return FALSE;
+
+    // If the cache is valid, return the cached value
     if (m_StateCache[State].Valid)
     {
         *Value = m_StateCache[State].Value;
         return TRUE;
     }
-    else
+
+    // Special handling for INVERSEWINDING which is handled internally
+    if (State == VXRENDERSTATE_INVERSEWINDING)
     {
-        *Value = m_StateCache[State].DefaultValue;
-        if (State == VXRENDERSTATE_INVERSEWINDING)
-        {
-            *Value = m_InverseWinding;
-            return TRUE;
-        }
-        else
-        {
-            return FALSE;
-        }
+        *Value = m_InverseWinding;
+        return TRUE;
     }
+
+    // For states that are in the StateCacheHitMask but don't have special handling in SetRenderState,
+    // we need to add them here if needed
+
+    // Return default value for any other state
+    *Value = m_StateCache[State].DefaultValue;
+    return FALSE;
 }
 
 CKBOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
