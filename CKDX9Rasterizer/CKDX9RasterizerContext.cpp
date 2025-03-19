@@ -2517,7 +2517,7 @@ int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buf
     BYTE *srcData = img_desc.Image;
 
     // Calculate proper row size (no partial copy needed)
-    UINT rowSize = min(img_desc.BytesPerLine, (UINT)lockedRect.Pitch);
+    UINT rowSize = min(img_desc.BytesPerLine, lockedRect.Pitch);
 
     // Copy each row
     for (UINT y = 0; y < img_desc.Height; ++y)
@@ -2537,7 +2537,7 @@ int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buf
     }
 
     // Define source and destination rectangles for copying to back buffer
-    RECT srcRect = {0, 0, min(img_desc.Width, (UINT)destWidth), min(img_desc.Height, (UINT)destHeight)};
+    RECT srcRect = {0, 0, min(img_desc.Width, destWidth), min(img_desc.Height, destHeight)};
     POINT destPoint = {left, top};
 
     // Copy from temporary surface to back buffer
