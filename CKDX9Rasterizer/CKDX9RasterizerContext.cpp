@@ -89,15 +89,39 @@ CKBOOL CKDX9PixelShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKPixelShaderDe
 CKDX9PixelShaderDesc::~CKDX9PixelShaderDesc() { SAFERELEASE(DxShader); }
 
 CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver *driver) :
-    CKRasterizerContext(), m_Device(NULL), m_PresentParams(), m_DirectXData(), m_SoftwareVertexProcessing(FALSE),
-    m_CurrentTextureIndex(0), m_IndexBuffer(), m_DefaultBackBuffer(NULL), m_DefaultDepthBuffer(NULL),
-    m_InCreateDestroy(TRUE), m_ScreenBackup(NULL), m_CurrentVertexShaderCache(0), m_CurrentVertexFormatCache(0),
-    m_CurrentVertexBufferCache(NULL), m_CurrentVertexSizeCache(0), m_TranslatedRenderStates(), m_TempZBuffers()
+    CKRasterizerContext(),
+    m_Device(NULL),
+    m_PresentParams(),
+    m_DirectXData(),
+    m_SoftwareVertexProcessing(FALSE),
+    m_CurrentTextureIndex(0),
+    m_DefaultBackBuffer(NULL),
+    m_DefaultDepthBuffer(NULL),
+    m_InCreateDestroy(TRUE),
+    m_ScreenBackup(NULL),
+    m_CurrentVertexShaderCache(0),
+    m_CurrentVertexFormatCache(0),
+    m_CurrentVertexBufferCache(NULL),
+    m_CurrentVertexSizeCache(0),
+    m_StateCacheHitMask(),
+    m_StateCacheMissMask(),
+    m_Owner(NULL)
 {
-    assert(driver != NULL);
+    if (!driver)
+    {
+        return; // Early return in case driver is null
+    }
+
+    // Set driver and owner
     m_Driver = driver;
     m_Owner = static_cast<CKDX9Rasterizer *>(driver->m_Owner);
 
+    // Initialize arrays
+    memset(m_IndexBuffer, 0, sizeof(m_IndexBuffer));
+    memset(m_TranslatedRenderStates, 0, sizeof(m_TranslatedRenderStates));
+    memset(m_TempZBuffers, 0, sizeof(m_TempZBuffers));
+
+    // Initialize state block arrays
     memset(m_TextureMinFilterStateBlocks, 0, sizeof(m_TextureMinFilterStateBlocks));
     memset(m_TextureMagFilterStateBlocks, 0, sizeof(m_TextureMagFilterStateBlocks));
     memset(m_TextureMapBlendStateBlocks, 0, sizeof(m_TextureMapBlendStateBlocks));
@@ -105,16 +129,65 @@ CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver *driver) :
 
 CKDX9RasterizerContext::~CKDX9RasterizerContext()
 {
+    // Set flag to prevent recursive calls during destruction
+    m_InCreateDestroy = TRUE;
+
+    // If we're the fullscreen context, clear the reference
+    if (m_Owner && m_Owner->m_FullscreenContext == this)
+        m_Owner->m_FullscreenContext = NULL;
+
+    // Release anything bound to the device
+    if (m_Device)
+    {
+        // End scene if it was active
+        EndScene();
+
+        // Clear all texture stages
+        for (int i = 0; i < 8; i++)
+        {
+            m_Device->SetTexture(i, NULL);
+        }
+
+        // Clear index buffer binding
+        m_Device->SetIndices(NULL);
+
+        // Clear vertex stream bindings
+        for (UINT i = 0; i < 8; i++)
+        {
+            m_Device->SetStreamSource(i, NULL, 0, 0);
+        }
+
+        // Clear shader bindings
+        m_Device->SetVertexShader(NULL);
+        m_Device->SetPixelShader(NULL);
+
+        // Clear render target binding
+        if (m_DefaultBackBuffer)
+        {
+            m_Device->SetRenderTarget(0, m_DefaultBackBuffer);
+        }
+    }
+
+    // Free state-specific resources
     ReleaseStateBlocks();
     ReleaseIndexBuffers();
-    FlushObjects(CKRST_OBJ_ALL);
+
+    // Release temporary and cached resources
+    ReleaseTempZBuffers();
     ReleaseScreenBackup();
     ReleaseVertexDeclarations();
+
+    // Release major objects
+    FlushObjects(CKRST_OBJ_ALL);
+
+    // Release device-specific resources
     SAFERELEASE(m_DefaultBackBuffer);
     SAFERELEASE(m_DefaultDepthBuffer);
-    if (m_Owner->m_FullscreenContext == this)
-        m_Owner->m_FullscreenContext = NULL;
+
+    // Finally release the device itself
     SAFERELEASE(m_Device);
+
+    m_InCreateDestroy = FALSE;
 }
 
 int DepthBitPerPixelFromFormat(D3DFORMAT Format, CKDWORD *StencilSize)
