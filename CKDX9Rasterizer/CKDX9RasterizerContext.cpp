@@ -2585,21 +2585,25 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
     if (!desc || !desc->DxCubeTexture)
         return FALSE;
 
+    // Skip loading render targets since they're managed differently
     if ((desc->Flags & CKRST_TEXTURE_RENDERTARGET) != 0)
         return TRUE;
 
+    // Ensure this is actually a cube map texture
     if ((desc->Flags & CKRST_TEXTURE_CUBEMAP) == 0)
         return FALSE;
 
-    HRESULT hr;
-
+    // Determine the actual mipmap level to load
     int actualMipLevel = (miplevel < 0) ? 0 : miplevel;
+
+    // Get surface description for the specified mipmap level
     D3DSURFACE_DESC surfaceDesc;
-    hr = desc->DxCubeTexture->GetLevelDesc(actualMipLevel, &surfaceDesc);
-    assert(SUCCEEDED(hr));
+    HRESULT hr = desc->DxCubeTexture->GetLevelDesc(actualMipLevel, &surfaceDesc);
+    if (FAILED(hr))
+        return FALSE;
 
-    IDirect3DSurface9 *pSurface = NULL;
 
+    // Path 1: DXTn compressed textures using D3DX helper functions
     if ((surfaceDesc.Format == D3DFMT_DXT1 ||
         surfaceDesc.Format == D3DFMT_DXT2 ||
         surfaceDesc.Format == D3DFMT_DXT3 ||
@@ -2607,46 +2611,82 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
         surfaceDesc.Format == D3DFMT_DXT5) &&
         (D3DXLoadSurfaceFromSurface && D3DXLoadSurfaceFromMemory))
     {
+        // Get the cube map face surface
         IDirect3DSurface9 *pCubeMapSurface = NULL;
-        desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, actualMipLevel, &pCubeMapSurface);
-        if (!pCubeMapSurface)
+        hr = desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, actualMipLevel, &pCubeMapSurface);
+        if (FAILED(hr) || !pCubeMapSurface)
             return FALSE;
 
-        RECT srcRect{0, 0, SurfDesc.Height, SurfDesc.Width};
+        // Set up source rectangle with correct dimensions
+        RECT srcRect = {0, 0, (LONG)SurfDesc.Width, (LONG)SurfDesc.Height};
+
+        // Convert source format
         VX_PIXELFORMAT vxpf = VxImageDesc2PixelFormat(SurfDesc);
         D3DFORMAT format = VxPixelFormatToD3DFormat(vxpf);
-        hr = D3DXLoadSurfaceFromMemory(pCubeMapSurface, NULL, NULL, SurfDesc.Image, format, SurfDesc.BytesPerLine, NULL, &srcRect, D3DX_FILTER_LINEAR, 0);
-        assert(SUCCEEDED(hr));
 
+        // Load data from memory to surface
+        hr = D3DXLoadSurfaceFromMemory(pCubeMapSurface, NULL, NULL, SurfDesc.Image, format, SurfDesc.BytesPerLine, NULL, &srcRect, D3DX_FILTER_LINEAR, 0);
+        if (FAILED(hr))
+        {
+            SAFERELEASE(pCubeMapSurface);
+            return FALSE;
+        }
+
+        // Generate mipmaps if needed
         CKDWORD mipMapCount = m_Textures[Texture]->MipMapCount;
         if (miplevel == -1 && mipMapCount > 0)
         {
+            // Create all mipmap levels from the loaded surface
             for (int i = 1; i < mipMapCount + 1; ++i)
             {
-                desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, i, &pSurface);
-                hr = D3DXLoadSurfaceFromSurface(pSurface, NULL, NULL, pCubeMapSurface, NULL, NULL, D3DX_FILTER_BOX, 0);
-                assert(SUCCEEDED(hr));
-                SAFERELEASE(pCubeMapSurface);
+                IDirect3DSurface9 *pMipSurface = NULL;
+                hr = desc->DxCubeTexture->GetCubeMapSurface((D3DCUBEMAP_FACES)Face, i, &pMipSurface);
+                if (FAILED(hr) || !pMipSurface)
+                {
+                    SAFERELEASE(pCubeMapSurface);
+                    return FALSE;
+                }
+
+                // Create mipmap using box filter
+                hr = D3DXLoadSurfaceFromSurface(pMipSurface, NULL, NULL, pCubeMapSurface, NULL, NULL, D3DX_FILTER_BOX, 0);
+
+                // Clean up mip surface regardless of result
+                SAFERELEASE(pMipSurface);
+
+                if (FAILED(hr))
+                {
+                    SAFERELEASE(pCubeMapSurface);
+                    return FALSE;
+                }
             }
         }
-        else
-        {
-            pSurface = pCubeMapSurface;
-        }
 
-        SAFERELEASE(pSurface);
-        return SUCCEEDED(hr);
+        // Clean up and return
+        SAFERELEASE(pCubeMapSurface);
+        return TRUE;
     }
 
+    // Path 2: Manual texture loading and mipmap generation
+    // Create a copy of the source image data
     VxImageDescEx src = SurfDesc;
     VxImageDescEx dst;
-    if (miplevel != -1 || desc->MipMapCount == 0)
-        pSurface = NULL;
     CKBYTE *image = NULL;
+    CKBOOL needsCleanup = FALSE;
 
-    if (pSurface)
+    // Generate mipmaps if requested
+    CKBOOL generateMipmaps = (miplevel == -1 && desc->MipMapCount > 0);
+
+    // Allocate temporary buffer for mipmap generation if needed
+    if (generateMipmaps)
     {
+        // Allocate memory for image processing
         image = m_Owner->AllocateObjects(surfaceDesc.Width * surfaceDesc.Height);
+        if (!image)
+            return FALSE;
+
+        needsCleanup = TRUE;
+
+        // If source dimensions don't match texture dimensions, resize
         if (surfaceDesc.Width != src.Width || surfaceDesc.Height != src.Height)
         {
             dst.Width = src.Width;
@@ -2658,51 +2698,74 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
             dst.GreenMask = G_MASK;
             dst.BlueMask = B_MASK;
             dst.Image = image;
+
+            // Blit the source image to our working buffer
             VxDoBlit(src, dst);
             src = dst;
         }
     }
 
+    // Lock and load base level
     D3DLOCKED_RECT lockRect;
     hr = desc->DxCubeTexture->LockRect((D3DCUBEMAP_FACES)Face, actualMipLevel, &lockRect, NULL, 0);
     if (FAILED(hr))
+    {
+        // Clean up on failure
         return FALSE;
+    }
 
+    // Copy data to texture
     LoadSurface(surfaceDesc, lockRect, src);
 
+    // Unlock base level
     hr = desc->DxCubeTexture->UnlockRect((D3DCUBEMAP_FACES)Face, actualMipLevel);
-    assert(SUCCEEDED(hr));
+    if (FAILED(hr))
+    {
+        return FALSE;
+    }
 
-    if (pSurface)
+    // Generate and load mipmaps if needed
+    if (generateMipmaps && image)
     {
         dst = src;
+
+        // For each mipmap level
         for (int i = 1; i < desc->MipMapCount + 1; ++i)
         {
+            // Generate next mipmap level
             VxGenerateMipMap(dst, image);
 
+            // Halve dimensions for next mipmap
             if (dst.Width > 1)
                 dst.Width >>= 1;
             if (dst.Height > 1)
                 dst.Height >>= 1;
+
+            // Update stride for new dimensions
             dst.BytesPerLine = 4 * dst.Width;
             dst.Image = image;
 
-            desc->DxCubeTexture->GetLevelDesc(i, &surfaceDesc);
-
-            hr = desc->DxCubeTexture->LockRect((D3DCUBEMAP_FACES)Face, i, &lockRect, NULL, NULL);
+            // Get destination surface description
+            hr = desc->DxCubeTexture->GetLevelDesc(i, &surfaceDesc);
             if (FAILED(hr))
-            {
-                SAFERELEASE(pSurface);
-                return FALSE;
-            }
+                return TRUE; // Return success for levels we managed to create
 
+            // Lock the mipmap level
+            hr = desc->DxCubeTexture->LockRect((D3DCUBEMAP_FACES)Face, i, &lockRect, NULL, 0);
+            if (FAILED(hr))
+                return TRUE; // Return success for levels we managed to create
+
+            // Copy data to mipmap level
             LoadSurface(surfaceDesc, lockRect, dst);
 
+            // Unlock the mipmap level
             hr = desc->DxCubeTexture->UnlockRect((D3DCUBEMAP_FACES)Face, i);
-            assert(SUCCEEDED(hr));
+            if (FAILED(hr))
+                return TRUE; // Return success for levels we managed to create
 
-            if (dst.Width <= 1)
-                return TRUE;
+            // Stop if we've reached 1x1 texture
+            if (dst.Width <= 1 && dst.Height <= 1)
+                break;
         }
     }
 
