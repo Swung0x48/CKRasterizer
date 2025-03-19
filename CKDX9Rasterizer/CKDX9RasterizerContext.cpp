@@ -3730,7 +3730,7 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
     ZoneScopedN(__FUNCTION__);
 #endif
 
-    if (!m_Device)
+    if (!m_Device || !Buffer || VSize == 0)
         return;
 
     HRESULT hr = S_OK;
@@ -3746,7 +3746,7 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
         {
             // Look for existing vertex declaration
             IDirect3DVertexDeclaration9 *pDecl = NULL;
-            auto it = m_VertexDeclarations.Find(VFormat);
+            XNHashTable<LPDIRECT3DVERTEXDECLARATION9, DWORD>::Iterator it = m_VertexDeclarations.Find(VFormat);
 
             // Use cached declaration if found
             if (it != m_VertexDeclarations.End())
@@ -3754,16 +3754,10 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
                 pDecl = *it;
             }
             // Otherwise create a new one
-            else
+            else if (CreateVertexDeclaration(VFormat, &pDecl) && pDecl)
             {
-                if (CreateVertexDeclaration(VFormat, &pDecl))
-                {
-                    // Store for future use if successful
-                    if (pDecl)
-                    {
-                        m_VertexDeclarations.Insert(VFormat, pDecl);
-                    }
-                }
+                // Store for future use if successful
+                m_VertexDeclarations.Insert(VFormat, pDecl);
             }
 
             // If we have a valid declaration, set up the programmable pipeline
@@ -3788,29 +3782,33 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
     // Fall back to fixed function pipeline if needed
     if (useFixedPipeline)
     {
-        // Reset shader state
-        m_CurrentVertexShaderCache = 0;
+        // Only reset shader if we're not already in fixed-function mode
+        if (m_CurrentVertexShaderCache != 0)
+        {
+            // Reset shader state
+            m_CurrentVertexShaderCache = 0;
+
+            // Disable programmable vertex shader
+            hr = m_Device->SetVertexShader(NULL);
+            if (FAILED(hr))
+            {
+                // If we can't disable the shader, we're in trouble
+                return;
+            }
+        }
 
         // Update format cache if needed
         if (VFormat != m_CurrentVertexFormatCache)
         {
             m_CurrentVertexFormatCache = VFormat;
-        }
 
-        // Disable programmable vertex shader
-        hr = m_Device->SetVertexShader(NULL);
-        if (FAILED(hr))
-        {
-            // If we can't disable the shader, we're in trouble
-            return;
-        }
-
-        // Set Fixed Function Vertex Format (FVF)
-        hr = m_Device->SetFVF(m_CurrentVertexFormatCache);
-        if (FAILED(hr))
-        {
-            // Log error or handle failure
-            return;
+            // Set Fixed Function Vertex Format (FVF)
+            hr = m_Device->SetFVF(m_CurrentVertexFormatCache);
+            if (FAILED(hr))
+            {
+                // Log error or handle failure
+                return;
+            }
         }
     }
 
