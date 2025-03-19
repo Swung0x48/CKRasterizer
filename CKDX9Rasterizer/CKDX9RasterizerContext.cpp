@@ -533,9 +533,20 @@ CKBOOL CKDX9RasterizerContext::BeginScene()
     if (m_SceneBegined)
         return TRUE;
 
+    if (!m_Device)
+        return FALSE;
+
+    // Begin the scene
     HRESULT hr = m_Device->BeginScene();
-    m_SceneBegined = TRUE;
-    return SUCCEEDED(hr);
+    if (SUCCEEDED(hr))
+    {
+        m_SceneBegined = TRUE;
+        return TRUE;
+    }
+    else
+    {
+        return FALSE;
+    }
 }
 
 CKBOOL CKDX9RasterizerContext::EndScene()
@@ -543,7 +554,17 @@ CKBOOL CKDX9RasterizerContext::EndScene()
     if (!m_SceneBegined)
         return TRUE;
 
+    if (!m_Device)
+    {
+        // Force consistency even without a valid device
+        m_SceneBegined = FALSE;
+        return FALSE;
+    }
+
+    // End the scene
     HRESULT hr = m_Device->EndScene();
+    // Update scene state regardless of success/failure
+    // This ensures state consistency even if EndScene fails
     m_SceneBegined = FALSE;
     return SUCCEEDED(hr);
 }
