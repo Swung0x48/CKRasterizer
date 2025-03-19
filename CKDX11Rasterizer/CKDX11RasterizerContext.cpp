@@ -749,7 +749,7 @@ CKBOOL CKDX11RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxM
 }
 CKBOOL CKDX11RasterizerContext::SetRenderState(VXRENDERSTATETYPE State, CKDWORD Value)
 {
-    if (m_StateCache[State].Flag)
+    if (m_StateCache[State].Flags)
         return TRUE;
 
     if (m_StateCache[State].Valid && m_StateCache[State].Value == Value)
@@ -1876,10 +1876,9 @@ CKBOOL CKDX11RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect *Src, VxRe
 {
     return CKRasterizerContext::CopyToTexture(Texture, Src, Dest, Face);
 }
-CKBOOL CKDX11RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, int Height, CKRST_CUBEFACE Face,
-                                                 CKBOOL GenerateMipMap)
+CKBOOL CKDX11RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, int Height, CKRST_CUBEFACE Face)
 {
-    return CKRasterizerContext::SetTargetTexture(TextureObject, Width, Height, Face, GenerateMipMap);
+    return CKRasterizerContext::SetTargetTexture(TextureObject, Width, Height, Face);
 }
 CKBOOL CKDX11RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *dst)
 {

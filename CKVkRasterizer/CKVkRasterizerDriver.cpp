@@ -23,14 +23,6 @@ CKRasterizerContext *CKVkRasterizerDriver::CreateContext() {
     return context;
 }
 
-bool operator==(const VxDisplayMode& a, const VxDisplayMode& b)
-{
-    return a.Bpp == b.Bpp &&
-        a.Width == b.Width &&
-        a.Height == b.Height &&
-        a.RefreshRate == b.RefreshRate;
-}
-
 CKBOOL CKVkRasterizerDriver::InitializeCaps()
 {
     DEVMODEA dm;

@@ -6,7 +6,7 @@ Custom rasterizers for Virtools.
 
 | Project  | Description | Status |
 | -------- | ----------- | ------ |
-| CKDX9Rasterizer | DirectX 8 Rasterizer bundled with Virtools 2.1.0.14 reverse engineered and ported to DirectX 9 with Direct3D 9Ex support. | Mostly complete |
+| CKDX9Rasterizer | DirectX 8 Rasterizer bundled with Virtools 2.1.0.14 reverse engineered and ported to DirectX 9 with Direct3D 9Ex support. | Complete |
 | CKGLRasterizer | OpenGL Rasterizer targeting OpenGL 4.3+ built from ground up (*) | Feature complete for running _Ballance_, ~90% feature complete for general use. Not yet optimized. |
 | CKDX11Rasterizer | DirectX 11 Rasterizer with DXGI 1.5+ AllowTearing feature adaptively enabled to eliminate present latency | Feature mostly complete for running _Ballance_. Minor details differs from fixed pipeline DirectX 8/9 rasterizer. Not yet optimized (by any means!). |
 | CkVkRasterizer | (Work in progress) | Textured object rendering |

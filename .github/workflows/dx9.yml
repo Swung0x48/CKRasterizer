@@ -19,7 +19,7 @@ on:
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
-  CMAKE_ARGS: -DVIRTOOLS_SDK_FETCH_FROM_GIT=ON -DTRACY_ENABLE=OFF -A Win32
+  CMAKE_ARGS: -DVIRTOOLS_SDK_FETCH_FROM_GIT=ON -DUSE_D3D9EX=OFF -DTRACY_ENABLE=OFF -A Win32
 
 jobs:
   build-dx9:
@@ -29,28 +29,18 @@ jobs:
       VENDOR_ROOT: ${{github.workspace}}/vendor
       PROJECT_NAME: CKDX9Rasterizer
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - uses: lukka/get-cmake@latest
+      - name: Setup MSVC
+        uses: TheMrMilchmann/setup-msvc-dev@v3.0.0
+        with:
+          arch: x86
 
-      - name: Fetch git submodules
-        run: git submodule update --init --recursive --remote
-
-      - name:  Config DXSDK path env var
-        run:   echo "DXSDK_DIR=${{env.VENDOR_ROOT}}/DXSDK" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Download and setup DXSDK
-        run:  |
-              curl -L https://download.microsoft.com/download/a/e/7/ae743f1f-632b-4809-87a9-aa1bb3458e31/DXSDK_Jun10.exe -o _DX2010_.exe
-              7z x _DX2010_.exe DXSDK/Include -o_DX2010_
-              7z x _DX2010_.exe DXSDK/Lib/x86 -o_DX2010_
-              mv _DX2010_/DXSDK "${{env.VENDOR_ROOT}}/DXSDK"
-              rm -fR _DX*_ _DX*_.exe
-        shell: bash
-
-      # Setup MSVC command prompt environment vars
-      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
 
       - name: Configure CMake
         run: cmake -B ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build -S ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ${{env.CMAKE_ARGS}}
@@ -64,7 +54,7 @@ jobs:
         run: ctest -C ${{env.BUILD_TYPE}}
 
       - name: Release Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4.3.3
         with:
           name: ${{env.PROJECT_NAME}}
           path: ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build/${{env.BUILD_TYPE}}

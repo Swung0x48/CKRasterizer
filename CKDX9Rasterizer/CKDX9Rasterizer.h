@@ -1,37 +1,36 @@
 #ifndef CKRASTERIZERDX9_H
-#define CKRASTERIZERDX9_H "$Id:$"
-/*************************************************************************/
-/*	File : CKDX9Rasterizer.h											 */
-/*	Author : Romain Sididris											 */
-/*																		 */
-/*	+ Direct X 9 Rasterizer declaration									 */
-/*	+ Some methods of these classes are already implemented in the 		 */
-/*	CKRasterizerLib	library	as they are common to all rasterizers		 */
-/*																		 */
-/*	Virtools SDK 														 */
-/*	Copyright (c) Virtools 2004, All Rights Reserved.					 */
-/*************************************************************************/
-
-typedef void TexFromFile;
-// Ensure we are using correct DirectDraw version
-#define NBTEMPZBUFFER 256
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-
-#define _NOD3DX
+#define CKRASTERIZERDX9_H
 
 #ifdef _DEBUG
 #define D3D_DEBUG_INFO
 #endif
 
-#include "d3d9.h"
-#include "d3dx9.h"
-// DDraw is included here only to get the Total Video memory and Free Video Memory
-#include "ddraw.h"
+#include <d3d9.h>
 
-#include "CKRasterizer.h"
 #include "XBitArray.h"
+#include "XNHashTable.h"
+#include "CKRasterizer.h"
+
+#ifdef TRACY_ENABLE
 #include "tracy/Tracy.hpp"
+#endif
+
+#define NBTEMPZBUFFER 256
+
+struct TexFromFile
+{
+    VX_PIXELFORMAT Format;
+    int MipLevels;
+    CKDWORD ColorKey; // 0 : No Color Key, 0xFFRRGGBB (R,G,B) color Key
+    CKBOOL IsDynamic;
+};
+
+struct VisibleSpriteTexture
+{
+    CKSPRTextInfo *Texture;
+    int VertexIndex;
+    CKDWORD TextureId;
+};
 
 //---Implemented in CKDX9PixelFormatUtils.cpp :
 
@@ -43,33 +42,31 @@ void D3DFormatToTextureDesc(D3DFORMAT ddpf, CKTextureDesc *desc);
 
 //------
 
-extern CKContext *rst_ckctx;
-
 class CKDX9RasterizerDriver;
 class CKDX9RasterizerContext;
 class CKDX9Rasterizer;
 
-typedef BOOL (*SetDXRenderStateFunc)(CKDX9RasterizerContext *ctx, CKDWORD Value);
-typedef BOOL (*GetDXRenderStateFunc)(CKDX9RasterizerContext *ctx, CKDWORD *Value);
+typedef CKBOOL (*SetDXRenderStateFunc)(CKDX9RasterizerContext *ctx, CKDWORD Value);
+typedef CKBOOL (*GetDXRenderStateFunc)(CKDX9RasterizerContext *ctx, CKDWORD *Value);
 
-#define PREPAREDXSTRUCT(x)                                                                                             \
-    {                                                                                                                  \
-        memset(&x, 0, sizeof(x));                                                                                      \
-        x.dwSize = sizeof(x);                                                                                          \
+#define PREPAREDXSTRUCT(x)        \
+    {                             \
+        memset(&x, 0, sizeof(x)); \
+        x.dwSize = sizeof(x);     \
     }
-#define SAFERELEASE(x)                                                                                                 \
-    {                                                                                                                  \
-        if (x)                                                                                                         \
-            x->Release();                                                                                              \
-        x = NULL;                                                                                                      \
+#define SAFERELEASE(x)    \
+    {                     \
+        if (x)            \
+            x->Release(); \
+        x = NULL;         \
     }
-#define SAFELASTRELEASE(x)                                                                                             \
-    {                                                                                                                  \
-        int refCount = 0;                                                                                              \
-        if (x)                                                                                                         \
-            refCount = x->Release();                                                                                   \
-        x = NULL;                                                                                                      \
-        XASSERT(refCount == 0);                                                                                        \
+#define SAFELASTRELEASE(x)           \
+    {                                \
+        int refCount = 0;            \
+        if (x)                       \
+            refCount = x->Release(); \
+        x = NULL;                    \
+        XASSERT(refCount == 0);      \
     }
 
 // Store texture operation required to perform blending between two texture stages
@@ -100,7 +97,7 @@ public:
     LPDIRECT3DTEXTURE9 DxRenderTexture;
     //----- For non managed surface to be locked (DX9 does not support direct locking anymore)
     LPDIRECT3DSURFACE9 DxLockedSurface;
-    DWORD LockedFlags;
+    CKDWORD LockedFlags;
 
 public:
     CKDX9TextureDesc()
@@ -108,6 +105,7 @@ public:
         DxTexture = NULL;
         DxRenderTexture = NULL;
         DxLockedSurface = NULL;
+        LockedFlags = 0;
     }
     ~CKDX9TextureDesc()
     {
@@ -151,15 +149,14 @@ typedef struct CKDX9VertexShaderDesc : public CKVertexShaderDesc
 public:
     LPDIRECT3DVERTEXSHADER9 DxShader;
     CKDX9RasterizerContext *Owner;
-    XArray<BYTE> m_FunctionData;
 
 public:
-    BOOL Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format);
+    CKBOOL Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format);
     virtual ~CKDX9VertexShaderDesc();
     CKDX9VertexShaderDesc()
     {
-        DxShader = 0;
-        Owner = 0;
+        DxShader = NULL;
+        Owner = NULL;
     }
 } CKDX9VertexShaderDesc;
 
@@ -173,12 +170,12 @@ public:
     CKDX9RasterizerContext *Owner;
 
 public:
-    BOOL Create(CKDX9RasterizerContext *Ctx, CKDWORD *Function);
+    CKBOOL Create(CKDX9RasterizerContext *Ctx, CKPixelShaderDesc *Format);
     virtual ~CKDX9PixelShaderDesc();
     CKDX9PixelShaderDesc()
     {
-        DxShader = 0;
-        Owner = 0;
+        DxShader = NULL;
+        Owner = NULL;
     }
 
 } CKDX9PixelShaderDesc;
@@ -190,7 +187,7 @@ class CKDX9RasterizerContext : public CKRasterizerContext
 {
 public:
     //--- Construction/destruction
-    CKDX9RasterizerContext();
+    CKDX9RasterizerContext(CKDX9RasterizerDriver *driver);
     virtual ~CKDX9RasterizerContext();
 
     //--- Creation
@@ -234,46 +231,52 @@ public:
     //--- Drawing
     virtual CKBOOL DrawPrimitive(VXPRIMITIVETYPE pType, CKWORD *indices, int indexcount, VxDrawPrimitiveData *data);
     virtual CKBOOL DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD VertexBuffer, CKDWORD StartIndex, CKDWORD VertexCount,
-                                   CKWORD *indices = NULL, int indexcount = NULL);
+                                   CKWORD *indices = NULL, int indexcount = 0);
     virtual CKBOOL DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
                                      CKDWORD VertexCount, CKDWORD StartIndex, int Indexcount);
 
     //--- Creation of Textures, Sprites and Vertex Buffer
     CKBOOL CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat) override;
 
+    //--- Textures
+    virtual CKBOOL LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel = -1);
+    virtual CKBOOL CopyToTexture(CKDWORD Texture, VxRect *Src, VxRect *Dest, CKRST_CUBEFACE Face = CKRST_CUBEFACE_XPOS);
+    //-- Sets the rendering to occur on a texture (reset the texture format to match )
+    virtual CKBOOL SetTargetTexture(CKDWORD TextureObject, int Width = 0, int Height = 0, CKRST_CUBEFACE Face = CKRST_CUBEFACE_XPOS);
+
+    //--- Sprites
+    virtual CKBOOL DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *dst);
+
     //--- Vertex Buffers
     virtual void *LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount,
                                    CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockVertexBuffer(CKDWORD VB);
 
-    //--- Textures
-    virtual CKBOOL LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel = -1);
-    virtual CKBOOL CopyToTexture(CKDWORD Texture, VxRect *Src, VxRect *Dest, CKRST_CUBEFACE Face = CKRST_CUBEFACE_XPOS);
-    //-- Sets the rendering to occur on a texture (reset the texture format to match )
-    virtual CKBOOL SetTargetTexture(CKDWORD TextureObject, int Width = 0, int Height = 0,
-                                    CKRST_CUBEFACE Face = CKRST_CUBEFACE_XPOS, CKBOOL GenerateMipMap = FALSE);
-
-    //--- Sprites
-    virtual CKBOOL DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *dst);
-
-    //--- Utils
+    //--- Copy the content of this rendering context to a memory buffer	(CopyToMemoryBuffer)
+    //--- or Updates this rendering context with the content of a memory buffer	(CopyFromMemoryBuffer)
     virtual int CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc);
     virtual int CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, const VxImageDescEx &img_desc);
 
+    //-------------------------------------------------------------
+    //--- Each implementation can return here a pointer
+    //--- to a structure containing its specific data
     virtual void *GetImplementationSpecificData() { return &m_DirectXData; }
 
+    //--- For web content the render context can be transparent (no clear of back buffer but instead
+    //--- a copy of what is currently on screen)
+    virtual void SetTransparentMode(CKBOOL Trans);
+
+    //--- User Clip Plane Function
     virtual CKBOOL SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane &PlaneEquation);
     virtual CKBOOL GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane &PlaneEquation);
 
+    //--------- Load a cube map texture face
+    virtual CKBOOL LoadCubeMapTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, CKRST_CUBEFACE Face, int miplevel = -1);
+
+    //--- Index Buffers
     virtual void *LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount,
                                   CKRST_LOCKFLAGS Lock = CKRST_LOCK_DEFAULT);
     virtual CKBOOL UnlockIndexBuffer(CKDWORD IB);
-
-    //---------------------------------------------------------------------
-    //---- New methods to lock video memory (DX only)
-    //virtual CKBOOL LockTextureVideoMemory(CKDWORD Texture, VxImageDescEx &Desc, int MipLevel = 0,
-    //                                      VX_LOCKFLAGS Flags = VX_LOCK_DEFAULT);
-    //virtual CKBOOL UnlockTextureVideoMemory(CKDWORD Texture, int MipLevel = 0);
 
     //---- To Enable more direct creation of system objects	without
     //---- CK2_3D holding a copy of the texture
@@ -292,6 +295,7 @@ protected:
     CKBOOL CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat);
     CKBOOL CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat);
     CKBOOL CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat);
+    CKBOOL CreateVertexDeclaration(CKDWORD VFormat, LPDIRECT3DVERTEXDECLARATION9 *ppDecl);
 
     //---- Cleanup
     void FlushCaches();
@@ -300,10 +304,10 @@ protected:
     void ReleaseIndexBuffers();
     void ClearStreamCache();
     void ReleaseScreenBackup();
+    void ReleaseVertexDeclarations();
+
     CKDWORD DX9PresentInterval(DWORD PresentInterval);
-#ifdef _NOD3DX
     CKBOOL LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc);
-#endif
 
     //--- Temp Z-Buffers for texture rendering...
     void ReleaseTempZBuffers()
@@ -317,7 +321,12 @@ protected:
     LPDIRECT3DSURFACE9 GetTempZBuffer(int Width, int Height);
 
 public:
-    IDirect3DDevice9Ex *m_Device;
+#ifdef USE_D3D9EX
+    LPDIRECT3DDEVICE9EX m_Device;
+#else
+    LPDIRECT3DDEVICE9 m_Device;
+#endif
+    
     D3DPRESENT_PARAMETERS m_PresentParams;
     VxDirectXData m_DirectXData;
     CKBOOL m_SoftwareVertexProcessing;
@@ -366,6 +375,9 @@ public:
     // texture rendering
     LPDIRECT3DSURFACE9 m_TempZBuffers[NBTEMPZBUFFER];
 
+    XNHashTable<LPDIRECT3DVERTEXDECLARATION9, DWORD> m_VertexDeclarations;
+    XArray<VisibleSpriteTexture> m_VisibleSpriteTextures;
+
     CKDX9Rasterizer *m_Owner;
 };
 
@@ -381,10 +393,8 @@ public:
     //--- Contexts
     virtual CKRasterizerContext *CreateContext();
 
-    UINT BytesPerPixel(D3DFORMAT Format);
-
     CKBOOL InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType);
-    CKBOOL IsTextureFormatOk(D3DFORMAT TextureFormat, D3DFORMAT AdapterFormat, DWORD Usage = 0);
+	CKBOOL IsTextureFormatOk(D3DFORMAT TextureFormat, D3DFORMAT AdapterFormat, DWORD Usage = 0);
 
     D3DFORMAT FindNearestTextureFormat(CKTextureDesc *desc, D3DFORMAT AdapterFormat, DWORD Usage = 0);
     D3DFORMAT FindNearestRenderTargetFormat(int Bpp, CKBOOL Windowed);
@@ -392,7 +402,7 @@ public:
 
 private:
     CKBOOL CheckDeviceFormat(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
-    BOOL CheckDepthStencilMatch(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
+    CKBOOL CheckDepthStencilMatch(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
 
 public:
     CKBOOL m_Inited;
@@ -414,11 +424,15 @@ public:
     virtual ~CKDX9Rasterizer();
 
     virtual CKBOOL Start(WIN_HANDLE AppWnd);
-    virtual void Close(void);
+    virtual void Close();
 
 public:
     CKBOOL m_Init;
-    IDirect3D9Ex *m_D3D9;
+#ifdef USE_D3D9EX
+    LPDIRECT3D9EX m_D3D9;
+#else
+    LPDIRECT3D9 m_D3D9;
+#endif
 
     // Stage Blends
     void InitBlendStages();
