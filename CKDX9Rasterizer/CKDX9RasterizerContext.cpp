@@ -2802,42 +2802,132 @@ CKBOOL CKDX9RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 
 CKBOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char *Filename, TexFromFile *param)
 {
-    if (!Filename)
+    if (!Filename || !param)
+        return FALSE;
+        
+    if (Texture >= m_Textures.Size())
         return FALSE;
 
+    // Check if D3DX function is available
     if (!D3DXCreateTextureFromFileExA)
         return FALSE;
 
+    // Determine the texture format to use
     D3DFORMAT format = VxPixelFormatToD3DFormat(param->Format);
     if (format == D3DFMT_UNKNOWN)
         format = D3DFMT_A8R8G8B8;
 
-    int mipLevel = -1;
-    if (param->MipLevels == 0)
-        mipLevel = 1;
+    // Determine mipmap settings
+    UINT mipLevels = (param->MipLevels == 0) ? 1 : param->MipLevels;
 
+    // Determine filter settings based on mipmaps
+    DWORD filter = D3DX_FILTER_LINEAR;
+    DWORD mipFilter = (mipLevels > 1) ? D3DX_FILTER_BOX : D3DX_FILTER_NONE;
+
+    // Determine usage and pool based on dynamic flag
+    DWORD usage = 0;
+    D3DPOOL pool = D3DPOOL_MANAGED;
+
+    if (param->IsDynamic)
+    {
+        usage = D3DUSAGE_DYNAMIC;
+        pool = D3DPOOL_DEFAULT;
+    }
+
+    // Create the texture
     IDirect3DTexture9 *pTexture = NULL;
-    D3DXCreateTextureFromFileExA(m_Device, Filename, D3DX_DEFAULT, D3DX_DEFAULT, mipLevel, 0, format, D3DPOOL_DEFAULT,
-                                 D3DX_DEFAULT, D3DX_DEFAULT, param->ColorKey, NULL, NULL, &pTexture);
-    if (!pTexture)
+    HRESULT hr = D3DXCreateTextureFromFileExA(
+        m_Device,               // Device
+        Filename,               // Source file
+        D3DX_DEFAULT,           // Width (use file's width)
+        D3DX_DEFAULT,           // Height (use file's height)
+        mipLevels,              // Number of mipmap levels
+        usage,                  // Usage flags
+        format,                 // Pixel format
+        pool,                   // Memory pool
+        filter,                 // Filter for resizing if needed
+        mipFilter,              // Mipmap filter
+        param->ColorKey,        // Color key for transparency
+        NULL,                   // Source info (don't need)
+        NULL,                   // Palette (don't need)
+        &pTexture               // Result
+    );
+
+    if (FAILED(hr) || !pTexture)
         return FALSE;
 
-    HRESULT hr;
+    // Get texture information
     D3DSURFACE_DESC surfaceDesc = {};
     hr = pTexture->GetLevelDesc(0, &surfaceDesc);
-    assert(SUCCEEDED(hr));
+    if (FAILED(hr))
+    {
+        SAFERELEASE(pTexture);
+        return FALSE;
+    }
 
-    CKDX9TextureDesc *desc = (CKDX9TextureDesc *)m_Textures[Texture];
+    // Remove existing texture if any
+    CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture]);
     if (desc)
+    {
         delete desc;
+        desc = NULL;
+    }
 
-    desc = new CKDX9TextureDesc;
+    // Create and initialize new texture descriptor
+    desc = new CKDX9TextureDesc();
+    if (!desc)
+    {
+        SAFERELEASE(pTexture);
+        return FALSE;
+    }
+
+    // Set up the texture descriptor
     desc->DxTexture = pTexture;
     D3DFormatToTextureDesc(surfaceDesc.Format, desc);
-    desc->Flags = CKRST_TEXTURE_VALID | CKRST_TEXTURE_RGB;
+
+    // Set appropriate flags
+    CKDWORD flags = CKRST_TEXTURE_VALID | CKRST_TEXTURE_RGB;
+
+    // Check if the texture has alpha
+    D3DFORMAT actualFormat = surfaceDesc.Format;
+    if (actualFormat == D3DFMT_A8R8G8B8 || 
+        actualFormat == D3DFMT_A1R5G5B5 || 
+        actualFormat == D3DFMT_A4R4G4B4 ||
+        actualFormat == D3DFMT_A8B8G8R8 ||
+        actualFormat == D3DFMT_A16B16G16R16 ||
+        actualFormat == D3DFMT_A8P8 ||
+        actualFormat == D3DFMT_A8L8 ||
+        actualFormat == D3DFMT_A4L4 ||
+        actualFormat == D3DFMT_DXT2 ||
+        actualFormat == D3DFMT_DXT3 ||
+        actualFormat == D3DFMT_DXT4 ||
+        actualFormat == D3DFMT_DXT5)
+    {
+        flags |= CKRST_TEXTURE_ALPHA;
+    }
+
+    // Add dynamic flag if applicable
+    if (param->IsDynamic)
+    {
+        flags |= CKRST_TEXTURE_HINTPROCEDURAL;
+    }
+    else
+    {
+        flags |= CKRST_TEXTURE_HINTSTATIC;
+    }
+
+    // Add managed flag if applicable
+    if (pool == D3DPOOL_MANAGED)
+    {
+        flags |= CKRST_TEXTURE_MANAGED;
+    }
+
+    desc->Flags = flags;
     desc->Format.Width = surfaceDesc.Width;
     desc->Format.Height = surfaceDesc.Height;
     desc->MipMapCount = pTexture->GetLevelCount() - 1;
+
+    // Store the texture
     m_Textures[Texture] = desc;
 
     return TRUE;
