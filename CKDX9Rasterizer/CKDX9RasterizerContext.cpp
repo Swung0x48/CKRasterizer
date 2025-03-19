@@ -1101,6 +1101,11 @@ CKBOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 
 CKBOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
+    if (!m_Device || Stage < 0 || Stage >= m_Driver->m_3DCaps.MaxNumberTextureStage)
+        return FALSE;
+
+    HRESULT hr = S_OK;
+
     switch (Tss)
     {
         case CKRST_TSS_ADDRESS:
@@ -1126,7 +1131,7 @@ CKBOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAG
                 LPDIRECT3DSTATEBLOCK9 block = m_TextureMagFilterStateBlocks[Value][Stage];
                 if (block)
                 {
-                    HRESULT hr = block->Apply();
+                    hr = block->Apply();
 #if LOGGING && LOG_SETTEXURESTAGESTATE
                     fprintf(stderr, "Applying TextureMagFilterStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage, hr);
 #endif
@@ -1164,7 +1169,7 @@ CKBOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAG
                 LPDIRECT3DSTATEBLOCK9 block = m_TextureMinFilterStateBlocks[Value][Stage];
                 if (block)
                 {
-                    HRESULT hr = block->Apply();
+                    hr = block->Apply();
 #if LOGGING && LOG_SETTEXURESTAGESTATE
                     fprintf(stderr, "Applying TextureMinFilterStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage, hr);
 #endif
@@ -1235,7 +1240,7 @@ CKBOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAG
                 LPDIRECT3DSTATEBLOCK9 block = m_TextureMapBlendStateBlocks[Value][Stage];
                 if (block)
                 {
-                    HRESULT hr = block->Apply();
+                    hr = block->Apply();
 #if LOGGING && LOG_SETTEXURESTAGESTATE
                     fprintf(stderr, "Applying TextureMapBlendStateBlocks Value %d Stage %d -> 0x%x\n", Value, Stage, hr);
 #endif
