@@ -2854,14 +2854,41 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
 void *CKDX9RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
 {
     if (IB >= m_IndexBuffers.Size())
-        return FALSE;
+        return NULL;
 
     CKDX9IndexBufferDesc *ib = static_cast<CKDX9IndexBufferDesc *>(m_IndexBuffers[IB]);
     if (!ib || !ib->DxBuffer)
-        return FALSE;
+        return NULL;
 
+    // Validate StartIndex and IndexCount
+    if (StartIndex >= ib->m_MaxIndexCount)
+        return NULL;
+
+    if (IndexCount == 0 || StartIndex + IndexCount > ib->m_MaxIndexCount)
+        IndexCount = ib->m_MaxIndexCount - StartIndex;
+
+    // Convert CKRST_LOCKFLAGS to D3DLOCK flags
+    DWORD d3dLockFlags = 0;
+    switch (Lock)
+    {
+        case CKRST_LOCK_NOOVERWRITE:
+            d3dLockFlags = D3DLOCK_NOOVERWRITE;
+            break;
+        case CKRST_LOCK_DISCARD:
+            d3dLockFlags = D3DLOCK_DISCARD;
+            break;
+        default:
+            d3dLockFlags = 0; // Default lock
+            break;
+    }
+
+    // Calculate byte offset for 16-bit indices (2 bytes per index)
+    UINT offsetInBytes = StartIndex * 2;
+    UINT sizeInBytes = IndexCount * 2;
+
+    // Lock the buffer
     void *pIndices = NULL;
-    if (FAILED(ib->DxBuffer->Lock(StartIndex * 2, IndexCount * 2, &pIndices, Lock << 12)))
+    if (FAILED(ib->DxBuffer->Lock(offsetInBytes, sizeInBytes, &pIndices, d3dLockFlags)))
         return NULL;
 
     return pIndices;
