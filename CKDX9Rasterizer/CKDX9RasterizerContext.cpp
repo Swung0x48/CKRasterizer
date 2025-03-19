@@ -40,10 +40,7 @@ CKBOOL CKDX9VertexShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKVertexShader
     return SUCCEEDED(Ctx->m_Device->CreateVertexShader(m_Function, &DxShader));
 }
 
-CKDX9VertexShaderDesc::~CKDX9VertexShaderDesc()
-{
-    SAFERELEASE(DxShader);
-}
+CKDX9VertexShaderDesc::~CKDX9VertexShaderDesc() { SAFERELEASE(DxShader); }
 
 CKBOOL CKDX9PixelShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKPixelShaderDesc *Format)
 {
@@ -61,10 +58,7 @@ CKBOOL CKDX9PixelShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKPixelShaderDe
     return SUCCEEDED(Ctx->m_Device->CreatePixelShader(m_Function, &DxShader));
 }
 
-CKDX9PixelShaderDesc::~CKDX9PixelShaderDesc()
-{
-    SAFERELEASE(DxShader);
-}
+CKDX9PixelShaderDesc::~CKDX9PixelShaderDesc() { SAFERELEASE(DxShader); }
 
 CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver *driver) :
     CKRasterizerContext(), m_Device(NULL), m_PresentParams(), m_DirectXData(), m_SoftwareVertexProcessing(FALSE),
@@ -1563,7 +1557,7 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         }
 
         hr = m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, 1, D3DUSAGE_RENDERTARGET,
-                                    m_PresentParams.BackBufferFormat, D3DPOOL_DEFAULT, &desc->DxRenderTexture, NULL);
+                                     m_PresentParams.BackBufferFormat, D3DPOOL_DEFAULT, &desc->DxRenderTexture, NULL);
         assert(SUCCEEDED(hr));
     }
 
@@ -2356,7 +2350,7 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
         for (int i = 1; i < desc->MipMapCount + 1; ++i)
         {
             VxGenerateMipMap(dst, image);
-            
+
             if (dst.Width > 1)
                 dst.Width >>= 1;
             if (dst.Height > 1)
@@ -3061,10 +3055,7 @@ void CKDX9RasterizerContext::ClearStreamCache()
     m_CurrentVertexShaderCache = 0;
 }
 
-void CKDX9RasterizerContext::ReleaseScreenBackup()
-{
-    SAFERELEASE(m_ScreenBackup);
-}
+void CKDX9RasterizerContext::ReleaseScreenBackup() { SAFERELEASE(m_ScreenBackup); }
 
 void CKDX9RasterizerContext::ReleaseVertexDeclarations()
 {
