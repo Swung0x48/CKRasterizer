@@ -1630,102 +1630,78 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
     if (!sprite || sprite->Textures.IsEmpty())
         return FALSE;
 
-    // Quick boundary checks
-    if (src->GetWidth() <= 0.0f || src->right < 0.0f || sprite->Format.Width <= src->left ||
-        src->GetHeight() < 0.0f || src->bottom < 0.0f || sprite->Format.Height <= src->top ||
-        dst->GetWidth() <= 0.0f || dst->right < 0.0f || m_Width <= dst->left ||
-        dst->GetHeight() <= 0.0f || dst->bottom < 0.0f || m_Height <= dst->top)
+    // Quick boundary checks with early exit
+    if (src->GetWidth() <= 0.0f || src->GetHeight() <= 0.0f ||
+        dst->GetWidth() <= 0.0f || dst->GetHeight() <= 0.0f ||
+        src->right < 0.0f || src->bottom < 0.0f ||
+        sprite->Format.Width <= src->left || sprite->Format.Height <= src->top ||
+        dst->right < 0.0f || dst->bottom < 0.0f ||
+        m_Width <= dst->left || m_Height <= dst->top)
         return FALSE;
 
     // Begin scene if needed
     if (!m_SceneBegined)
         BeginScene();
 
-    // Set up rendering states
+    // Set up rendering states once (not per texture)
     HRESULT hr;
-    hr = m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
-    assert(SUCCEEDED(hr));
-    hr = m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
-    assert(SUCCEEDED(hr));
-    hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
-    assert(SUCCEEDED(hr));
-    hr = m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
-    assert(SUCCEEDED(hr));
-    hr = m_Device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-    assert(SUCCEEDED(hr));
-    hr = m_Device->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
-    assert(SUCCEEDED(hr));
-    hr = m_Device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
-    assert(SUCCEEDED(hr));
 
-    CKBOOL ret;
-    ret = SetRenderState(VXRENDERSTATE_ZWRITEENABLE, FALSE);
-    assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_TEXTUREPERSPECTIVE, FALSE);
-    assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_FILLMODE, VXFILL_SOLID);
-    assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_ZENABLE, FALSE);
-    assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_LIGHTING, FALSE);
-    assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_CULLMODE, VXCULL_NONE);
-    assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_WRAP0, 0);
-    assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_CLIPPING, FALSE);
-    assert(ret);
-    ret = SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, FALSE);
-    assert(ret);
+    // Save current render states to restore later
+    CKDWORD oldZEnable, oldZWriteEnable, oldLighting, oldCullMode;
+    GetRenderState(VXRENDERSTATE_ZENABLE, &oldZEnable);
+    GetRenderState(VXRENDERSTATE_ZWRITEENABLE, &oldZWriteEnable);
+    GetRenderState(VXRENDERSTATE_LIGHTING, &oldLighting);
+    GetRenderState(VXRENDERSTATE_CULLMODE, &oldCullMode);
 
-    // Set viewport
-    // Save current viewport
+    // Set up texture stage states once
+    m_Device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+    m_Device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+    m_Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+    m_Device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+    m_Device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+    m_Device->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+    m_Device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+
+    SetRenderState(VXRENDERSTATE_ZWRITEENABLE, FALSE);
+    SetRenderState(VXRENDERSTATE_TEXTUREPERSPECTIVE, FALSE);
+    SetRenderState(VXRENDERSTATE_FILLMODE, VXFILL_SOLID);
+    SetRenderState(VXRENDERSTATE_ZENABLE, FALSE);
+    SetRenderState(VXRENDERSTATE_LIGHTING, FALSE);
+    SetRenderState(VXRENDERSTATE_CULLMODE, VXCULL_NONE);
+    SetRenderState(VXRENDERSTATE_WRAP0, 0);
+    SetRenderState(VXRENDERSTATE_CLIPPING, FALSE);
+    SetRenderState(VXRENDERSTATE_ALPHABLENDENABLE, FALSE);
+
+    // Save original viewport
     D3DVIEWPORT9 oldViewport;
     m_Device->GetViewport(&oldViewport);
 
     // Set sprite viewport
     D3DVIEWPORT9 viewport = {0, 0, m_Width, m_Height, 0.0f, 1.0f};
-    hr = m_Device->SetViewport(&viewport);
-    assert(SUCCEEDED(hr));
+    m_Device->SetViewport(&viewport);
 
-    int visibleCount = 0;
-
-    // First scan: count visible textures
-    for (auto texture = sprite->Textures.Begin(); texture != sprite->Textures.End(); ++texture)
-    {
-        const float tx = texture->x;
-        const float ty = texture->y;
-        const float tr = tx + texture->w;
-        const float tb = ty + texture->h;
-
-        // Skip textures that are completely outside the view
-        if (tx > src->right || ty > src->bottom || tr < src->left || tb < src->top)
-            continue;
-
-        // This texture is visible
-        ++visibleCount;
-    }
-
-    if (visibleCount == 0)
-    {
-        // No visible textures, early exit
-        m_Device->SetViewport(&oldViewport);
-        SetRenderState(VXRENDERSTATE_ZENABLE, TRUE);
-        return TRUE;
-    }
-
-    if (visibleCount > m_VisibleSpriteTextures.Size())
-    {
-        m_VisibleSpriteTextures.Resize(visibleCount);
-    }
-
-
-    // Calculate ratios once
+    // Calculate scaling ratios once
     const float widthRatio = dst->GetWidth() / src->GetWidth();
     const float heightRatio = dst->GetHeight() / src->GetHeight();
 
-    // Second scan: populate visible textures array
-    int visibleIndex = 0;
+    // Single-pass texture processing
+    // Create a direct list of visible textures with calculated coordinates
+    struct VisibleTexture
+    {
+        CKDWORD TextureId;
+        float ScreenLeft, ScreenTop, ScreenRight, ScreenBottom;
+        float TexU, TexV, TexU2, TexV2;
+    };
+
+    // Use a local stack buffer for speed and to avoid heap allocations
+    // for most common use cases
+    VisibleTexture localBuffer[16];
+    XArray<VisibleTexture> dynamicBuffer;
+    VisibleTexture *visibleTextures = localBuffer;
+    int visibleCount = 0;
+    int maxVisibleCount = 16;
+
+    // First pass: identify visible textures and calculate their coordinates
     for (auto texture = sprite->Textures.Begin(); texture != sprite->Textures.End(); ++texture)
     {
         const float tx = texture->x;
@@ -1733,125 +1709,163 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
         const float tr = tx + texture->w;
         const float tb = ty + texture->h;
 
-        // Skip textures that are completely outside the view
+        // Skip textures completely outside the view
         if (tx > src->right || ty > src->bottom || tr < src->left || tb < src->top)
             continue;
 
-        // This texture is visible
-        m_VisibleSpriteTextures[visibleIndex].Texture = &(*texture);
-        m_VisibleSpriteTextures[visibleIndex].TextureId = texture->IndexTexture;
-        visibleIndex++;
-    }
-
-    // Sort visible textures by texture ID to minimize texture state changes
-    if (visibleIndex > 1)
-    {
-        for (int i = 0; i < visibleIndex - 1; ++i)
+        // Ensure we have enough space
+        if (visibleCount >= maxVisibleCount)
         {
-            for (int j = i + 1; j < visibleIndex; ++j)
+            // Need to switch to dynamic buffer
+            if (dynamicBuffer.IsEmpty())
             {
-                if (m_VisibleSpriteTextures[i].TextureId > m_VisibleSpriteTextures[j].TextureId)
-                {
-                    VisibleSpriteTexture temp = m_VisibleSpriteTextures[i];
-                    m_VisibleSpriteTextures[i] = m_VisibleSpriteTextures[j];
-                    m_VisibleSpriteTextures[j] = temp;
-                }
+                // First time switching - copy local buffer to dynamic
+                dynamicBuffer.Resize(maxVisibleCount * 2);
+                memcpy(dynamicBuffer.Begin(), localBuffer, maxVisibleCount * sizeof(VisibleTexture));
+                visibleTextures = dynamicBuffer.Begin();
+                maxVisibleCount = dynamicBuffer.Size();
+            }
+            else if (visibleCount >= maxVisibleCount)
+            {
+                // Need to resize dynamic buffer
+                dynamicBuffer.Resize(maxVisibleCount * 2);
+                visibleTextures = dynamicBuffer.Begin();
+                maxVisibleCount = dynamicBuffer.Size();
             }
         }
-    }
 
-    // Allocate vertex buffer for all visible quads
-    const int totalVertices = visibleIndex * 4;
-    CKDWORD startVertex = 0;
-    CKDX9VertexBufferDesc *vb = static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[GetDynamicVertexBuffer(CKRST_VF_TLVERTEX, totalVertices, sizeof(CKVertex), 1)]);
-    if (!vb)
-    {
-        m_Device->SetViewport(&oldViewport);
-        SetRenderState(VXRENDERSTATE_ZENABLE, TRUE);
-        return FALSE;
-    }
+        VisibleTexture &visible = visibleTextures[visibleCount++];
+        visible.TextureId = texture->IndexTexture;
 
-    // Lock the vertex buffer
-    void *pBuf = NULL;
-    if (vb->m_CurrentVCount + totalVertices <= vb->m_MaxVertexCount)
-    {
-        vb->DxBuffer->Lock(sizeof(CKVertex) * vb->m_CurrentVCount, sizeof(CKVertex) * totalVertices, &pBuf, D3DLOCK_NOOVERWRITE);
-        startVertex = vb->m_CurrentVCount;
-        vb->m_CurrentVCount += totalVertices;
-    }
-    else
-    {
-        vb->DxBuffer->Lock(0, sizeof(CKVertex) * totalVertices, &pBuf, D3DLOCK_DISCARD);
-        vb->m_CurrentVCount = totalVertices;
-    }
+        // Calculate texture coordinates, clipping to visible region
+        float tuStart = 0.0f;
+        float tvStart = 0.0f;
+        float tuEnd = static_cast<float>(texture->w) / texture->sw;
+        float tvEnd = static_cast<float>(texture->h) / texture->sh;
 
-    if (!pBuf)
-    {
-        m_Device->SetViewport(&oldViewport);
-        SetRenderState(VXRENDERSTATE_ZENABLE, TRUE);
-        return FALSE;
-    }
+        // Calculate screen coordinates
+        float screenLeft = (tx - src->left) * widthRatio + dst->left;
+        float screenTop = (ty - src->top) * heightRatio + dst->top;
+        float screenRight = (tr - src->left) * widthRatio + dst->left;
+        float screenBottom = (tb - src->top) * heightRatio + dst->top;
 
-    // Fill vertex buffer with data
-    CKVertex *vbData = static_cast<CKVertex *>(pBuf);
-    int currentVertex = 0;
-
-    for (int i = 0; i < visibleIndex; ++i)
-    {
-        CKSPRTextInfo *texture = m_VisibleSpriteTextures[i].Texture;
-        m_VisibleSpriteTextures[i].VertexIndex = startVertex + currentVertex;
-
-        float tx = texture->x;
-        float ty = texture->y;
-        float tr = tx + texture->w;
-        float tb = ty + texture->h;
-
-        // Calculate texture coordinates for the visible portion
-        float tu = 0.0f;
-        float tv = 0.0f;
-        float tu2 = (float)(texture->w) / texture->sw;
-        float tv2 = (float)(texture->h) / texture->sh;
-
-        // Adjust for partial visibility
+        // Handle partial visibility with texture coordinate adjustment
         if (src->right < tr)
         {
             const float clippedWidth = src->right - tx;
-            tr = src->right;
-            tu2 = clippedWidth / texture->sw;
+            screenRight = (tx + clippedWidth - src->left) * widthRatio + dst->left;
+            tuEnd = clippedWidth / texture->sw;
         }
 
         if (src->bottom < tb)
         {
             const float clippedHeight = src->bottom - ty;
-            tb = src->bottom;
-            tv2 = clippedHeight / texture->sh;
+            screenBottom = (ty + clippedHeight - src->top) * heightRatio + dst->top;
+            tvEnd = clippedHeight / texture->sh;
         }
 
         if (src->left > tx)
         {
             const float clippedLeft = src->left - tx;
-            tu = clippedLeft / texture->sw;
-            tx = src->left;
+            tuStart = clippedLeft / texture->sw;
+            screenLeft = dst->left; // Align with destination left edge
         }
 
         if (src->top > ty)
         {
             const float clippedTop = src->top - ty;
-            tv = clippedTop / texture->sh;
-            ty = src->top;
+            tvStart = clippedTop / texture->sh;
+            screenTop = dst->top; // Align with destination top edge
         }
 
-        // Calculate screen coordinates
-        const float screenLeft = (tx - src->left) * widthRatio + dst->left;
-        const float screenTop = (ty - src->top) * heightRatio + dst->top;
-        const float screenRight = (tr - src->left) * widthRatio + dst->left;
-        const float screenBottom = (tb - src->top) * heightRatio + dst->top;
+        visible.ScreenLeft = screenLeft;
+        visible.ScreenTop = screenTop;
+        visible.ScreenRight = screenRight;
+        visible.ScreenBottom = screenBottom;
+        visible.TexU = tuStart;
+        visible.TexV = tvStart;
+        visible.TexU2 = tuEnd;
+        visible.TexV2 = tvEnd;
+    }
 
-        // Set up vertex data (counter-clockwise for proper facing)
-        CKVertex *quad = &vbData[currentVertex];
+    // Skip rendering if no visible textures
+    if (visibleCount == 0)
+    {
+        m_Device->SetViewport(&oldViewport);
+        SetRenderState(VXRENDERSTATE_ZENABLE, oldZEnable);
+        SetRenderState(VXRENDERSTATE_ZWRITEENABLE, oldZWriteEnable);
+        SetRenderState(VXRENDERSTATE_LIGHTING, oldLighting);
+        SetRenderState(VXRENDERSTATE_CULLMODE, oldCullMode);
+        return TRUE;
+    }
 
-        // Set common attributes for all vertices
-        const CKDWORD diffuseColor = (R_MASK | G_MASK | B_MASK | A_MASK);
+    // Sort visible textures by TextureId to minimize texture switches
+    // Use insertion sort for small arrays (fast for nearly-sorted data)
+    for (int i = 1; i < visibleCount; i++)
+    {
+        VisibleTexture key = visibleTextures[i];
+        int j = i - 1;
+
+        while (j >= 0 && visibleTextures[j].TextureId > key.TextureId)
+        {
+            visibleTextures[j + 1] = visibleTextures[j];
+            j--;
+        }
+
+        visibleTextures[j + 1] = key;
+    }
+
+    // Allocate a vertex buffer for all quads at once
+    const int totalVertices = visibleCount * 4;
+    CKDWORD vertexBufferIndex = GetDynamicVertexBuffer(CKRST_VF_TLVERTEX, totalVertices, sizeof(CKVertex), 1);
+    CKDX9VertexBufferDesc *vb = static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[vertexBufferIndex]);
+    if (!vb)
+    {
+        m_Device->SetViewport(&oldViewport);
+        SetRenderState(VXRENDERSTATE_ZENABLE, oldZEnable);
+        SetRenderState(VXRENDERSTATE_ZWRITEENABLE, oldZWriteEnable);
+        SetRenderState(VXRENDERSTATE_LIGHTING, oldLighting);
+        SetRenderState(VXRENDERSTATE_CULLMODE, oldCullMode);
+        return FALSE;
+    }
+
+    // Lock the vertex buffer
+    void *pBuf = nullptr;
+    CKDWORD startVertex = 0;
+
+    if (vb->m_CurrentVCount + totalVertices <= vb->m_MaxVertexCount)
+    {
+        hr = vb->DxBuffer->Lock(sizeof(CKVertex) * vb->m_CurrentVCount, sizeof(CKVertex) * totalVertices, &pBuf,
+                                D3DLOCK_NOOVERWRITE);
+        startVertex = vb->m_CurrentVCount;
+        vb->m_CurrentVCount += totalVertices;
+    }
+    else
+    {
+        hr = vb->DxBuffer->Lock(0, sizeof(CKVertex) * totalVertices, &pBuf, D3DLOCK_DISCARD);
+        vb->m_CurrentVCount = totalVertices;
+    }
+
+    if (FAILED(hr) || !pBuf)
+    {
+        m_Device->SetViewport(&oldViewport);
+        SetRenderState(VXRENDERSTATE_ZENABLE, oldZEnable);
+        SetRenderState(VXRENDERSTATE_ZWRITEENABLE, oldZWriteEnable);
+        SetRenderState(VXRENDERSTATE_LIGHTING, oldLighting);
+        SetRenderState(VXRENDERSTATE_CULLMODE, oldCullMode);
+        return FALSE;
+    }
+
+    // Fill the vertex buffer
+    CKVertex *vertices = static_cast<CKVertex *>(pBuf);
+    const CKDWORD diffuseColor = (R_MASK | G_MASK | B_MASK | A_MASK);
+
+    for (int i = 0; i < visibleCount; ++i)
+    {
+        const VisibleTexture &tex = visibleTextures[i];
+        CKVertex *quad = &vertices[i * 4];
+
+        // Set common vertex attributes
         for (int v = 0; v < 4; ++v)
         {
             quad[v].Diffuse = diffuseColor;
@@ -1859,85 +1873,79 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
         }
 
         // Top-left
-        quad[0].V = VxVector4(screenLeft, screenTop, 0.0f, 1.0f);
-        quad[0].tu = tu;
-        quad[0].tv = tv;
+        quad[0].V = VxVector4(tex.ScreenLeft, tex.ScreenTop, 0.0f, 1.0f);
+        quad[0].tu = tex.TexU;
+        quad[0].tv = tex.TexV;
 
         // Bottom-left
-        quad[1].V = VxVector4(screenLeft, screenBottom, 0.0f, 1.0f);
-        quad[1].tu = tu;
-        quad[1].tv = tv2;
+        quad[1].V = VxVector4(tex.ScreenLeft, tex.ScreenBottom, 0.0f, 1.0f);
+        quad[1].tu = tex.TexU;
+        quad[1].tv = tex.TexV2;
 
         // Bottom-right
-        quad[2].V = VxVector4(screenRight, screenBottom, 0.0f, 1.0f);
-        quad[2].tu = tu2;
-        quad[2].tv = tv2;
+        quad[2].V = VxVector4(tex.ScreenRight, tex.ScreenBottom, 0.0f, 1.0f);
+        quad[2].tu = tex.TexU2;
+        quad[2].tv = tex.TexV2;
 
         // Top-right
-        quad[3].V = VxVector4(screenRight, screenTop, 0.0f, 1.0f);
-        quad[3].tu = tu2;
-        quad[3].tv = tv;
-
-        currentVertex += 4;
+        quad[3].V = VxVector4(tex.ScreenRight, tex.ScreenTop, 0.0f, 1.0f);
+        quad[3].tu = tex.TexU2;
+        quad[3].tv = tex.TexV;
     }
 
-    // Unlock vertex buffer
-    hr = vb->DxBuffer->Unlock();
-    assert(SUCCEEDED(hr));
+    // Unlock the vertex buffer
+    vb->DxBuffer->Unlock();
 
-    // Set up stream sources
-    m_CurrentVertexBufferCache = NULL;
+    // Setup vertex stream
+    m_CurrentVertexBufferCache = NULL; // Force update
     SetupStreams(vb->DxBuffer, CKRST_VF_TLVERTEX, sizeof(CKVertex));
 
-    // Draw all quads with same texture in batches
-    CKDWORD currentTextureId = 0xFFFFFFFF;
+    // Render batches with the same texture
+    CKDWORD currentTextureId = UINT_MAX;
     int batchStart = 0;
-    int batchCount = 0;
 
-    for (int i = 0; i <= visibleIndex; i++)
+    for (int i = 0; i <= visibleCount; ++i)
     {
-        // Check if we need to flush the batch (new texture or end of list)
-        if (i == visibleIndex || m_VisibleSpriteTextures[i].TextureId != currentTextureId)
+        // Process batch when texture changes or at the end
+        if (i == visibleCount || visibleTextures[i].TextureId != currentTextureId)
         {
-            // Draw the current batch if it exists
-            if (batchCount > 0)
+            // Render current batch if it exists
+            if (i > batchStart)
             {
-                // Render all quads in this batch
-                for (int j = 0; j < batchCount; j++)
-                {
-                    int quadIndex = batchStart + j;
-                    m_Device->DrawPrimitive(D3DPT_TRIANGLEFAN, m_VisibleSpriteTextures[quadIndex].VertexIndex, 2);
-                }
+                // Draw all quads in the batch
+                int quadsToDraw = i - batchStart;
+                m_Device->DrawPrimitive(D3DPT_TRIANGLEFAN, startVertex + (batchStart * 4), quadsToDraw * 2);
             }
 
-            // Start a new batch if not at end
-            if (i < visibleIndex)
+            // Setup new texture (if not at the end)
+            if (i < visibleCount)
             {
-                currentTextureId = m_VisibleSpriteTextures[i].TextureId;
+                currentTextureId = visibleTextures[i].TextureId;
                 CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[currentTextureId]);
-                if (desc)
+                if (desc && desc->DxTexture)
                 {
                     m_Device->SetTexture(0, desc->DxTexture);
                 }
+                else
+                {
+                    m_Device->SetTexture(0, NULL);
+                }
+
                 batchStart = i;
-                batchCount = 1;
             }
-        }
-        else
-        {
-            // Add to the current batch
-            batchCount++;
         }
     }
 
-    // Reset state
+    // Restore state
     m_Device->SetStreamSource(0, NULL, 0, 0);
+    m_Device->SetTexture(0, NULL);
     m_Device->SetViewport(&oldViewport);
 
-    // Restore render states (only the critical ones)
-    SetRenderState(VXRENDERSTATE_ZENABLE, TRUE);
-    SetRenderState(VXRENDERSTATE_ZWRITEENABLE, TRUE);
-    SetRenderState(VXRENDERSTATE_LIGHTING, TRUE);
+    // Restore render states
+    SetRenderState(VXRENDERSTATE_ZENABLE, oldZEnable);
+    SetRenderState(VXRENDERSTATE_ZWRITEENABLE, oldZWriteEnable);
+    SetRenderState(VXRENDERSTATE_LIGHTING, oldLighting);
+    SetRenderState(VXRENDERSTATE_CULLMODE, oldCullMode);
 
     return TRUE;
 }

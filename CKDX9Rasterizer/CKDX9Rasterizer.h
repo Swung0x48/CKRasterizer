@@ -25,13 +25,6 @@ struct TexFromFile
     CKBOOL IsDynamic;
 };
 
-struct VisibleSpriteTexture
-{
-    CKSPRTextInfo *Texture;
-    int VertexIndex;
-    CKDWORD TextureId;
-};
-
 //---Implemented in CKDX9PixelFormatUtils.cpp :
 
 D3DFORMAT VxPixelFormatToD3DFormat(VX_PIXELFORMAT pf);
@@ -376,7 +369,6 @@ public:
     LPDIRECT3DSURFACE9 m_TempZBuffers[NBTEMPZBUFFER];
 
     XNHashTable<LPDIRECT3DVERTEXDECLARATION9, DWORD> m_VertexDeclarations;
-    XArray<VisibleSpriteTexture> m_VisibleSpriteTextures;
 
     CKDX9Rasterizer *m_Owner;
 };
