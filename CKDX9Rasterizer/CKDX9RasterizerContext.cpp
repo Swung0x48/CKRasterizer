@@ -26,36 +26,41 @@ static int vbibbat = 0;
 
 CKBOOL CKDX9VertexShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKVertexShaderDesc *Format)
 {
-    if (Format != this)
-    {
-        Owner = Ctx;
-        m_Function = Format->m_Function;
-        m_FunctionSize = Format->m_FunctionSize;
-    }
-
-    if (!m_Function || m_FunctionSize == 0 || !Ctx || !Ctx->m_Device)
+    if (!Ctx || !Ctx->m_Device)
         return FALSE;
 
+    if (!m_Function || m_FunctionSize == 0)
+        return FALSE;
+
+    // Update ownership
+    Owner = Ctx;
+
+    // Re-create the shader if device is available
     SAFERELEASE(DxShader);
-    return SUCCEEDED(Ctx->m_Device->CreateVertexShader(m_Function, &DxShader));
+    HRESULT hr = Ctx->m_Device->CreateVertexShader(m_Function, &DxShader);
+
+    return SUCCEEDED(hr);
 }
 
 CKDX9VertexShaderDesc::~CKDX9VertexShaderDesc() { SAFERELEASE(DxShader); }
 
 CKBOOL CKDX9PixelShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKPixelShaderDesc *Format)
 {
-    if (Format != this)
-    {
-        Owner = Ctx;
-        m_Function = Format->m_Function;
-        m_FunctionSize = Format->m_FunctionSize;
-    }
-
-    if (!m_Function || m_FunctionSize == 0 || !Ctx || !Ctx->m_Device)
+    // Validate parameters
+    if (!Ctx || !Ctx->m_Device)
         return FALSE;
 
+    if (!m_Function || m_FunctionSize == 0)
+        return FALSE;
+
+    // Update ownership
+    Owner = Ctx;
+
+    // Re-create the shader if device is available
     SAFERELEASE(DxShader);
-    return SUCCEEDED(Ctx->m_Device->CreatePixelShader(m_Function, &DxShader));
+    HRESULT hr = Ctx->m_Device->CreatePixelShader(m_Function, &DxShader);
+
+    return SUCCEEDED(hr);
 }
 
 CKDX9PixelShaderDesc::~CKDX9PixelShaderDesc() { SAFERELEASE(DxShader); }
@@ -3566,28 +3571,79 @@ CKBOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShade
     if (VShader >= m_VertexShaders.Size() || !DesiredFormat)
         return FALSE;
 
-    CKVertexShaderDesc *shader = m_VertexShaders[VShader];
-    if (DesiredFormat == shader)
+    // Validate required resources
+    if (!m_Device)
+        return FALSE;
+
+    // Check if the function data is valid
+    if (!DesiredFormat->m_Function || DesiredFormat->m_FunctionSize == 0)
+        return FALSE;
+
+    // Case 1: DesiredFormat is already the shader in our array (update existing)
+    if (DesiredFormat == m_VertexShaders[VShader])
     {
         CKDX9VertexShaderDesc *desc = static_cast<CKDX9VertexShaderDesc *>(DesiredFormat);
         return desc->Create(this, DesiredFormat);
     }
 
-    if (shader)
+    // Case 2: Need to create a new shader
+    CKDX9VertexShaderDesc *newDesc = new CKDX9VertexShaderDesc;
+    if (!newDesc)
+        return FALSE;
+
+    // Set initial data
+    newDesc->Owner = this;
+
+    // Create a copy of the shader function data to avoid ownership issues
+    if (DesiredFormat->m_FunctionSize > 0 && DesiredFormat->m_Function)
     {
-        delete shader;
-        m_VertexShaders[VShader] = NULL;
+        try
+        {
+            newDesc->m_Function = new CKDWORD[DesiredFormat->m_FunctionSize / sizeof(CKDWORD)];
+            memcpy(newDesc->m_Function, DesiredFormat->m_Function, DesiredFormat->m_FunctionSize);
+            newDesc->m_FunctionSize = DesiredFormat->m_FunctionSize;
+        }
+        catch (...)
+        {
+            delete newDesc;
+            return FALSE;
+        }
+    }
+    else
+    {
+        delete newDesc;
+        return FALSE;
     }
 
-    CKDX9VertexShaderDesc *desc = new CKDX9VertexShaderDesc;
-    if (!desc)
-        return FALSE;
+    // Try to create the actual shader
+    HRESULT hr = m_Device->CreateVertexShader(newDesc->m_Function, &newDesc->DxShader);
+    if (FAILED(hr))
+    {
+        // Handle device lost case with a retry
+        if (hr == D3DERR_DEVICELOST)
+        {
+            // Keep the descriptor but mark it for recreation when device is recovered
+            newDesc->DxShader = NULL;
+        }
+        else
+        {
+            // Clean up on other errors
+            delete[] newDesc->m_Function;
+            delete newDesc;
+            return FALSE;
+        }
+    }
 
-    m_VertexShaders[VShader] = desc;
-    if (!desc->Create(this, DesiredFormat))
-        return FALSE;
+    // Clean up any existing shader
+    CKVertexShaderDesc *oldShader = m_VertexShaders[VShader];
+    if (oldShader)
+    {
+        delete oldShader;
+    }
 
-    return TRUE;
+    // Store the new shader
+    m_VertexShaders[VShader] = newDesc;
+    return (newDesc->DxShader != NULL);
 }
 
 CKBOOL CKDX9RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat)
@@ -3598,28 +3654,79 @@ CKBOOL CKDX9RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderD
     if (PShader >= m_PixelShaders.Size() || !DesiredFormat)
         return FALSE;
 
-    CKPixelShaderDesc *shader = m_PixelShaders[PShader];
-    if (DesiredFormat == shader)
+    // Validate required resources
+    if (!m_Device)
+        return FALSE;
+
+    // Check if the function data is valid
+    if (!DesiredFormat->m_Function || DesiredFormat->m_FunctionSize == 0)
+        return FALSE;
+
+    // Case 1: DesiredFormat is already the shader in our array (update existing)
+    if (DesiredFormat == m_PixelShaders[PShader])
     {
         CKDX9PixelShaderDesc *desc = static_cast<CKDX9PixelShaderDesc *>(DesiredFormat);
         return desc->Create(this, DesiredFormat);
     }
 
-    if (shader)
+    // Case 2: Need to create a new shader
+    CKDX9PixelShaderDesc *newDesc = new CKDX9PixelShaderDesc;
+    if (!newDesc)
+        return FALSE;
+
+    // Set initial data
+    newDesc->Owner = this;
+
+    // Create a copy of the shader function data to avoid ownership issues
+    if (DesiredFormat->m_FunctionSize > 0 && DesiredFormat->m_Function)
     {
-        delete shader;
-        m_PixelShaders[PShader] = NULL;
+        try
+        {
+            newDesc->m_Function = new CKDWORD[DesiredFormat->m_FunctionSize / sizeof(CKDWORD)];
+            memcpy(newDesc->m_Function, DesiredFormat->m_Function, DesiredFormat->m_FunctionSize);
+            newDesc->m_FunctionSize = DesiredFormat->m_FunctionSize;
+        }
+        catch (...)
+        {
+            delete newDesc;
+            return FALSE;
+        }
+    }
+    else
+    {
+        delete newDesc;
+        return FALSE;
     }
 
-    CKDX9PixelShaderDesc *desc = new CKDX9PixelShaderDesc;
-    if (!desc)
-        return FALSE;
+    // Try to create the actual shader
+    HRESULT hr = m_Device->CreatePixelShader(newDesc->m_Function, &newDesc->DxShader);
+    if (FAILED(hr))
+    {
+        // Handle device lost case with a retry
+        if (hr == D3DERR_DEVICELOST)
+        {
+            // Keep the descriptor but mark it for recreation when device is recovered
+            newDesc->DxShader = NULL;
+        }
+        else
+        {
+            // Clean up on other errors
+            delete[] newDesc->m_Function;
+            delete newDesc;
+            return FALSE;
+        }
+    }
 
-    m_PixelShaders[PShader] = desc;
-    if (!desc->Create(this, DesiredFormat))
-        return FALSE;
+    // Clean up any existing shader
+    CKPixelShaderDesc *oldShader = m_PixelShaders[PShader];
+    if (oldShader)
+    {
+        delete oldShader;
+    }
 
-    return TRUE;
+    // Store the new shader
+    m_PixelShaders[PShader] = newDesc;
+    return (newDesc->DxShader != NULL);
 }
 
 CKBOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat)
