@@ -522,22 +522,58 @@ CKBOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height,
 
 CKBOOL CKDX9RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD Stencil, int RectCount, CKRECT *rects)
 {
-    if (m_InCreateDestroy)
+    if (m_InCreateDestroy || !m_Device)
         return FALSE;
 
     DWORD flags = 0;
-    if (m_Device)
+
+    // In transparent mode, we skip clearing the color buffer
+    if (!m_TransparentMode && (Flags & CKRST_CTXCLEAR_COLOR) && m_Bpp != 0)
+        flags |= D3DCLEAR_TARGET;
+
+    // Always handle depth and stencil clearing normally
+    if ((Flags & CKRST_CTXCLEAR_STENCIL) && m_StencilBpp != 0)
+        flags |= D3DCLEAR_STENCIL;
+
+    if ((Flags & CKRST_CTXCLEAR_DEPTH) && m_ZBpp != 0)
+        flags |= D3DCLEAR_ZBUFFER;
+
+    if (flags == 0)
+        return TRUE;
+
+    // Store scene state to restore it later if needed
+    CKBOOL wasInScene = m_SceneBegined;
+
+    // We must be in a scene to clear
+    if (!wasInScene)
     {
-        if (!m_TransparentMode && (Flags & CKRST_CTXCLEAR_COLOR) != 0 && m_Bpp != 0)
-            flags = D3DCLEAR_TARGET;
-        if ((Flags & CKRST_CTXCLEAR_STENCIL) != 0 && m_StencilBpp != 0)
-            flags |= D3DCLEAR_STENCIL;
-        if ((Flags & CKRST_CTXCLEAR_DEPTH) != 0 && m_ZBpp != 0)
-            flags |= D3DCLEAR_ZBUFFER;
-        return SUCCEEDED(m_Device->Clear(RectCount, (D3DRECT *)rects, flags, Ccol, Z, Stencil));
+        if (!BeginScene())
+            return FALSE;
     }
 
-    return flags == 0;
+    // Validate rect count and pointers
+    if (RectCount < 0)
+        RectCount = 0;
+
+    if (RectCount > 0 && !rects)
+        RectCount = 0;
+
+    // Perform the clear operation
+    HRESULT hr = m_Device->Clear(RectCount, (D3DRECT *)rects, flags, Ccol, Z, Stencil);
+
+    // End scene if we started it
+    if (!wasInScene)
+    {
+        EndScene();
+    }
+
+    // If this was a full clear, reset the dirty rects
+    if (RectCount == 0 && (Flags & CKRST_CTXCLEAR_COLOR))
+    {
+        ResetDirtyRects();
+    }
+
+    return SUCCEEDED(hr);
 }
 
 #if LOGGING && LOG_LOADTEXTURE
@@ -2741,9 +2777,115 @@ int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buf
 
 void CKDX9RasterizerContext::SetTransparentMode(CKBOOL Trans)
 {
+    // If no change in state, return
+    if (m_TransparentMode == Trans)
+        return;
+        
+    // Update transparent mode flag
     m_TransparentMode = Trans;
+    
     if (!Trans)
-        ReleaseScreenBackup();
+    {
+        ResetDirtyRects();
+    }
+}
+
+void CKDX9RasterizerContext::AddDirtyRect(CKRECT *Rect)
+{
+    if (!Rect)
+    {
+        // Mark entire screen as dirty
+        m_CleanAllRects = TRUE;
+    }
+    else
+    {
+        // Don't add if we're already cleaning everything
+        if (m_CleanAllRects)
+            return;
+
+        // Validate rectangle
+        if (Rect->right <= Rect->left || Rect->bottom <= Rect->top)
+            return;
+
+        // Add to dirty rectangles list
+        m_DirtyRects.PushBack(*Rect);
+
+        // Limit number of rectangles to prevent performance issues
+        if (m_DirtyRects.Size() > 64)
+            m_CleanAllRects = TRUE;
+    }
+}
+
+void CKDX9RasterizerContext::RestoreScreenBackup()
+{
+    // Do nothing if not in transparent mode
+    if (!m_TransparentMode)
+        return;
+        
+    // Create screen backup if it doesn't exist
+    if (!m_ScreenBackup)
+    {
+        HRESULT hr;
+        IDirect3DSurface9* backBuffer = NULL;
+        
+        // Get the back buffer
+        hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
+        if (FAILED(hr) || !backBuffer)
+            return;
+            
+        // Get its description
+        D3DSURFACE_DESC desc;
+        hr = backBuffer->GetDesc(&desc);
+        
+        // Create a matching offscreen surface for backup
+        if (SUCCEEDED(hr))
+        {
+            hr = m_Device->CreateOffscreenPlainSurface(
+                desc.Width, 
+                desc.Height,
+                desc.Format,
+                D3DPOOL_SYSTEMMEM,
+                &m_ScreenBackup,
+                NULL
+            );
+        }
+        
+        SAFERELEASE(backBuffer);
+        
+        // If we couldn't create the backup, exit
+        if (!m_ScreenBackup)
+            return;
+    }
+    
+    // Get the current back buffer
+    IDirect3DSurface9* backBuffer = NULL;
+    HRESULT hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
+    if (FAILED(hr) || !backBuffer)
+        return;
+        
+    // If we have specific dirty rectangles and not cleaning all, update only those
+    if (!m_CleanAllRects && m_DirtyRects.Size() > 0)
+    {
+        for (XArray<CKRECT>::Iterator it = m_DirtyRects.Begin(); it != m_DirtyRects.End(); ++it)
+        {
+            RECT rect = { it->left, it->top, it->right, it->bottom };
+            POINT destPoint = { rect.left, rect.top };
+            
+            // Copy the dirty rect from backup to back buffer
+            hr = m_Device->UpdateSurface(m_ScreenBackup, &rect, backBuffer, &destPoint);
+        }
+    }
+    else
+    {
+        // Copy the entire surface
+        hr = m_Device->UpdateSurface(m_ScreenBackup, NULL, backBuffer, NULL);
+    }
+    
+    // Release the back buffer
+    SAFERELEASE(backBuffer);
+    
+    // Reset dirty rectangles
+    ResetDirtyRects();
 }
 
 CKBOOL CKDX9RasterizerContext::SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane &PlaneEquation)
