@@ -661,8 +661,36 @@ CKBOOL CKDX9RasterizerContext::SetMaterial(CKMaterialData *mat)
 
 CKBOOL CKDX9RasterizerContext::SetViewport(CKViewportData *data)
 {
+    if (!m_Device || !data)
+        return FALSE;
+
     m_ViewportData = *data;
-    return SUCCEEDED(m_Device->SetViewport((D3DVIEWPORT9 *)&m_ViewportData));
+
+    D3DVIEWPORT9 d3dViewport;
+    d3dViewport.X = data->ViewX;
+    d3dViewport.Y = data->ViewY;
+    d3dViewport.Width = data->ViewWidth;
+    d3dViewport.Height = data->ViewHeight;
+    d3dViewport.MinZ = data->ViewZMin;
+    d3dViewport.MaxZ = data->ViewZMax;
+
+    // Validate viewport dimensions
+    if (d3dViewport.Width == 0 || d3dViewport.Height == 0)
+    {
+        // Use default size if invalid dimensions provided
+        d3dViewport.Width = m_Width;
+        d3dViewport.Height = m_Height;
+    }
+
+    // Ensure Z range is valid
+    if (d3dViewport.MinZ > d3dViewport.MaxZ)
+    {
+        float temp = d3dViewport.MinZ;
+        d3dViewport.MinZ = d3dViewport.MaxZ;
+        d3dViewport.MaxZ = temp;
+    }
+
+    return SUCCEEDED(m_Device->SetViewport(&d3dViewport));
 }
 
 CKBOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat)
