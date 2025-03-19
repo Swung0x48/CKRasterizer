@@ -855,6 +855,9 @@ CKBOOL CKDX9RasterizerContext::SetViewport(CKViewportData *data)
 
 CKBOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMatrix &Mat)
 {
+    if (!m_Device)
+        return FALSE;
+
     CKDWORD matrixMask = 0;
     D3DTRANSFORMSTATETYPE type = (D3DTRANSFORMSTATETYPE)Type;
     switch (Type)
@@ -866,20 +869,27 @@ CKBOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMa
             m_MatrixUptodate &= ~WORLD_TRANSFORM;
             type = D3DTS_WORLD;
             break;
+
         case VXMATRIX_VIEW:
             m_ViewMatrix = Mat;
             matrixMask = VIEW_TRANSFORM;
             Vx3DMultiplyMatrix(m_ModelViewMatrix, m_ViewMatrix, m_WorldMatrix);
-            m_MatrixUptodate = 0;
+            m_MatrixUptodate = 0; // Clear all flags to force recomputation
             type = D3DTS_VIEW;
             break;
+
         case VXMATRIX_PROJECTION:
             m_ProjectionMatrix = Mat;
             matrixMask = PROJ_TRANSFORM;
-            m_MatrixUptodate = 0;
+            m_MatrixUptodate = 0; // Clear all flags to force recomputation
             type = D3DTS_PROJECTION;
             break;
+
         case VXMATRIX_TEXTURE0:
+            matrixMask = TEXTURE0_TRANSFORM;
+            type = D3DTS_TEXTURE0;
+            break;
+
         case VXMATRIX_TEXTURE1:
         case VXMATRIX_TEXTURE2:
         case VXMATRIX_TEXTURE3:
@@ -887,13 +897,17 @@ CKBOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMa
         case VXMATRIX_TEXTURE5:
         case VXMATRIX_TEXTURE6:
         case VXMATRIX_TEXTURE7:
-            matrixMask = TEXTURE0_TRANSFORM << (Type - TEXTURE1_TRANSFORM);
+            matrixMask = TEXTURE0_TRANSFORM << (Type - VXMATRIX_TEXTURE0);
+            type = (D3DTRANSFORMSTATETYPE)(D3DTS_TEXTURE0 + (Type - VXMATRIX_TEXTURE0));
             break;
+
         default:
             return FALSE;
     }
+
     if (VxMatrix::Identity() == Mat)
     {
+        // If already set as identity, return success
         if ((m_UnityMatrixMask & matrixMask) != 0)
             return TRUE;
         m_UnityMatrixMask |= matrixMask;
@@ -902,6 +916,7 @@ CKBOOL CKDX9RasterizerContext::SetTransformMatrix(VXMATRIX_TYPE Type, const VxMa
     {
         m_UnityMatrixMask &= ~matrixMask;
     }
+
     return SUCCEEDED(m_Device->SetTransform(type, (const D3DMATRIX *)&Mat));
 }
 
