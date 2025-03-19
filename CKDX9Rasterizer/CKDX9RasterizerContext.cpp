@@ -126,24 +126,28 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
 #endif
     m_InCreateDestroy = TRUE;
 
-    CKRECT rect;
+    // Store original window position
+    CKRECT rect = {0, 0, 0, 0};
+    LONG originalStyle = 0;
     if (Window)
     {
         VxGetWindowRect(Window, &rect);
         WIN_HANDLE parent = VxGetParent(Window);
         VxScreenToClient(parent, reinterpret_cast<CKPOINT *>(&rect));
         VxScreenToClient(parent, reinterpret_cast<CKPOINT *>(&rect.right));
+        
+        // Save original window style for restoration if needed
+        originalStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
     }
 
-    LONG prevStyle = 0;
+    // Modify window style for fullscreen mode
     if (Fullscreen && Window)
     {
-        LONG prevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
-        SetWindowLongA((HWND)Window, GWL_STYLE, prevStyle & ~WS_CHILDWINDOW);
+        SetWindowLongA((HWND)Window, GWL_STYLE, originalStyle & ~WS_CHILDWINDOW);
     }
 
     CKDX9RasterizerDriver *driver = static_cast<CKDX9RasterizerDriver *>(m_Driver);
-    ZeroMemory(&m_PresentParams, sizeof(m_PresentParams));
+    memset(&m_PresentParams, 0, sizeof(m_PresentParams));
     m_PresentParams.hDeviceWindow = (HWND)Window;
     m_PresentParams.BackBufferWidth = Width;
     m_PresentParams.BackBufferHeight = Height;
@@ -174,6 +178,7 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
         D3DSCANLINEORDERING_PROGRESSIVE
     };
 
+    // Configure multisampling (anti-aliasing)
     if (m_Antialias == D3DMULTISAMPLE_NONE)
     {
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
@@ -187,6 +192,7 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
         m_PresentParams.MultiSampleType = (D3DMULTISAMPLE_TYPE)m_Antialias;
     }
 
+    // Find highest supported multisampling level if requested
     if (m_PresentParams.MultiSampleType >= D3DMULTISAMPLE_2_SAMPLES)
     {
         for (int type = m_PresentParams.MultiSampleType; type >= D3DMULTISAMPLE_2_SAMPLES; --type)
@@ -196,13 +202,16 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
                     D3DDEVTYPE_HAL,
                     m_PresentParams.BackBufferFormat,
                     m_PresentParams.Windowed,
-                    m_PresentParams.MultiSampleType,
+                    (D3DMULTISAMPLE_TYPE)type,
                     NULL)))
+            {
+                m_PresentParams.MultiSampleType = (D3DMULTISAMPLE_TYPE)type;
                 break;
-            m_PresentParams.MultiSampleType = (D3DMULTISAMPLE_TYPE)type;
+            }
         }
     }
 
+    // Configure device behavior flags
     DWORD behaviorFlags = D3DCREATE_ENABLE_PRESENTSTATS;
     if (!driver->m_IsHTL || driver->m_D3DCaps.VertexShaderVersion < D3DVS_VERSION(1, 0) && m_EnsureVertexShader)
     {
@@ -217,13 +226,15 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
         m_SoftwareVertexProcessing = FALSE;
     }
 
-    HRESULT hr;
+    HRESULT hr = E_FAIL;
 
+    // Create the Direct3D device
 #ifdef USE_D3D9EX
     hr = m_Owner->m_D3D9->CreateDeviceEx(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
                                          behaviorFlags, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
     if (FAILED(hr) && m_PresentParams.MultiSampleType != D3DMULTISAMPLE_NONE)
     {
+        // Retry without multisampling if it failed
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
         hr = m_Owner->m_D3D9->CreateDeviceEx(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
                                              behaviorFlags, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
@@ -232,63 +243,76 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
     hr = m_Owner->m_D3D9->CreateDevice(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow, behaviorFlags, &m_PresentParams, &m_Device);
     if (FAILED(hr) && m_PresentParams.MultiSampleType != D3DMULTISAMPLE_NONE)
     {
+        // Retry without multisampling if it failed
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
         hr = m_Owner->m_D3D9->CreateDevice(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow, behaviorFlags, &m_PresentParams, &m_Device);
     }
 #endif
 
-    if (Fullscreen)
+    // Restore window style if we're not going fullscreen
+    if (Fullscreen && Window)
     {
-        LONG prevStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
-        SetWindowLongA((HWND)Window, GCLP_HMODULE, prevStyle | WS_CHILDWINDOW);
+        SetWindowLongA((HWND)Window, GWL_STYLE, originalStyle | WS_CHILDWINDOW);
     }
     else if (Window && !Fullscreen)
     {
         VxMoveWindow(Window, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, FALSE);
     }
 
+    // Handle device creation failure
     if (FAILED(hr))
     {
-        // Restore window styles on failure
-        if (Fullscreen && Window)
-            SetWindowLongA((HWND)Window, GWL_STYLE, prevStyle);
-
         m_InCreateDestroy = FALSE;
         return FALSE;
     }
 
+    // Store context configuration
     m_Window = (HWND)Window;
     m_PosX = PosX;
     m_PosY = PosY;
     m_Fullscreen = Fullscreen;
 
+    // Get back buffer information
     IDirect3DSurface9 *pBackBuffer = NULL;
     if (SUCCEEDED(m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer)))
     {
         VxImageDescEx desc;
         D3DSURFACE_DESC surfaceDesc;
-        pBackBuffer->GetDesc(&surfaceDesc);
+        if (SUCCEEDED(pBackBuffer->GetDesc(&surfaceDesc)))
+        {
+            m_PixelFormat = D3DFormatToVxPixelFormat(surfaceDesc.Format);
+            VxPixelFormat2ImageDesc(m_PixelFormat, desc);
+            m_Bpp = desc.BitsPerPixel;
+            m_Width = surfaceDesc.Width;
+            m_Height = surfaceDesc.Height;
+        }
         SAFERELEASE(pBackBuffer);
-        m_PixelFormat = D3DFormatToVxPixelFormat(surfaceDesc.Format);
-        VxPixelFormat2ImageDesc(m_PixelFormat, desc);
-        m_Bpp = desc.BitsPerPixel;
-        m_Width = surfaceDesc.Width;
-        m_Height = surfaceDesc.Height;
     }
 
+    // Get depth/stencil information
     IDirect3DSurface9 *pStencilSurface = NULL;
     if (SUCCEEDED(m_Device->GetDepthStencilSurface(&pStencilSurface)))
     {
         D3DSURFACE_DESC desc;
-        pStencilSurface->GetDesc(&desc);
+        if (SUCCEEDED(pStencilSurface->GetDesc(&desc)))
+        {
+            m_ZBpp = DepthBitPerPixelFromFormat(desc.Format, &m_StencilBpp);
+        }
         SAFERELEASE(pStencilSurface);
-        m_ZBpp = DepthBitPerPixelFromFormat(desc.Format, &m_StencilBpp);
     }
 
-    SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, TRUE);
-    SetRenderState(VXRENDERSTATE_LOCALVIEWER, TRUE);
-    SetRenderState(VXRENDERSTATE_COLORVERTEX, FALSE);
+    // Set up default render states
+    if (FAILED(m_Device->SetRenderState(D3DRS_NORMALIZENORMALS, TRUE)) ||
+        FAILED(m_Device->SetRenderState(D3DRS_LOCALVIEWER, TRUE)) ||
+        FAILED(m_Device->SetRenderState(D3DRS_COLORVERTEX, FALSE)))
+    {
+        // Handle setup failure
+        SAFERELEASE(m_Device);
+        m_InCreateDestroy = FALSE;
+        return FALSE;
+    }
 
+    // Finish initialization
     UpdateDirectXData();
     FlushCaches();
     UpdateObjectArrays(m_Owner);
