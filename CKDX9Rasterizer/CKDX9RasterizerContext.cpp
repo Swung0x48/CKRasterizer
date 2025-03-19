@@ -625,9 +625,38 @@ CKBOOL CKDX9RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 
 CKBOOL CKDX9RasterizerContext::SetMaterial(CKMaterialData *mat)
 {
-    if (mat)
-        m_CurrentMaterialData = *mat;
-    return SUCCEEDED(m_Device->SetMaterial((D3DMATERIAL9 *)mat));
+    if (!m_Device)
+        return FALSE;
+
+    if (!mat)
+        return FALSE;
+
+    m_CurrentMaterialData = *mat;
+
+    D3DMATERIAL9 d3dMat;
+    d3dMat.Diffuse.r = mat->Diffuse.r;
+    d3dMat.Diffuse.g = mat->Diffuse.g;
+    d3dMat.Diffuse.b = mat->Diffuse.b;
+    d3dMat.Diffuse.a = mat->Diffuse.a;
+
+    d3dMat.Ambient.r = mat->Ambient.r;
+    d3dMat.Ambient.g = mat->Ambient.g;
+    d3dMat.Ambient.b = mat->Ambient.b;
+    d3dMat.Ambient.a = mat->Ambient.a;
+
+    d3dMat.Specular.r = mat->Specular.r;
+    d3dMat.Specular.g = mat->Specular.g;
+    d3dMat.Specular.b = mat->Specular.b;
+    d3dMat.Specular.a = mat->Specular.a;
+
+    d3dMat.Emissive.r = mat->Emissive.r;
+    d3dMat.Emissive.g = mat->Emissive.g;
+    d3dMat.Emissive.b = mat->Emissive.b;
+    d3dMat.Emissive.a = mat->Emissive.a;
+
+    d3dMat.Power = mat->SpecularPower;
+
+    return SUCCEEDED(m_Device->SetMaterial(&d3dMat));
 }
 
 CKBOOL CKDX9RasterizerContext::SetViewport(CKViewportData *data)
