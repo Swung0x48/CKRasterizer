@@ -2169,20 +2169,24 @@ int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffe
 {
     D3DSURFACE_DESC desc = {};
     IDirect3DSurface9 *surface = NULL;
-    int bbp = 0;
+    int depthBytesPerPixel = 0;
     HRESULT hr;
 
+    // Step 1: Get the appropriate surface based on buffer type
     switch (buffer)
     {
         case VXBUFFER_BACKBUFFER:
             {
                 hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &surface);
-                assert(SUCCEEDED(hr));
-                if (!surface)
+                if (FAILED(hr) || !surface)
                     return 0;
 
                 hr = surface->GetDesc(&desc);
-                assert(SUCCEEDED(hr));
+                if (FAILED(hr))
+                {
+                    SAFERELEASE(surface);
+                    return 0;
+                }
 
                 VX_PIXELFORMAT vxpf = D3DFormatToVxPixelFormat(desc.Format);
                 VxPixelFormat2ImageDesc(vxpf, img_desc);
@@ -2191,44 +2195,53 @@ int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffe
         case VXBUFFER_ZBUFFER:
             {
                 hr = m_Device->GetDepthStencilSurface(&surface);
-                assert(SUCCEEDED(hr));
-                if (!surface)
+                if (FAILED(hr) || !surface)
                     return 0;
 
                 hr = surface->GetDesc(&desc);
-                assert(SUCCEEDED(hr));
+                if (FAILED(hr))
+                {
+                    SAFERELEASE(surface);
+                    return 0;
+                }
 
                 img_desc.BitsPerPixel = 32;
                 img_desc.AlphaMask = 0;
                 img_desc.BlueMask = B_MASK;
                 img_desc.GreenMask = G_MASK;
                 img_desc.RedMask = R_MASK;
+
                 switch (desc.Format)
                 {
                     case D3DFMT_D16_LOCKABLE:
                     case D3DFMT_D15S1:
                     case D3DFMT_D16:
-                        bbp = 2;
+                        depthBytesPerPixel = 2;
                         break;
                     case D3DFMT_D32:
                     case D3DFMT_D24S8:
                     case D3DFMT_D24X8:
                     case D3DFMT_D24X4S4:
-                        bbp = 4;
+                        depthBytesPerPixel = 4;
                         break;
                     default:
+                        depthBytesPerPixel = 0;
                         break;
                 }
+                break; // Add missing break to prevent fallthrough
             }
         case VXBUFFER_STENCILBUFFER:
             {
                 hr = m_Device->GetDepthStencilSurface(&surface);
-                assert(SUCCEEDED(hr));
-                if (!surface)
+                if (FAILED(hr) || !surface)
                     return 0;
 
                 hr = surface->GetDesc(&desc);
-                assert(SUCCEEDED(hr));
+                if (FAILED(hr))
+                {
+                    SAFERELEASE(surface);
+                    return 0;
+                }
 
                 D3DFORMAT d3dFormat = desc.Format;
                 img_desc.BitsPerPixel = 32;
@@ -2236,18 +2249,20 @@ int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffe
                 img_desc.BlueMask = B_MASK;
                 img_desc.GreenMask = G_MASK;
                 img_desc.RedMask = R_MASK;
-                if (d3dFormat != D3DFMT_D15S1)
+
+                if (d3dFormat == D3DFMT_D15S1)
                 {
-                    if (d3dFormat != D3DFMT_D24S8 && d3dFormat != D3DFMT_D24X4S4)
-                    {
-                        SAFERELEASE(surface);
-                        return 0;
-                    }
-                    bbp = 4;
+                    depthBytesPerPixel = 2;
+                }
+                else if (d3dFormat == D3DFMT_D24S8 || d3dFormat == D3DFMT_D24X4S4)
+                {
+                    depthBytesPerPixel = 4;
                 }
                 else
                 {
-                    bbp = 2;
+                    // Unsupported stencil format
+                    SAFERELEASE(surface);
+                    return 0;
                 }
                 break;
             }
@@ -2255,95 +2270,152 @@ int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffe
             return 0;
     }
 
+    // Step 2: Calculate the boundaries of the region to copy
     UINT right, left, top, bottom;
     if (rect)
     {
-        right = (rect->right > desc.Width) ? desc.Width : rect->right;
+        // Clamp rectangle to surface boundaries
+        right = (rect->right > (int)desc.Width) ? desc.Width : rect->right;
         left = (rect->left < 0) ? 0 : rect->left;
         top = (rect->top < 0) ? 0 : rect->top;
-        bottom = (rect->bottom > desc.Height) ? desc.Height : rect->bottom;
+        bottom = (rect->bottom > (int)desc.Height) ? desc.Height : rect->bottom;
     }
     else
     {
+        // Use full surface if no rectangle specified
         top = 0;
         bottom = desc.Height;
         left = 0;
         right = desc.Width;
     }
 
+    // Validate rectangle dimensions
+    if (left >= right || top >= bottom)
+    {
+        SAFERELEASE(surface);
+        return 0;
+    }
+
+    // Step 3: Set up the image description
     UINT width = right - left;
     UINT height = bottom - top;
     img_desc.Width = width;
     img_desc.Height = height;
     int bytesPerPixel = img_desc.BitsPerPixel / 8;
     img_desc.BytesPerLine = width * bytesPerPixel;
-    if (img_desc.BytesPerLine != 0)
+
+    // Validate image parameters
+    if (img_desc.BytesPerLine == 0 || !img_desc.Image)
     {
-        IDirect3DSurface9 *imageSurface = NULL;
-        D3DLOCKED_RECT lockedRect;
-        if (FAILED(m_Device->CreateOffscreenPlainSurface(width, height, desc.Format, D3DPOOL_SCRATCH, &imageSurface, NULL)))
-        {
-            imageSurface = surface;
-            surface->AddRef();
-        }
-        else if (FAILED(m_Device->UpdateSurface(surface, NULL, imageSurface, NULL)))
-        {
-            SAFERELEASE(imageSurface);
-            SAFERELEASE(surface);
-            return 0;
-        }
-
-        if (FAILED(imageSurface->LockRect(&lockedRect, NULL, D3DLOCK_READONLY)))
-        {
-            SAFERELEASE(imageSurface);
-            SAFERELEASE(surface);
-            return 0;
-        }
-
-        BYTE *pBits = &((BYTE *)lockedRect.pBits)[top * lockedRect.Pitch + left * bytesPerPixel];
-        BYTE *image = img_desc.Image;
-
-        if (bbp == 2)
-        {
-            if (top < bottom)
-            {
-                for (int i = 0; i < height; ++i)
-                {
-                    if (left < bottom)
-                    {
-                        for (int j = 0; j < width; ++j)
-                        {
-                            *image = *pBits;
-                            image += 4;
-                            pBits += 2;
-                        }
-                    }
-                    image += img_desc.BytesPerLine;
-                    pBits += lockedRect.Pitch;
-                }
-            }
-        }
-        else
-        {
-            if (top < bottom)
-            {
-                for (int i = 0; i < height; ++i)
-                {
-                    memcpy(image, pBits, img_desc.BytesPerLine);
-                    image += img_desc.BytesPerLine;
-                    pBits += lockedRect.Pitch;
-                }
-            }
-        }
-
-        hr = imageSurface->UnlockRect();
-        assert(SUCCEEDED(hr));
-
-        SAFERELEASE(imageSurface);
+        SAFERELEASE(surface);
+        return 0;
     }
 
+    // Step 4: Copy the data
+    int totalBytes = 0;
+    IDirect3DSurface9 *tempSurface = NULL;
+    RECT srcRect = {(LONG)left, (LONG)top, (LONG)right, (LONG)bottom};
+
+    // Try to create a temporary surface for the copy operation
+    hr = m_Device->CreateOffscreenPlainSurface(width, height, desc.Format, D3DPOOL_SCRATCH, &tempSurface, NULL);
+    if (SUCCEEDED(hr) && tempSurface)
+    {
+        // Copy source region to temp surface
+        POINT destPoint = {0, 0};
+        hr = m_Device->UpdateSurface(surface, &srcRect, tempSurface, &destPoint);
+        if (SUCCEEDED(hr))
+        {
+            // Lock the entire temp surface
+            D3DLOCKED_RECT lockedRect;
+            hr = tempSurface->LockRect(&lockedRect, NULL, D3DLOCK_READONLY);
+            if (SUCCEEDED(hr))
+            {
+                BYTE *srcData = (BYTE *)lockedRect.pBits;
+                BYTE *destData = img_desc.Image;
+
+                if (depthBytesPerPixel == 2 && bytesPerPixel == 4)
+                {
+                    // Convert 16-bit depth/stencil to 32-bit RGB
+                    for (UINT row = 0; row < height; ++row)
+                    {
+                        BYTE *srcRow = srcData + (row * lockedRect.Pitch);
+                        BYTE *destRow = destData + (row * img_desc.BytesPerLine);
+
+                        for (UINT col = 0; col < width; ++col)
+                        {
+                            // Read 16-bit depth value
+                            WORD depthValue = *((WORD *)(srcRow + col * 2));
+
+                            // Write as 32-bit RGB value (scale to visible range)
+                            DWORD *destPixel = (DWORD *)(destRow + col * 4);
+                            BYTE intensity = (BYTE)((depthValue * 255) / 65535);
+                            *destPixel = (intensity << 16) | (intensity << 8) | intensity;
+                        }
+                    }
+                }
+                else
+                {
+                    // Standard copy for normal color buffers or 32-bit depth/stencil
+                    for (UINT row = 0; row < height; ++row)
+                    {
+                        memcpy(destData + (row * img_desc.BytesPerLine), srcData + (row * lockedRect.Pitch), width * bytesPerPixel);
+                    }
+                }
+
+                tempSurface->UnlockRect();
+                totalBytes = img_desc.BytesPerLine * height;
+            }
+        }
+
+        SAFERELEASE(tempSurface);
+    }
+    else
+    {
+        // Fallback: try to lock the original surface directly
+        D3DLOCKED_RECT lockedRect;
+        hr = surface->LockRect(&lockedRect, &srcRect, D3DLOCK_READONLY);
+        if (SUCCEEDED(hr))
+        {
+            BYTE *srcData = (BYTE *)lockedRect.pBits;
+            BYTE *destData = img_desc.Image;
+
+            if (depthBytesPerPixel == 2 && bytesPerPixel == 4)
+            {
+                // Convert 16-bit depth/stencil to 32-bit RGB
+                for (UINT row = 0; row < height; ++row)
+                {
+                    BYTE *srcRow = srcData + (row * lockedRect.Pitch);
+                    BYTE *destRow = destData + (row * img_desc.BytesPerLine);
+
+                    for (UINT col = 0; col < width; ++col)
+                    {
+                        // Read 16-bit depth value
+                        WORD depthValue = *((WORD *)(srcRow + col * 2));
+
+                        // Write as 32-bit RGB value (scale to visible range)
+                        DWORD *destPixel = (DWORD *)(destRow + col * 4);
+                        BYTE intensity = (BYTE)((depthValue * 255) / 65535);
+                        *destPixel = (intensity << 16) | (intensity << 8) | intensity;
+                    }
+                }
+            }
+            else
+            {
+                // Standard copy for normal color buffers or 32-bit depth/stencil
+                for (UINT row = 0; row < height; ++row)
+                {
+                    memcpy(destData + (row * img_desc.BytesPerLine), srcData + (row * lockedRect.Pitch), width * bytesPerPixel);
+                }
+            }
+
+            surface->UnlockRect();
+            totalBytes = img_desc.BytesPerLine * height;
+        }
+    }
+
+    // Cleanup
     SAFERELEASE(surface);
-    return img_desc.BytesPerLine * img_desc.Height;
+    return totalBytes;
 }
 
 int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, const VxImageDescEx &img_desc)
