@@ -3832,23 +3832,186 @@ CKBOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *
 
 CKBOOL CKDX9RasterizerContext::CreateVertexDeclaration(CKDWORD VFormat, LPDIRECT3DVERTEXDECLARATION9 *ppDecl)
 {
-    if (!D3DXDeclaratorFromFVF)
+    if (!ppDecl || !m_Device)
         return FALSE;
 
-    HRESULT hr;
+    *ppDecl = NULL;
 
-    D3DVERTEXELEMENT9 declarator[MAX_FVF_DECL_SIZE];
-    hr = D3DXDeclaratorFromFVF(VFormat, declarator);
-    if (FAILED(hr))
-        return FALSE;
+    // Try to use D3DX utility function first (preferred method)
+    if (D3DXDeclaratorFromFVF)
+    {
+        D3DVERTEXELEMENT9 declarator[MAX_FVF_DECL_SIZE];
+        memset(declarator, 0, sizeof(declarator));
 
-    IDirect3DVertexDeclaration9 *pDecl = NULL;
-    hr = m_Device->CreateVertexDeclaration(declarator, &pDecl);
-    if (FAILED(hr))
-        return FALSE;
+        HRESULT hr = D3DXDeclaratorFromFVF(VFormat, declarator);
+        if (SUCCEEDED(hr))
+        {
+            hr = m_Device->CreateVertexDeclaration(declarator, ppDecl);
+            if (SUCCEEDED(hr))
+                return TRUE;
+        }
+    }
 
-    *ppDecl = pDecl;
-    return TRUE;
+    // Manual declaration creation as fallback
+    D3DVERTEXELEMENT9 declaration[MAX_FVF_DECL_SIZE];
+    memset(declaration, 0, sizeof(declaration));
+    WORD offset = 0;
+    int elementIndex = 0;
+
+    // Position elements
+    if (VFormat & CKRST_VF_POSITION)
+    {
+        declaration[elementIndex].Stream = 0;
+        declaration[elementIndex].Offset = offset;
+        declaration[elementIndex].Type = D3DDECLTYPE_FLOAT3;
+        declaration[elementIndex].Method = D3DDECLMETHOD_DEFAULT;
+        declaration[elementIndex].Usage = D3DDECLUSAGE_POSITION;
+        declaration[elementIndex].UsageIndex = 0;
+        offset += 12; // 3 floats
+        elementIndex++;
+    }
+    else if (VFormat & CKRST_VF_RASTERPOS)
+    {
+        declaration[elementIndex].Stream = 0;
+        declaration[elementIndex].Offset = offset;
+        declaration[elementIndex].Type = D3DDECLTYPE_FLOAT4;
+        declaration[elementIndex].Method = D3DDECLMETHOD_DEFAULT;
+        declaration[elementIndex].Usage = D3DDECLUSAGE_POSITION;
+        declaration[elementIndex].UsageIndex = 0;
+        offset += 16; // 4 floats
+        elementIndex++;
+    }
+    else if (VFormat & CKRST_VF_POSITIONMASK)
+    {
+        // Handle weighted vertex blending (POSITION1W - POSITION5W)
+        int weightCount = CKRST_VF_GETWCOUNT(VFormat);
+        if (weightCount > 0)
+        {
+            // Position
+            declaration[elementIndex].Stream = 0;
+            declaration[elementIndex].Offset = offset;
+            declaration[elementIndex].Type = D3DDECLTYPE_FLOAT3;
+            declaration[elementIndex].Method = D3DDECLMETHOD_DEFAULT;
+            declaration[elementIndex].Usage = D3DDECLUSAGE_POSITION;
+            declaration[elementIndex].UsageIndex = 0;
+            offset += 12; // 3 floats
+            elementIndex++;
+
+            // Blend weights
+            declaration[elementIndex].Stream = 0;
+            declaration[elementIndex].Offset = offset;
+            declaration[elementIndex].Type = weightCount == 1 ? D3DDECLTYPE_FLOAT1
+                                           : weightCount == 2 ? D3DDECLTYPE_FLOAT2
+                                           : weightCount == 3 ? D3DDECLTYPE_FLOAT3
+                                                              : D3DDECLTYPE_FLOAT4;
+            declaration[elementIndex].Method = D3DDECLMETHOD_DEFAULT;
+            declaration[elementIndex].Usage = D3DDECLUSAGE_BLENDWEIGHT;
+            declaration[elementIndex].UsageIndex = 0;
+            offset += 4 * weightCount;
+            elementIndex++;
+        }
+    }
+
+    // Normal
+    if (VFormat & CKRST_VF_NORMAL)
+    {
+        declaration[elementIndex].Stream = 0;
+        declaration[elementIndex].Offset = offset;
+        declaration[elementIndex].Type = D3DDECLTYPE_FLOAT3;
+        declaration[elementIndex].Method = D3DDECLMETHOD_DEFAULT;
+        declaration[elementIndex].Usage = D3DDECLUSAGE_NORMAL;
+        declaration[elementIndex].UsageIndex = 0;
+        offset += 12; // 3 floats
+        elementIndex++;
+    }
+
+    // Point size (for point sprites)
+    if (VFormat & CKRST_VF_PSIZE)
+    {
+        declaration[elementIndex].Stream = 0;
+        declaration[elementIndex].Offset = offset;
+        declaration[elementIndex].Type = D3DDECLTYPE_FLOAT1;
+        declaration[elementIndex].Method = D3DDECLMETHOD_DEFAULT;
+        declaration[elementIndex].Usage = D3DDECLUSAGE_PSIZE;
+        declaration[elementIndex].UsageIndex = 0;
+        offset += 4; // 1 float
+        elementIndex++;
+    }
+
+    // Diffuse color
+    if (VFormat & CKRST_VF_DIFFUSE)
+    {
+        declaration[elementIndex].Stream = 0;
+        declaration[elementIndex].Offset = offset;
+        declaration[elementIndex].Type = D3DDECLTYPE_D3DCOLOR;
+        declaration[elementIndex].Method = D3DDECLMETHOD_DEFAULT;
+        declaration[elementIndex].Usage = D3DDECLUSAGE_COLOR;
+        declaration[elementIndex].UsageIndex = 0;
+        offset += 4; // DWORD
+        elementIndex++;
+    }
+
+    // Specular color
+    if (VFormat & CKRST_VF_SPECULAR)
+    {
+        declaration[elementIndex].Stream = 0;
+        declaration[elementIndex].Offset = offset;
+        declaration[elementIndex].Type = D3DDECLTYPE_D3DCOLOR;
+        declaration[elementIndex].Method = D3DDECLMETHOD_DEFAULT;
+        declaration[elementIndex].Usage = D3DDECLUSAGE_COLOR;
+        declaration[elementIndex].UsageIndex = 1;
+        offset += 4; // DWORD
+        elementIndex++;
+    }
+
+    // Texture coordinates
+    DWORD texCount = CKRST_VF_GETTEXCOUNT(VFormat);
+    for (DWORD i = 0; i < texCount && i < 8; i++)
+    {
+        // Get number of components for this texture coordinate set
+        DWORD texDimension = 2; // Default is 2D (UV)
+
+        // Check for texture coordinate dimension override in bits 16-31
+        DWORD texFormat = (VFormat >> (16 + i * 2)) & 0x3;
+        switch (texFormat)
+        {
+            case CKRST_VF_TEXFORMAT1: texDimension = 1; break; // 1D (U)
+            case CKRST_VF_TEXFORMAT3: texDimension = 3; break; // 3D (UVW)
+            case CKRST_VF_TEXFORMAT4: texDimension = 4; break; // 4D (UVWQ)
+            default: texDimension = 2; break;                  // 2D (UV)
+        }
+
+        // Map dimension to D3D declaration type
+        D3DDECLTYPE declType;
+        switch (texDimension)
+        {
+            case 1: declType = D3DDECLTYPE_FLOAT1; break;
+            case 3: declType = D3DDECLTYPE_FLOAT3; break;
+            case 4: declType = D3DDECLTYPE_FLOAT4; break;
+            default: declType = D3DDECLTYPE_FLOAT2; break;
+        }
+
+        declaration[elementIndex].Stream = 0;
+        declaration[elementIndex].Offset = offset;
+        declaration[elementIndex].Type = declType;
+        declaration[elementIndex].Method = D3DDECLMETHOD_DEFAULT;
+        declaration[elementIndex].Usage = D3DDECLUSAGE_TEXCOORD;
+        declaration[elementIndex].UsageIndex = i;
+        offset += 4 * texDimension;
+        elementIndex++;
+    }
+
+    // Add terminator element (required by Direct3D 9)
+    declaration[elementIndex].Stream = 0xFF;
+    declaration[elementIndex].Offset = 0;
+    declaration[elementIndex].Type = D3DDECLTYPE_UNUSED;
+    declaration[elementIndex].Method = 0;
+    declaration[elementIndex].Usage = 0;
+    declaration[elementIndex].UsageIndex = 0;
+
+    // Create the declaration
+    HRESULT hr = m_Device->CreateVertexDeclaration(declaration, ppDecl);
+    return SUCCEEDED(hr);
 }
 
 void CKDX9RasterizerContext::FlushCaches()
