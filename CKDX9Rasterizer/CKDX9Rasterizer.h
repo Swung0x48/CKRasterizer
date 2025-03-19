@@ -279,6 +279,13 @@ public:
 
 protected:
     //-----------------------
+    void RestoreWindowStyle(HWND Window, LONG originalStyle, CKBOOL wasFullscreen);
+    CKBOOL UpdateDeviceProperties();
+    CKBOOL InitializeDeviceStates();
+    void DestroyDevice();
+    HRESULT ResetDevice();
+    void ConfigureMultisampling();
+
     void UpdateDirectXData();
     CKBOOL InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc *VB, CKDWORD StartIndex,
                                    CKDWORD VertexCount, CKWORD *indices, int indexcount, CKBOOL Clip);

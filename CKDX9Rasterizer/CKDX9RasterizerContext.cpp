@@ -231,27 +231,39 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
 #endif
     m_InCreateDestroy = TRUE;
 
-    // Store original window position
-    CKRECT rect = {0, 0, 0, 0};
+    // Store original window style for restoring later if needed
     LONG originalStyle = 0;
+    CKRECT windowRect = {0, 0, 0, 0};
+
+    // Get window position and handle parent relationship
     if (Window)
     {
-        VxGetWindowRect(Window, &rect);
-        WIN_HANDLE parent = VxGetParent(Window);
-        VxScreenToClient(parent, reinterpret_cast<CKPOINT *>(&rect));
-        VxScreenToClient(parent, reinterpret_cast<CKPOINT *>(&rect.right));
-        
-        // Save original window style for restoration if needed
+        // Store original window style
         originalStyle = GetWindowLongA((HWND)Window, GWL_STYLE);
-    }
 
-    // Modify window style for fullscreen mode
-    if (Fullscreen && Window)
-    {
-        SetWindowLongA((HWND)Window, GWL_STYLE, originalStyle & ~WS_CHILDWINDOW);
+        // Get window position relative to parent
+        VxGetWindowRect(Window, &windowRect);
+        WIN_HANDLE parent = VxGetParent(Window);
+        if (parent)
+        {
+            VxScreenToClient(parent, reinterpret_cast<CKPOINT *>(&windowRect));
+            VxScreenToClient(parent, reinterpret_cast<CKPOINT *>(&windowRect.right));
+        }
+
+        // For fullscreen mode, remove child window style
+        if (Fullscreen)
+        {
+            SetWindowLongA((HWND)Window, GWL_STYLE, originalStyle & ~WS_CHILDWINDOW);
+        }
     }
 
     CKDX9RasterizerDriver *driver = static_cast<CKDX9RasterizerDriver *>(m_Driver);
+    if (!driver || !driver->m_Inited)
+    {
+        m_InCreateDestroy = FALSE;
+        return FALSE;
+    }
+
     memset(&m_PresentParams, 0, sizeof(m_PresentParams));
     m_PresentParams.hDeviceWindow = (HWND)Window;
     m_PresentParams.BackBufferWidth = Width;
@@ -269,10 +281,30 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
 #endif
     m_PresentParams.EnableAutoDepthStencil = TRUE;
     m_PresentParams.FullScreen_RefreshRateInHz = Fullscreen ? RefreshRate : D3DPRESENT_RATE_DEFAULT;
+    
+    // Use immediate presentation by default
     m_PresentParams.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
     // m_PresentParams.PresentationInterval = Fullscreen ? D3DPRESENT_INTERVAL_IMMEDIATE : D3DPRESENT_INTERVAL_DEFAULT;
+    
+    // Find appropriate formats for rendering
     m_PresentParams.BackBufferFormat = driver->FindNearestRenderTargetFormat(Bpp, !Fullscreen);
+    if (m_PresentParams.BackBufferFormat == D3DFMT_UNKNOWN)
+    {
+        RestoreWindowStyle((HWND)Window, originalStyle, Fullscreen);
+        m_InCreateDestroy = FALSE;
+        return FALSE;
+    }
+
     m_PresentParams.AutoDepthStencilFormat = driver->FindNearestDepthFormat(m_PresentParams.BackBufferFormat, Zbpp, StencilBpp);
+    if (m_PresentParams.AutoDepthStencilFormat == D3DFMT_UNKNOWN)
+    {
+        RestoreWindowStyle((HWND)Window, originalStyle, Fullscreen);
+        m_InCreateDestroy = FALSE;
+        return FALSE;
+    }
+
+    // Configure multisampling
+    ConfigureMultisampling();
 
     D3DDISPLAYMODEEX displayMode = {
         sizeof(D3DDISPLAYMODEEX),
@@ -282,39 +314,6 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
         m_PresentParams.BackBufferFormat,
         D3DSCANLINEORDERING_PROGRESSIVE
     };
-
-    // Configure multisampling (anti-aliasing)
-    if (m_Antialias == D3DMULTISAMPLE_NONE)
-    {
-        m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
-    }
-    else if (m_Antialias < D3DMULTISAMPLE_2_SAMPLES || m_Antialias > D3DMULTISAMPLE_4_SAMPLES)
-    {
-        m_PresentParams.MultiSampleType = D3DMULTISAMPLE_2_SAMPLES;
-    }
-    else
-    {
-        m_PresentParams.MultiSampleType = (D3DMULTISAMPLE_TYPE)m_Antialias;
-    }
-
-    // Find highest supported multisampling level if requested
-    if (m_PresentParams.MultiSampleType >= D3DMULTISAMPLE_2_SAMPLES)
-    {
-        for (int type = m_PresentParams.MultiSampleType; type >= D3DMULTISAMPLE_2_SAMPLES; --type)
-        {
-            if (SUCCEEDED(m_Owner->m_D3D9->CheckDeviceMultiSampleType(
-                    static_cast<CKDX9RasterizerDriver *>(m_Driver)->m_AdapterIndex,
-                    D3DDEVTYPE_HAL,
-                    m_PresentParams.BackBufferFormat,
-                    m_PresentParams.Windowed,
-                    (D3DMULTISAMPLE_TYPE)type,
-                    NULL)))
-            {
-                m_PresentParams.MultiSampleType = (D3DMULTISAMPLE_TYPE)type;
-                break;
-            }
-        }
-    }
 
     // Configure device behavior flags
     DWORD behaviorFlags = D3DCREATE_ENABLE_PRESENTSTATS;
@@ -331,44 +330,77 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
         m_SoftwareVertexProcessing = FALSE;
     }
 
-    HRESULT hr = E_FAIL;
+    HRESULT hr = S_OK;
 
     // Create the Direct3D device
 #ifdef USE_D3D9EX
-    hr = m_Owner->m_D3D9->CreateDeviceEx(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
-                                         behaviorFlags, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
+    hr = m_Owner->m_D3D9->CreateDeviceEx(
+        driver->m_AdapterIndex, 
+        D3DDEVTYPE_HAL, 
+        (HWND)m_Owner->m_MainWindow,
+        behaviorFlags, 
+        &m_PresentParams, 
+        Fullscreen ? &displayMode : NULL, 
+        &m_Device);
     if (FAILED(hr) && m_PresentParams.MultiSampleType != D3DMULTISAMPLE_NONE)
     {
-        // Retry without multisampling if it failed
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
-        hr = m_Owner->m_D3D9->CreateDeviceEx(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow,
-                                             behaviorFlags, &m_PresentParams, Fullscreen ? &displayMode : NULL, &m_Device);
+        hr = m_Owner->m_D3D9->CreateDeviceEx(
+            driver->m_AdapterIndex, 
+            D3DDEVTYPE_HAL, 
+            (HWND)m_Owner->m_MainWindow,
+            behaviorFlags, 
+            &m_PresentParams, 
+            Fullscreen ? &displayMode : NULL,
+            &m_Device);
     }
 #else
-    hr = m_Owner->m_D3D9->CreateDevice(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow, behaviorFlags, &m_PresentParams, &m_Device);
+    hr = m_Owner->m_D3D9->CreateDevice(
+        driver->m_AdapterIndex, 
+        D3DDEVTYPE_HAL, 
+        (HWND)m_Owner->m_MainWindow,
+        behaviorFlags, 
+        &m_PresentParams, 
+        &m_Device);
     if (FAILED(hr) && m_PresentParams.MultiSampleType != D3DMULTISAMPLE_NONE)
     {
-        // Retry without multisampling if it failed
         m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
-        hr = m_Owner->m_D3D9->CreateDevice(driver->m_AdapterIndex, D3DDEVTYPE_HAL, (HWND)m_Owner->m_MainWindow, behaviorFlags, &m_PresentParams, &m_Device);
+        hr = m_Owner->m_D3D9->CreateDevice(
+            driver->m_AdapterIndex, 
+            D3DDEVTYPE_HAL, 
+            (HWND)m_Owner->m_MainWindow,
+            behaviorFlags, 
+            &m_PresentParams, 
+            &m_Device);
     }
 #endif
 
-    // Restore window style if we're not going fullscreen
-    if (Fullscreen && Window)
-    {
-        SetWindowLongA((HWND)Window, GWL_STYLE, originalStyle | WS_CHILDWINDOW);
-    }
-    else if (Window && !Fullscreen)
-    {
-        VxMoveWindow(Window, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, FALSE);
-    }
-
-    // Handle device creation failure
+    // Restore window style if device creation failed
     if (FAILED(hr))
     {
+        RestoreWindowStyle((HWND)Window, originalStyle, Fullscreen);
         m_InCreateDestroy = FALSE;
         return FALSE;
+    }
+
+    // Position the window appropriately
+    if (Window)
+    {
+        if (Fullscreen)
+        {
+            // For fullscreen, restore window as a child if it was a child window
+            if (originalStyle & WS_CHILDWINDOW)
+            {
+                SetWindowLongA((HWND)Window, GWL_STYLE, originalStyle);
+            }
+        }
+        else
+        {
+            // For windowed mode, position the window correctly
+            VxMoveWindow(Window, windowRect.left, windowRect.top,
+                         windowRect.right - windowRect.left,
+                         windowRect.bottom - windowRect.top, FALSE);
+        }
     }
 
     // Store context configuration
@@ -377,52 +409,31 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
     m_PosY = PosY;
     m_Fullscreen = Fullscreen;
 
-    // Get back buffer information
-    IDirect3DSurface9 *pBackBuffer = NULL;
-    if (SUCCEEDED(m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer)))
+    // Update internal dimensions and formats from created device
+    if (!UpdateDeviceProperties())
     {
-        VxImageDescEx desc;
-        D3DSURFACE_DESC surfaceDesc;
-        if (SUCCEEDED(pBackBuffer->GetDesc(&surfaceDesc)))
-        {
-            m_PixelFormat = D3DFormatToVxPixelFormat(surfaceDesc.Format);
-            VxPixelFormat2ImageDesc(m_PixelFormat, desc);
-            m_Bpp = desc.BitsPerPixel;
-            m_Width = surfaceDesc.Width;
-            m_Height = surfaceDesc.Height;
-        }
-        SAFERELEASE(pBackBuffer);
-    }
-
-    // Get depth/stencil information
-    IDirect3DSurface9 *pStencilSurface = NULL;
-    if (SUCCEEDED(m_Device->GetDepthStencilSurface(&pStencilSurface)))
-    {
-        D3DSURFACE_DESC desc;
-        if (SUCCEEDED(pStencilSurface->GetDesc(&desc)))
-        {
-            m_ZBpp = DepthBitPerPixelFromFormat(desc.Format, &m_StencilBpp);
-        }
-        SAFERELEASE(pStencilSurface);
-    }
-
-    // Set up default render states
-    if (!SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, TRUE) ||
-        !SetRenderState(VXRENDERSTATE_LOCALVIEWER, TRUE) ||
-        !SetRenderState(VXRENDERSTATE_COLORVERTEX, FALSE))
-    {
-        // Handle setup failure
-        SAFERELEASE(m_Device);
+        DestroyDevice();
         m_InCreateDestroy = FALSE;
         return FALSE;
     }
 
-    // Finish initialization
+    // Set initial rendering states
+    if (!InitializeDeviceStates())
+    {
+        DestroyDevice();
+        m_InCreateDestroy = FALSE;
+        return FALSE;
+    }
+
+    // Update DirectX data for external access
     UpdateDirectXData();
+    
+    // Initialize caches and object arrays
     FlushCaches();
     UpdateObjectArrays(m_Owner);
     ClearStreamCache();
 
+    // Register as fullscreen context if in fullscreen mode
     if (m_Fullscreen)
         m_Owner->m_FullscreenContext = this;
 
@@ -432,92 +443,88 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
 
 CKBOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height, CKDWORD Flags)
 {
-    if (m_InCreateDestroy)
+    if (m_InCreateDestroy || !m_Device)
         return FALSE;
 
-    EndScene();
+    // End any active scene
+    if (m_SceneBegined)
+        EndScene();
+
     ReleaseScreenBackup();
 
+    // Update position if allowed
     if ((Flags & VX_RESIZE_NOMOVE) == 0)
     {
         m_PosX = PosX;
         m_PosY = PosY;
     }
 
+    // Skip size changes if requested
+    if ((Flags & VX_RESIZE_NOSIZE) != 0)
+        return TRUE;
+
+    // Calculate dimensions if not specified
     RECT rect;
-    if ((Flags & VX_RESIZE_NOSIZE) == 0)
+    if (Width == 0 || Height == 0)
     {
-        if (Width == 0 || Height == 0)
-        {
-            GetClientRect((HWND)m_Window, &rect);
-            Width = rect.right - m_PosX;
-            Height = rect.bottom - m_PosY;
-        }
-        m_PresentParams.BackBufferWidth = Width;
-        m_PresentParams.BackBufferHeight = Height;
+        if (!m_Window || !GetClientRect((HWND)m_Window, &rect))
+            return FALSE;
 
-        ReleaseVertexDeclarations();
-        ReleaseStateBlocks();
-        FlushNonManagedObjects();
-        ClearStreamCache();
-
-        if (m_Antialias == 0)
-        {
-            m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
-        }
-        else if (m_PresentParams.MultiSampleType == D3DMULTISAMPLE_NONE)
-        {
-            m_PresentParams.MultiSampleType = (m_Antialias < 2 || m_Antialias > 16) ? D3DMULTISAMPLE_2_SAMPLES : (D3DMULTISAMPLE_TYPE)m_Antialias;
-            for (int type = m_PresentParams.MultiSampleType; type >= D3DMULTISAMPLE_2_SAMPLES; --type)
-            {
-                if (SUCCEEDED(m_Owner->m_D3D9->CheckDeviceMultiSampleType(
-                        static_cast<CKDX9RasterizerDriver *>(m_Driver)->m_AdapterIndex,
-                        D3DDEVTYPE_HAL,
-                        m_PresentParams.BackBufferFormat,
-                        m_PresentParams.Windowed,
-                        m_PresentParams.MultiSampleType,
-                        NULL)))
-                    break;
-                m_PresentParams.MultiSampleType = (D3DMULTISAMPLE_TYPE)type;
-            }
-
-            if (m_PresentParams.MultiSampleType < D3DMULTISAMPLE_2_SAMPLES)
-                m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
-        }
-
-        HRESULT hr = m_Device->Reset(&m_PresentParams);
-        if (hr == D3DERR_DEVICELOST)
-        {
-            if (m_Device->TestCooperativeLevel() == D3DERR_DEVICENOTRESET)
-            {
-                hr = m_Device->Reset(&m_PresentParams);
-                if (FAILED(hr))
-                {
-                    m_PresentParams.BackBufferWidth = m_Width;
-                    m_PresentParams.BackBufferHeight = m_Height;
-                    hr = m_Device->Reset(&m_PresentParams);
-                }
-            }
-        }
-        else
-        {
-            m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
-            hr = m_Device->Reset(&m_PresentParams);
-        }
-
-        if (SUCCEEDED(hr))
-        {
-            m_Width = Width;
-            m_Height = Height;
-        }
-
-        UpdateDirectXData();
-        FlushCaches();
-
-        return SUCCEEDED(hr);
+        Width = rect.right; // Don't subtract m_PosX - client rect is already relative
+        Height = rect.bottom;
     }
 
-    return TRUE;
+    // Validate minimum dimensions
+    if (Width < 1 || Height < 1)
+        return FALSE;
+
+    // Store old dimensions for fallback
+    UINT oldWidth = m_Width;
+    UINT oldHeight = m_Height;
+
+    // Update presentation parameters with new size
+    m_PresentParams.BackBufferWidth = Width;
+    m_PresentParams.BackBufferHeight = Height;
+
+    // Clean up resources that will be invalidated by Reset
+    ReleaseVertexDeclarations();
+    ReleaseStateBlocks();
+    FlushNonManagedObjects();
+    ClearStreamCache();
+
+    // Configure multisampling
+    ConfigureMultisampling();
+
+    // Try to reset the device
+    HRESULT hr = ResetDevice();
+    if (SUCCEEDED(hr))
+    {
+        m_Width = Width;
+        m_Height = Height;
+    }
+    else
+    {
+        // Reset failed - try to recover with original dimensions
+        m_PresentParams.BackBufferWidth = oldWidth;
+        m_PresentParams.BackBufferHeight = oldHeight;
+
+        // Try without multisampling as a fallback
+        m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
+        hr = ResetDevice();
+
+        if (FAILED(hr))
+        {
+            // Device is truly lost and can't be recovered yet
+            // We'll need to wait for TestCooperativeLevel to return D3DERR_DEVICENOTRESET
+            return FALSE;
+        }
+    }
+
+    // Update DirectX data and state caches
+    UpdateDirectXData();
+    FlushCaches();
+
+    return SUCCEEDED(hr);
 }
 
 CKBOOL CKDX9RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD Stencil, int RectCount, CKRECT *rects)
@@ -3280,6 +3287,151 @@ CKBOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char
     m_Textures[Texture] = desc;
 
     return TRUE;
+}
+
+void CKDX9RasterizerContext::RestoreWindowStyle(HWND Window, LONG originalStyle, CKBOOL wasFullscreen)
+{
+    if (Window && wasFullscreen)
+    {
+        SetWindowLongA(Window, GWL_STYLE, originalStyle);
+    }
+}
+
+CKBOOL CKDX9RasterizerContext::UpdateDeviceProperties()
+{
+    if (!m_Device)
+        return FALSE;
+
+    // Get backbuffer information
+    IDirect3DSurface9 *pBackBuffer = NULL;
+    if (SUCCEEDED(m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer)))
+    {
+        VxImageDescEx desc;
+        D3DSURFACE_DESC surfaceDesc;
+        if (SUCCEEDED(pBackBuffer->GetDesc(&surfaceDesc)))
+        {
+            SAFERELEASE(pBackBuffer);
+            m_PixelFormat = D3DFormatToVxPixelFormat(surfaceDesc.Format);
+            VxPixelFormat2ImageDesc(m_PixelFormat, desc);
+            m_Bpp = desc.BitsPerPixel;
+            m_Width = surfaceDesc.Width;
+            m_Height = surfaceDesc.Height;
+        }
+        else
+        {
+            SAFERELEASE(pBackBuffer);
+            return FALSE;
+        }
+    }
+    else
+    {
+        return FALSE;
+    }
+
+    // Get depth/stencil information
+    IDirect3DSurface9 *pStencilSurface = NULL;
+    if (SUCCEEDED(m_Device->GetDepthStencilSurface(&pStencilSurface)))
+    {
+        D3DSURFACE_DESC desc;
+        if (SUCCEEDED(pStencilSurface->GetDesc(&desc)))
+        {
+            SAFERELEASE(pStencilSurface);
+            m_ZBpp = DepthBitPerPixelFromFormat(desc.Format, &m_StencilBpp);
+        }
+        else
+        {
+            SAFERELEASE(pStencilSurface);
+            return FALSE;
+        }
+    }
+    else
+    {
+        // Not fatal - some renderers might work without depth buffer
+        m_ZBpp = 0;
+        m_StencilBpp = 0;
+    }
+
+    return TRUE;
+}
+
+CKBOOL CKDX9RasterizerContext::InitializeDeviceStates()
+{
+    if (!m_Device)
+        return FALSE;
+
+    if (!SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, TRUE) ||
+        !SetRenderState(VXRENDERSTATE_LOCALVIEWER, TRUE) ||
+        !SetRenderState(VXRENDERSTATE_COLORVERTEX, FALSE))
+    {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+void CKDX9RasterizerContext::DestroyDevice()
+{
+    if (m_Owner->m_FullscreenContext == this)
+        m_Owner->m_FullscreenContext = NULL;
+
+    SAFERELEASE(m_Device);
+}
+
+HRESULT CKDX9RasterizerContext::ResetDevice()
+{
+    HRESULT hr = m_Device->Reset(&m_PresentParams);
+
+    // Handle device lost case
+    if (hr == D3DERR_DEVICELOST)
+    {
+        // Check if device is ready to be reset
+        hr = m_Device->TestCooperativeLevel();
+        if (hr == D3DERR_DEVICENOTRESET)
+        {
+            // Device is ready to be reset
+            return m_Device->Reset(&m_PresentParams);
+        }
+    }
+
+    return hr;
+}
+
+void CKDX9RasterizerContext::ConfigureMultisampling()
+{
+    // Disable multisampling if not requested
+    if (m_Antialias == 0)
+    {
+        m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
+        m_PresentParams.MultiSampleQuality = 0;
+        return;
+    }
+
+    // Determine requested sampling level
+    D3DMULTISAMPLE_TYPE requestedType = (m_Antialias < D3DMULTISAMPLE_2_SAMPLES || 
+                                         m_Antialias > D3DMULTISAMPLE_16_SAMPLES) ? 
+        D3DMULTISAMPLE_2_SAMPLES : (D3DMULTISAMPLE_TYPE)m_Antialias;
+
+    // Try each level from requested down to 2x
+    for (int type = requestedType; type >= D3DMULTISAMPLE_2_SAMPLES; --type)
+    {
+        DWORD qualityLevels = 0;
+        if (SUCCEEDED(m_Owner->m_D3D9->CheckDeviceMultiSampleType(
+            static_cast<CKDX9RasterizerDriver *>(m_Driver)->m_AdapterIndex, 
+            D3DDEVTYPE_HAL,
+            m_PresentParams.BackBufferFormat, 
+            m_PresentParams.Windowed, 
+            (D3DMULTISAMPLE_TYPE)type,
+            &qualityLevels)))
+        {
+            m_PresentParams.MultiSampleType = (D3DMULTISAMPLE_TYPE)type;
+            m_PresentParams.MultiSampleQuality = (qualityLevels > 0) ? (qualityLevels - 1) : 0;
+            return;
+        }
+    }
+
+    // No supported multisampling level found
+    m_PresentParams.MultiSampleType = D3DMULTISAMPLE_NONE;
+    m_PresentParams.MultiSampleQuality = 0;
 }
 
 void CKDX9RasterizerContext::UpdateDirectXData()
