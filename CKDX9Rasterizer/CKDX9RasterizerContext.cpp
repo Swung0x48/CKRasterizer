@@ -69,6 +69,10 @@ CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver *driver) :
     assert(driver != NULL);
     m_Driver = driver;
     m_Owner = static_cast<CKDX9Rasterizer *>(driver->m_Owner);
+
+    memset(m_TextureMinFilterStateBlocks, 0, sizeof(m_TextureMinFilterStateBlocks));
+    memset(m_TextureMagFilterStateBlocks, 0, sizeof(m_TextureMagFilterStateBlocks));
+    memset(m_TextureMapBlendStateBlocks, 0, sizeof(m_TextureMapBlendStateBlocks));
 }
 
 CKDX9RasterizerContext::~CKDX9RasterizerContext()
@@ -3239,59 +3243,83 @@ CKBOOL CKDX9RasterizerContext::CreateVertexDeclaration(CKDWORD VFormat, LPDIRECT
 
 void CKDX9RasterizerContext::FlushCaches()
 {
+    // Reset render state cache
     FlushRenderStateCache();
-
     m_InverseWinding = FALSE;
 
-    memset(m_TextureMinFilterStateBlocks, NULL, sizeof(m_TextureMinFilterStateBlocks));
-    memset(m_TextureMagFilterStateBlocks, NULL, sizeof(m_TextureMagFilterStateBlocks));
-    memset(m_TextureMapBlendStateBlocks, NULL, sizeof(m_TextureMapBlendStateBlocks));
+    // First release any existing state blocks to prevent memory leaks
+    ReleaseStateBlocks();
 
 #if USE_D3DSTATEBLOCKS
-    if (m_Device)
+    // Only proceed if device is valid and in a usable state
+    if (!m_Device || FAILED(m_Device->TestCooperativeLevel()))
+        return;
+
+    HRESULT hr;
+
+    // Create new state blocks for texture filtering and blending operations
+    for (int i = 0; i < 8; i++) // For each texture stage
     {
-        HRESULT hr;
-        for (int i = 0; i < 8; i++)
+        for (int j = 0; j < 8; j++) // For each filter type
         {
-            for (int j = 0; j < 8; j++)
+            // Create min filter state blocks
+            hr = m_Device->BeginStateBlock();
+            if (SUCCEEDED(hr))
             {
-                hr = m_Device->BeginStateBlock();
-                assert(SUCCEEDED(hr));
 #if LOGGING && LOG_FLUSHCACHES
                 fprintf(stderr, "begin TextureMinFilterStateBlocks %d %d -> 0x%x\n", i, j, hr);
 #endif
                 SetTextureStageState(i, CKRST_TSS_MINFILTER, j);
                 hr = m_Device->EndStateBlock(&m_TextureMinFilterStateBlocks[j][i]);
+
 #if LOGGING && LOG_FLUSHCACHES
                 fprintf(stderr, "end TextureMinFilterStateBlocks %d %d -> 0x%x\n", i, j, hr);
 #endif
-                assert(SUCCEEDED(hr));
 
-                hr = m_Device->BeginStateBlock();
+                // If EndStateBlock failed, ensure pointer is NULL
+                if (FAILED(hr))
+                    m_TextureMinFilterStateBlocks[j][i] = NULL;
+            }
+
+            // Create mag filter state blocks
+            hr = m_Device->BeginStateBlock();
+            if (SUCCEEDED(hr))
+            {
 #if LOGGING && LOG_FLUSHCACHES
                 fprintf(stderr, "begin TextureMagFilterStateBlocks %d %d -> 0x%x\n", i, j, hr);
 #endif
-                assert(SUCCEEDED(hr));
                 SetTextureStageState(i, CKRST_TSS_MAGFILTER, j);
                 hr = m_Device->EndStateBlock(&m_TextureMagFilterStateBlocks[j][i]);
+
 #if LOGGING && LOG_FLUSHCACHES
                 fprintf(stderr, "end TextureMagFilterStateBlocks %d %d -> 0x%x\n", i, j, hr);
 #endif
-                assert(SUCCEEDED(hr));
+
+                // If EndStateBlock failed, ensure pointer is NULL
+                if (FAILED(hr))
+                    m_TextureMagFilterStateBlocks[j][i] = NULL;
             }
-            for (int k = 0; k < 10; k++)
+        }
+
+        // Create texture map blend state blocks
+        for (int k = 0; k < 10; k++)
+        {
+            hr = m_Device->BeginStateBlock();
+            if (SUCCEEDED(hr))
             {
-                hr = m_Device->BeginStateBlock();
 #if LOGGING && LOG_FLUSHCACHES
                 fprintf(stderr, "begin TextureMapBlendStateBlocks %d %d -> 0x%x\n", i, k, hr);
 #endif
-                assert(SUCCEEDED(hr));
                 SetTextureStageState(i, CKRST_TSS_TEXTUREMAPBLEND, k);
                 hr = m_Device->EndStateBlock(&m_TextureMapBlendStateBlocks[k][i]);
+
 #if LOGGING && LOG_FLUSHCACHES
                 fprintf(stderr, "end TextureMapBlendStateBlocks %d %d -> 0x%x\n", i, k, hr);
 #endif
-                assert(SUCCEEDED(hr));
+
+                // If EndStateBlock failed, ensure pointer is NULL
+                if (FAILED(hr))
+                    m_TextureMapBlendStateBlocks[k][i] = NULL;
             }
         }
     }
