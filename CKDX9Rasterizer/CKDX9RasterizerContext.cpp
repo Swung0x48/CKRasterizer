@@ -2935,26 +2935,33 @@ CKBOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char
 
 void CKDX9RasterizerContext::UpdateDirectXData()
 {
-    IDirect3DSurface9 *pBackBuffer = NULL;
-    HRESULT hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer);
-    assert(SUCCEEDED(hr));
-
-    IDirect3DSurface9 *pZStencilSurface = NULL;
-    hr = m_Device->GetDepthStencilSurface(&pZStencilSurface);
-    assert(SUCCEEDED(hr));
-
-    m_DirectXData.D3DDevice = m_Device;
-    m_DirectXData.DxVersion = DIRECT3D_VERSION;
-    m_DirectXData.D3DViewport = NULL;
-    m_DirectXData.DDBackBuffer = pBackBuffer;
+    // Reset the structure to defaults
+    m_DirectXData.DDBackBuffer = NULL;
     m_DirectXData.DDPrimaryBuffer = NULL;
-    m_DirectXData.DDZBuffer = pZStencilSurface;
+    m_DirectXData.DDZBuffer = NULL;
+    m_DirectXData.D3DViewport = NULL;
     m_DirectXData.DirectDraw = NULL;
-    m_DirectXData.Direct3D = m_Owner->m_D3D9;
     m_DirectXData.DDClipper = NULL;
 
-    SAFERELEASE(pZStencilSurface);
-    SAFERELEASE(pBackBuffer);
+    // Set device pointer
+    m_DirectXData.D3DDevice = m_Device;
+    m_DirectXData.DxVersion = DIRECT3D_VERSION;
+
+    // Get back buffer
+    IDirect3DSurface9 *pBackBuffer = NULL;
+    HRESULT hr = m_Device ? m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer) : E_FAIL;
+    if (SUCCEEDED(hr) && pBackBuffer)
+    {
+        SAFERELEASE(pBackBuffer);
+    }
+
+    // Get depth/stencil buffer
+    IDirect3DSurface9 *pZStencilSurface = NULL;
+    hr = m_Device ? m_Device->GetDepthStencilSurface(&pZStencilSurface) : E_FAIL;
+    if (SUCCEEDED(hr) && pZStencilSurface)
+    {
+        SAFERELEASE(pZStencilSurface);
+    }
 }
 
 CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc *VB,
