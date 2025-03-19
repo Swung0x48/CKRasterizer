@@ -560,7 +560,7 @@ CKBOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
     light.Theta = data->InnerSpotCone;
     light.Phi = data->OuterSpotCone;
 
-    if ((data->Type == VX_LIGHTPARA))
+    if (data->Type == VX_LIGHTPARA)
     {
         light.Type = D3DLIGHT_POINT;
     }
@@ -1657,6 +1657,10 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
         dst->GetWidth() <= 0.0f || dst->right < 0.0f || m_Width <= dst->left ||
         dst->GetHeight() <= 0.0f || dst->bottom < 0.0f || m_Height <= dst->top)
         return FALSE;
+
+    // Begin scene if needed
+    if (!m_SceneBegined)
+        BeginScene();
 
     // Set up rendering states
     HRESULT hr;
