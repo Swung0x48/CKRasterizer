@@ -4325,12 +4325,28 @@ void CKDX9RasterizerContext::ReleaseScreenBackup() { SAFERELEASE(m_ScreenBackup)
 
 void CKDX9RasterizerContext::ReleaseVertexDeclarations()
 {
-    for (auto it = m_VertexDeclarations.Begin(); it != m_VertexDeclarations.End(); ++it)
+    // Make sure we're not in the middle of creating/destroying resources
+    if (m_InCreateDestroy)
+        return;
+
+    // Clear any active vertex declaration from the device
+    if (m_Device)
+    {
+        m_Device->SetVertexDeclaration(NULL);
+    }
+
+    // Release all declarations in the hash table
+    for (XNHashTable<LPDIRECT3DVERTEXDECLARATION9, DWORD>::Iterator it = m_VertexDeclarations.Begin(); it != m_VertexDeclarations.End(); ++it)
     {
         LPDIRECT3DVERTEXDECLARATION9 decl = *it;
         SAFERELEASE(decl);
     }
+
+    // Clear the hash table
     m_VertexDeclarations.Clear();
+
+    // Reset vertex format cache to force recreation of declarations
+    m_CurrentVertexFormatCache = 0;
 }
 
 CKDWORD CKDX9RasterizerContext::DX9PresentInterval(DWORD PresentInterval)
