@@ -4101,42 +4101,156 @@ void CKDX9RasterizerContext::FlushCaches()
 
 void CKDX9RasterizerContext::FlushNonManagedObjects()
 {
+    // Skip if device is null or we're already in create/destroy process
+    if (!m_Device || m_InCreateDestroy)
+        return;
+
     HRESULT hr;
-    if (m_Device)
+
+    // Clear all texture stages first
+    for (int i = 0; i < m_Driver->m_3DCaps.MaxNumberTextureStage; ++i)
     {
-        hr = m_Device->SetIndices(NULL);
-        assert(SUCCEEDED(hr));
-
-        hr = m_Device->SetStreamSource(0, NULL, NULL, NULL);
-        assert(SUCCEEDED(hr));
-
-        if (m_DefaultBackBuffer && m_DefaultDepthBuffer)
+        hr = m_Device->SetTexture(i, NULL);
+        if (FAILED(hr))
         {
-            hr = m_Device->SetRenderTarget(0, m_DefaultBackBuffer);
-            assert(SUCCEEDED(hr));
-
-            hr = m_Device->SetDepthStencilSurface(m_DefaultDepthBuffer);
-            assert(SUCCEEDED(hr));
-
-            SAFERELEASE(m_DefaultBackBuffer);
-            SAFERELEASE(m_DefaultDepthBuffer);
+#if LOGGING
+            fprintf(stderr, "Failed to clear texture stage %d\n", i);
+#endif
         }
     }
 
+    // Reset indices and vertex streams
+    hr = m_Device->SetIndices(NULL);
+    if (FAILED(hr))
+    {
+#if LOGGING
+        fprintf(stderr, "Failed to clear index buffer\n");
+#endif
+    }
+
+    // Clear vertex streams (correctly using all parameters)
+    for (UINT i = 0; i < 8; ++i) // DirectX 9 typically supports 8 streams
+    {
+        hr = m_Device->SetStreamSource(i, NULL, 0, 0);
+        if (FAILED(hr))
+        {
+#if LOGGING
+            fprintf(stderr, "Failed to clear vertex stream %d\n", i);
+#endif
+        }
+    }
+
+    // Clear vertex and pixel shaders
+    hr = m_Device->SetVertexShader(NULL);
+    if (FAILED(hr))
+    {
+#if LOGGING
+        fprintf(stderr, "Failed to clear vertex shader\n");
+#endif
+    }
+
+    hr = m_Device->SetPixelShader(NULL);
+    if (FAILED(hr))
+    {
+#if LOGGING
+        fprintf(stderr, "Failed to clear pixel shader\n");
+#endif
+    }
+
+    // Reset render target if needed
+    if (m_DefaultBackBuffer)
+    {
+        // Store current render target for later release
+        LPDIRECT3DSURFACE9 oldBackBuffer = m_DefaultBackBuffer;
+        LPDIRECT3DSURFACE9 oldDepthBuffer = m_DefaultDepthBuffer;
+
+        // Set default render target and depth buffer
+        hr = m_Device->SetRenderTarget(0, oldBackBuffer);
+        if (SUCCEEDED(hr) && oldDepthBuffer)
+        {
+            hr = m_Device->SetDepthStencilSurface(oldDepthBuffer);
+            if (FAILED(hr))
+            {
+#if LOGGING
+                fprintf(stderr, "Failed to set depth buffer\n");
+#endif
+            }
+        }
+
+        // Clear references
+        m_DefaultBackBuffer = NULL;
+        m_DefaultDepthBuffer = NULL;
+
+        // Now release the stored references
+        SAFERELEASE(oldBackBuffer);
+        SAFERELEASE(oldDepthBuffer);
+    }
+
+    // Reset current texture index
     m_CurrentTextureIndex = 0;
-    for (auto it = m_Textures.Begin(); it != m_Textures.End(); ++it)
+
+    // Remove non-managed textures
+    for (XArray<CKTextureDesc *>::Iterator it = m_Textures.Begin(); it != m_Textures.End(); ++it)
     {
         CKTextureDesc *desc = *it;
         if (desc && (desc->Flags & CKRST_TEXTURE_MANAGED) == 0)
         {
+            // For DirectX 9, ensure all texture surfaces are properly released
+            CKDX9TextureDesc *dx9Desc = static_cast<CKDX9TextureDesc *>(desc);
+            if (dx9Desc)
+            {
+                // Special handling for render target textures
+                if (dx9Desc->Flags & CKRST_TEXTURE_RENDERTARGET)
+                {
+                    // Ensure any active render target is unbound
+                    LPDIRECT3DSURFACE9 currentRT = NULL;
+                    m_Device->GetRenderTarget(0, &currentRT);
+
+                    if (currentRT)
+                    {
+                        // Check if this is our texture's surface
+                        if (dx9Desc->DxTexture)
+                        {
+                            LPDIRECT3DSURFACE9 texSurface = NULL;
+                            dx9Desc->DxTexture->GetSurfaceLevel(0, &texSurface);
+
+                            if (texSurface)
+                            {
+                                if (texSurface == currentRT)
+                                {
+                                    // Reset render target to back buffer
+                                    LPDIRECT3DSURFACE9 backBuffer = NULL;
+                                    m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
+                                    if (backBuffer)
+                                    {
+                                        m_Device->SetRenderTarget(0, backBuffer);
+                                        SAFERELEASE(backBuffer);
+                                    }
+                                }
+                                SAFERELEASE(texSurface);
+                            }
+                        }
+                        SAFERELEASE(currentRT);
+                    }
+                }
+            }
+
             delete desc;
             *it = NULL;
         }
     }
 
+    // Release temporary Z-buffers
     ReleaseTempZBuffers();
+
+    // Release vertex and index buffers, shaders
     FlushObjects(CKRST_OBJ_VERTEXBUFFER | CKRST_OBJ_INDEXBUFFER | CKRST_OBJ_VERTEXSHADER | CKRST_OBJ_PIXELSHADER);
+
+    // Release static index buffers
     ReleaseIndexBuffers();
+
+    // Reset vertex format cache
+    ClearStreamCache();
 }
 
 void CKDX9RasterizerContext::ReleaseStateBlocks()
