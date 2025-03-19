@@ -4417,7 +4417,21 @@ void CKDX9RasterizerContext::ClearStreamCache()
     }
 }
 
-void CKDX9RasterizerContext::ReleaseScreenBackup() { SAFERELEASE(m_ScreenBackup); }
+void CKDX9RasterizerContext::ReleaseScreenBackup()
+{
+    if (m_InCreateDestroy)
+        return;
+
+    // If in transparent mode, notify that screen backup is no longer available
+    if (m_TransparentMode)
+    {
+        // Add dirty rect to indicate the whole screen needs redrawing
+        CKRECT rect = {0, 0, (int)m_Width, (int)m_Height};
+        AddDirtyRect(&rect);
+    }
+
+    SAFERELEASE(m_ScreenBackup);
+}
 
 void CKDX9RasterizerContext::ReleaseVertexDeclarations()
 {
