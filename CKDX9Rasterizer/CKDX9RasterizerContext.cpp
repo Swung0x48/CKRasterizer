@@ -1242,132 +1242,205 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
     if (!desc || !desc->DxTexture)
         return FALSE;
 
+    // Skip special texture types (cubemaps and render targets are handled separately)
     if ((desc->Flags & (CKRST_TEXTURE_CUBEMAP | CKRST_TEXTURE_RENDERTARGET)) != 0)
         return TRUE;
 
-    HRESULT hr;
-
+    // Determine target mip level
     int actualMipLevel = (miplevel < 0) ? 0 : miplevel;
+
     D3DSURFACE_DESC surfaceDesc;
-    hr = desc->DxTexture->GetLevelDesc(actualMipLevel, &surfaceDesc);
-    assert(SUCCEEDED(hr));
+    HRESULT hr = desc->DxTexture->GetLevelDesc(actualMipLevel, &surfaceDesc);
+    if (FAILED(hr))
+        return FALSE;
 
-    IDirect3DSurface9 *pSurface = NULL;
+    // Special handling for compressed textures (DXT formats)
+    bool isCompressedFormat = 
+        (surfaceDesc.Format == D3DFMT_DXT1 || 
+         surfaceDesc.Format == D3DFMT_DXT2 || 
+         surfaceDesc.Format == D3DFMT_DXT3 ||
+         surfaceDesc.Format == D3DFMT_DXT4 || 
+         surfaceDesc.Format == D3DFMT_DXT5);
 
-    if ((surfaceDesc.Format == D3DFMT_DXT1 ||
-        surfaceDesc.Format == D3DFMT_DXT2 ||
-        surfaceDesc.Format == D3DFMT_DXT3 ||
-        surfaceDesc.Format == D3DFMT_DXT4 ||
-        surfaceDesc.Format == D3DFMT_DXT5) &&
-        (D3DXLoadSurfaceFromSurface && D3DXLoadSurfaceFromMemory))
+    if (isCompressedFormat && (D3DXLoadSurfaceFromSurface && D3DXLoadSurfaceFromMemory))
     {
+        // Use D3DX functions for compressed textures
         IDirect3DSurface9 *pSurfaceLevel = NULL;
-        desc->DxTexture->GetSurfaceLevel(actualMipLevel, &pSurfaceLevel);
-        if (!pSurfaceLevel)
+        hr = desc->DxTexture->GetSurfaceLevel(actualMipLevel, &pSurfaceLevel);
+        if (FAILED(hr) || !pSurfaceLevel)
+        {
+            SAFERELEASE(pSurfaceLevel);
             return FALSE;
+        }
 
+        // Prepare source rect
         RECT srcRect{0, 0, SurfDesc.Height, SurfDesc.Width};
         D3DFORMAT format = VxPixelFormatToD3DFormat(VxImageDesc2PixelFormat(SurfDesc));
-        hr = D3DXLoadSurfaceFromMemory(pSurfaceLevel, NULL, NULL, SurfDesc.Image, format, SurfDesc.BytesPerLine, NULL, &srcRect, D3DX_FILTER_LINEAR, 0);
-        assert(SUCCEEDED(hr));
 
-        CKDWORD mipMapCount = m_Textures[Texture]->MipMapCount;
-        if (miplevel == -1 && mipMapCount > 0)
+        // Load texture data
+        hr = D3DXLoadSurfaceFromMemory(
+            pSurfaceLevel,      // Destination surface
+            NULL,               // No palette
+            NULL,               // Full destination surface
+            SurfDesc.Image,     // Source data
+            format,             // Source format
+            SurfDesc.BytesPerLine, // Source pitch
+            NULL,               // No palette
+            &srcRect,           // Source rect
+            D3DX_FILTER_LINEAR, // Filter
+            0);                 // No color key
+        if (FAILED(hr))
         {
-            for (int i = 1; i < mipMapCount + 1; ++i)
+            SAFERELEASE(pSurfaceLevel);
+            return FALSE;
+        }
+
+         // Generate mipmaps if requested
+         if (miplevel == -1 && desc->MipMapCount > 0)
+         {
+            // Generate each mipmap level from the base level using box filter
+            for (int i = 1; i <= desc->MipMapCount; ++i)
             {
-                desc->DxTexture->GetSurfaceLevel(i, &pSurface);
-                hr = D3DXLoadSurfaceFromSurface(pSurface, NULL, NULL, pSurfaceLevel, NULL, NULL, D3DX_FILTER_BOX, 0);
-                assert(SUCCEEDED(hr));
-                SAFERELEASE(pSurfaceLevel);
+                IDirect3DSurface9 *pMipSurface = NULL;
+                hr = desc->DxTexture->GetSurfaceLevel(i, &pMipSurface);
+                
+                if (SUCCEEDED(hr) && pMipSurface)
+                {
+                    // Generate this mip level from the base level
+                    hr = D3DXLoadSurfaceFromSurface(
+                        pMipSurface,        // Destination
+                        NULL,               // No palette
+                        NULL,               // Full surface
+                        pSurfaceLevel,      // Source (base level)
+                        NULL,               // No palette
+                        NULL,               // Full surface
+                        D3DX_FILTER_BOX,    // Box filter for better quality
+                        0);                 // No color key
+                    
+                    SAFERELEASE(pMipSurface);
+                    
+                    if (FAILED(hr))
+                    {
+                        // Log but continue if a mip level fails
+#if LOGGING && LOG_LOADTEXTURE
+                        fprintf(stderr, "Failed to generate mipmap level %d, hr=0x%x\n", i, hr);
+#endif
+                    }
+                }
             }
         }
-        else
-        {
-            pSurface = pSurfaceLevel;
-        }
 
-        SAFERELEASE(pSurface);
-
-#if LOGGING && LOG_LOADTEXTURE
-        if (FAILED(hr))
-            fprintf(stderr, "LoadTexture (DXTC) failed with %x\n", hr);
-#endif
-        return SUCCEEDED(hr);
+        SAFERELEASE(pSurfaceLevel);
+        return TRUE;
     }
 
+    // Standard texture loading path (non-compressed)
+
+    // Allocate memory for mipmap generation if needed
     VxImageDescEx src = SurfDesc;
     VxImageDescEx dst;
-    if (miplevel != -1 || desc->MipMapCount == 0)
-        pSurface = NULL;
-    CKBYTE *image = NULL;
+    CKBYTE *mipmapBuffer = NULL;
+    bool needMipmapGen = (miplevel == -1 && desc->MipMapCount > 0);
 
-    if (pSurface)
+    if (needMipmapGen)
     {
-        image = m_Owner->AllocateObjects(surfaceDesc.Width * surfaceDesc.Height);
+        mipmapBuffer = m_Owner->AllocateObjects(surfaceDesc.Width * surfaceDesc.Height);
+        if (!mipmapBuffer)
+            return FALSE;
+
+        // If source size doesn't match texture size, we need to rescale
         if (surfaceDesc.Width != src.Width || surfaceDesc.Height != src.Height)
         {
             dst.Width = src.Width;
             dst.Height = src.Height;
             dst.BitsPerPixel = 32;
-            dst.BytesPerLine = 4 * surfaceDesc.Width;
+            dst.BytesPerLine = 4 * dst.Width;
             dst.AlphaMask = A_MASK;
             dst.RedMask = R_MASK;
             dst.GreenMask = G_MASK;
             dst.BlueMask = B_MASK;
-            dst.Image = image;
+            dst.Image = mipmapBuffer;
+
+            // Convert the source to our working format
             VxDoBlit(src, dst);
             src = dst;
         }
     }
 
+    // Lock and load base level
     D3DLOCKED_RECT lockRect;
-    if (FAILED(desc->DxTexture->LockRect(actualMipLevel, &lockRect, NULL, 0)))
+    hr = desc->DxTexture->LockRect(actualMipLevel, &lockRect, NULL, 0);
+    if (FAILED(hr))
     {
-#if LOGGING && LOG_LOADTEXTURE
-        fprintf(stderr, "LoadTexture (Locking) failed with %x\n", hr);
-#endif
         return FALSE;
     }
 
-    LoadSurface(surfaceDesc, lockRect, src);
-
-    hr = desc->DxTexture->UnlockRect(actualMipLevel);
-    assert(SUCCEEDED(hr));
-
-    if (pSurface)
+    // Copy data to texture surface
+    if (!LoadSurface(surfaceDesc, lockRect, src))
     {
-        dst = src;
-        for (int i = 1; i < desc->MipMapCount + 1; ++i)
-        {
-            VxGenerateMipMap(dst, image);
+        // Unlock before returning
+        desc->DxTexture->UnlockRect(actualMipLevel);
+        return FALSE;
+    }
 
+    // Unlock the base level
+    hr = desc->DxTexture->UnlockRect(actualMipLevel);
+    if (FAILED(hr))
+    {
+        return FALSE;
+    }
+
+    // Generate mipmaps if needed
+    if (needMipmapGen && mipmapBuffer)
+    {
+        // Start with the source image data
+        dst = src;
+
+        // Generate each mip level
+        for (int i = 1; i <= desc->MipMapCount; ++i)
+        {
+            // Generate the next mip level
+            VxGenerateMipMap(dst, mipmapBuffer);
+
+            // Calculate dimensions of this mip level
             if (dst.Width > 1)
                 dst.Width >>= 1;
             if (dst.Height > 1)
                 dst.Height >>= 1;
             dst.BytesPerLine = 4 * dst.Width;
-            dst.Image = image;
+            dst.Image = mipmapBuffer;
 
+            // Check if surface exists at this mip level
             if (FAILED(desc->DxTexture->GetLevelDesc(i, &surfaceDesc)))
-                break;
-
-            if (FAILED(desc->DxTexture->LockRect(i, &lockRect, NULL, NULL)))
             {
-#if LOGGING && LOG_LOADTEXTURE
-                fprintf(stderr, "LoadTexture (Mipmap generation) failed with %x\n", hr);
-#endif
-                SAFERELEASE(pSurface);
-                return FALSE;
+                break; // No more mip levels
             }
 
-            LoadSurface(surfaceDesc, lockRect, dst);
+            // Lock the mip level
+            hr = desc->DxTexture->LockRect(i, &lockRect, NULL, 0);
+            if (FAILED(hr))
+            {
+                break; // Can't lock, but don't fail the whole operation
+            }
 
+            // Copy data to the mip level
+            if (!LoadSurface(surfaceDesc, lockRect, dst))
+            {
+                desc->DxTexture->UnlockRect(i);
+                break;
+            }
+
+            // Unlock the mip level
             hr = desc->DxTexture->UnlockRect(i);
             if (FAILED(hr))
             {
-                SAFERELEASE(pSurface);
-                return FALSE;
+                break; // Failed to unlock, but don't fail the whole operation
+            }
+
+            // Stop if we've reached smallest mip level
+            if (dst.Width <= 1 && dst.Height <= 1)
+            {
+                break;
             }
         }
     }
