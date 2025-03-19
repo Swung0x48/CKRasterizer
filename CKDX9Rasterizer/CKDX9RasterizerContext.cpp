@@ -4365,15 +4365,86 @@ CKDWORD CKDX9RasterizerContext::DX9PresentInterval(DWORD PresentInterval)
 
 CKBOOL CKDX9RasterizerContext::LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc)
 {
+    if (!LockRect.pBits)
+        return FALSE;
+
+    // Set up target image descriptor
     VxImageDescEx desc;
     desc.Size = sizeof(VxImageDescEx);
-    VxPixelFormat2ImageDesc(D3DFormatToVxPixelFormat(ddsd.Format), desc);
+
+    // Get pixel format from the DirectX surface format
+    VX_PIXELFORMAT vxpf = D3DFormatToVxPixelFormat(ddsd.Format);
+    if (vxpf == UNKNOWN_PF)
+    {
+        // Fallback to a compatible format if we couldn't determine the format
+        if (ddsd.Format == D3DFMT_A8R8G8B8 || ddsd.Format == D3DFMT_X8R8G8B8)
+            vxpf = _32_ARGB8888;
+        else if (ddsd.Format == D3DFMT_R8G8B8)
+            vxpf = _24_RGB888;
+        else if (ddsd.Format == D3DFMT_R5G6B5)
+            vxpf = _16_RGB565;
+        else if (ddsd.Format == D3DFMT_A1R5G5B5 || ddsd.Format == D3DFMT_X1R5G5B5)
+            vxpf = _16_ARGB1555;
+        else
+            return FALSE; // Couldn't determine a compatible format
+    }
+
+    // Fill in target descriptor
+    VxPixelFormat2ImageDesc(vxpf, desc);
     desc.Width = ddsd.Width;
     desc.Height = ddsd.Height;
     desc.BytesPerLine = LockRect.Pitch;
     desc.Image = static_cast<XBYTE *>(LockRect.pBits);
-    VxDoBlit(SurfDesc, desc);
-    return TRUE;
+
+    // Check if source is empty
+    if (!SurfDesc.Image)
+        return FALSE;
+
+    // Check if we need format conversion
+    if (vxpf != VxImageDesc2PixelFormat(SurfDesc) || desc.Width != SurfDesc.Width || desc.Height != SurfDesc.Height)
+    {
+        // For DXT formats, use D3DX for conversion if available
+        if ((ddsd.Format >= D3DFMT_DXT1 && ddsd.Format <= D3DFMT_DXT5) && D3DXLoadSurfaceFromMemory && m_Device)
+        {
+            // Release current lock and use D3DX for conversion
+            // (This is a hook for implementation elsewhere)
+            return FALSE;
+        }
+
+        // Perform the blitting operation with format conversion
+        VxDoBlit(SurfDesc, desc);
+        return TRUE;
+    }
+    else
+    {
+        // Formats match - perform straight memory copy
+        const int height = SurfDesc.Height;
+        const int srcStride = SurfDesc.BytesPerLine;
+        const int dstStride = LockRect.Pitch;
+
+        // If stride matches, do a single copy
+        if (srcStride == dstStride && srcStride == SurfDesc.Width * (SurfDesc.BitsPerPixel / 8))
+        {
+            memcpy(LockRect.pBits, SurfDesc.Image, srcStride * height);
+        }
+        else
+        {
+            // Copy line by line
+            const int bytesPerRow = srcStride < dstStride ? srcStride : dstStride;
+
+            XBYTE *src = SurfDesc.Image;
+            XBYTE *dst = static_cast<XBYTE *>(LockRect.pBits);
+
+            for (int y = 0; y < height; ++y)
+            {
+                memcpy(dst, src, bytesPerRow);
+                src += srcStride;
+                dst += dstStride;
+            }
+        }
+
+        return TRUE;
+    }
 }
 
 #pragma warning(disable : 4035)
