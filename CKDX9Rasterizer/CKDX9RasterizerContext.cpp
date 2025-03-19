@@ -302,9 +302,9 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
     }
 
     // Set up default render states
-    if (FAILED(m_Device->SetRenderState(D3DRS_NORMALIZENORMALS, TRUE)) ||
-        FAILED(m_Device->SetRenderState(D3DRS_LOCALVIEWER, TRUE)) ||
-        FAILED(m_Device->SetRenderState(D3DRS_COLORVERTEX, FALSE)))
+    if (!SetRenderState(VXRENDERSTATE_NORMALIZENORMALS, TRUE) ||
+        !SetRenderState(VXRENDERSTATE_LOCALVIEWER, TRUE) ||
+        !SetRenderState(VXRENDERSTATE_COLORVERTEX, FALSE))
     {
         // Handle setup failure
         SAFERELEASE(m_Device);
