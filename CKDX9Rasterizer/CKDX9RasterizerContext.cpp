@@ -4279,12 +4279,22 @@ void CKDX9RasterizerContext::ReleaseStateBlocks()
 
 void CKDX9RasterizerContext::ReleaseIndexBuffers()
 {
-    if (m_IndexBuffer[0])
-        delete m_IndexBuffer[0];
-    if (m_IndexBuffer[1])
-        delete m_IndexBuffer[1];
-    m_IndexBuffer[0] = NULL;
-    m_IndexBuffer[1] = NULL;
+    // Make sure device isn't using the index buffers
+    if (m_Device)
+    {
+        m_Device->SetIndices(NULL);
+    }
+
+    // Properly release index buffers with proper cleanup
+    for (int i = 0; i < 2; ++i)
+    {
+        if (m_IndexBuffer[i])
+        {
+            SAFERELEASE(m_IndexBuffer[i]->DxBuffer);
+            delete m_IndexBuffer[i];
+            m_IndexBuffer[i] = NULL;
+        }
+    }
 }
 
 void CKDX9RasterizerContext::ClearStreamCache()
