@@ -2420,108 +2420,139 @@ int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffe
 
 int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, const VxImageDescEx &img_desc)
 {
-    HRESULT hr;
+    // Input validation
     if (!img_desc.Image)
         return 0;
+
+    // Only backbuffer copying is supported
     if (buffer != VXBUFFER_BACKBUFFER)
         return 0;
 
-    IDirect3DSurface9 *backBuffer;
-    hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
-    assert(SUCCEEDED(hr));
+    // Get back buffer
+    IDirect3DSurface9 *backBuffer = NULL;
+    HRESULT hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
     if (FAILED(hr) || !backBuffer)
         return 0;
 
+    // Get back buffer description
     D3DSURFACE_DESC desc = {};
     hr = backBuffer->GetDesc(&desc);
-    assert(SUCCEEDED(hr));
+    if (FAILED(hr))
+    {
+        SAFERELEASE(backBuffer);
+        return 0;
+    }
 
-    VxImageDescEx imgDesc;
+    // Get back buffer format information
+    VxImageDescEx backBufferDesc;
     VX_PIXELFORMAT vxpf = D3DFormatToVxPixelFormat(desc.Format);
-    VxPixelFormat2ImageDesc(vxpf, imgDesc);
+    VxPixelFormat2ImageDesc(vxpf, backBufferDesc);
 
-    int left, top, right, bottom, width, height;
+    // Calculate destination rectangle
+    int left = 0, top = 0, right = 0, bottom = 0;
     if (rect)
     {
-        left = rect->left;
-        top = rect->top;
-        right = rect->right;
-        bottom = rect->bottom;
-        width = rect->left;
-        height = bottom;
-        if (top < 0)
-        {
-            top = 0;
-        }
-        if (bottom > desc.Height)
-        {
-            bottom = desc.Height;
-            height = desc.Height;
-        }
-        if (left < 0)
-        {
-            left = 0;
-            width = 0;
-        }
-        if (right > desc.Width)
-        {
-            right = desc.Width;
-        }
+        // Use provided rectangle, clamped to backbuffer bounds
+        left = max(0, rect->left);
+        top = max(0, rect->top);
+        right = min((int)desc.Width, rect->right);
+        bottom = min((int)desc.Height, rect->bottom);
     }
     else
     {
-        bottom = desc.Height;
+        // Use full backbuffer size
         right = desc.Width;
-        top = 0;
-        left = 0;
-        height = desc.Height;
-        width = 0;
+        bottom = desc.Height;
     }
 
+    // Validate resulting rectangle
+    int destWidth = right - left;
+    int destHeight = bottom - top;
+    if (destWidth <= 0 || destHeight <= 0)
+    {
+        SAFERELEASE(backBuffer);
+        return 0;
+    }
+
+    // Verify format compatibility
     int bytesPerPixel = img_desc.BitsPerPixel / 8;
-
-    IDirect3DSurface9 *surface = NULL;
-    if ((img_desc.Width != right - left) ||
-        (img_desc.Height != bottom - top) ||
-        (img_desc.BitsPerPixel != imgDesc.BitsPerPixel) ||
-        FAILED(m_Device->CreateOffscreenPlainSurface(img_desc.Width, img_desc.Height, desc.Format, D3DPOOL_SCRATCH, &surface, NULL)))
+    if (img_desc.BitsPerPixel != backBufferDesc.BitsPerPixel)
     {
         SAFERELEASE(backBuffer);
         return 0;
     }
 
+    // Create temporary surface matching source image size
+    IDirect3DSurface9 *tempSurface = NULL;
+    hr = m_Device->CreateOffscreenPlainSurface(
+        img_desc.Width, 
+        img_desc.Height, 
+        desc.Format, 
+        D3DPOOL_SCRATCH,
+        &tempSurface, 
+        NULL
+    );
+    if (FAILED(hr) || !tempSurface)
+    {
+        SAFERELEASE(backBuffer);
+        return 0;
+    }
+
+    // Lock the temporary surface for writing
     D3DLOCKED_RECT lockedRect;
-    if (FAILED(surface->LockRect(&lockedRect, NULL, D3DLOCK_READONLY)))
+    hr = tempSurface->LockRect(&lockedRect, NULL, 0);
+    if (FAILED(hr))
     {
-        SAFERELEASE(surface);
+        SAFERELEASE(tempSurface);
         SAFERELEASE(backBuffer);
         return 0;
     }
 
-    if (top < height)
+    // Copy the image data to the temporary surface
+    BYTE *destData = static_cast<BYTE *>(lockedRect.pBits);
+    BYTE *srcData = img_desc.Image;
+
+    // Calculate proper row size (no partial copy needed)
+    UINT rowSize = min(img_desc.BytesPerLine, (UINT)lockedRect.Pitch);
+
+    // Copy each row
+    for (UINT y = 0; y < img_desc.Height; ++y)
     {
-        BYTE *pBits = &((BYTE *)lockedRect.pBits)[top * lockedRect.Pitch + width * bytesPerPixel];
-        BYTE *image = img_desc.Image;
-        const int lines = bottom - top;
-        for (int i = 0; i < lines; ++i)
-        {
-            memcpy(pBits, image, 4 * (img_desc.BytesPerLine / 4));
-            BYTE *ptr = (BYTE *)&image[4 * (img_desc.BytesPerLine / 4)];
-            image += img_desc.BytesPerLine;
-            memcpy(&pBits[(img_desc.BytesPerLine >> 2) * 4], ptr, img_desc.BytesPerLine & 0x3);
-            pBits += lockedRect.Pitch;
-        }
+        memcpy(destData, srcData, rowSize);
+        destData += lockedRect.Pitch;
+        srcData += img_desc.BytesPerLine;
     }
 
-    hr = surface->UnlockRect();
-    assert(SUCCEEDED(hr));
+    // Unlock the surface
+    hr = tempSurface->UnlockRect();
+    if (FAILED(hr))
+    {
+        SAFERELEASE(tempSurface);
+        SAFERELEASE(backBuffer);
+        return 0;
+    }
 
-    hr = m_Device->UpdateSurface(backBuffer, NULL, surface, NULL);
-    assert(SUCCEEDED(hr));
+    // Define source and destination rectangles for copying to back buffer
+    RECT srcRect = {0, 0, min(img_desc.Width, (UINT)destWidth), min(img_desc.Height, (UINT)destHeight)};
+    POINT destPoint = {left, top};
 
-    SAFERELEASE(surface);
+    // Copy from temporary surface to back buffer
+    // Note: UpdateSurface requires: source surface, source rect, destination surface, destination point
+    hr = m_Device->UpdateSurface(tempSurface, &srcRect, backBuffer, &destPoint);
+
+    // Clean up
+    SAFERELEASE(tempSurface);
     SAFERELEASE(backBuffer);
-    return img_desc.BytesPerLine * img_desc.Height;
+
+    // Return bytes processed if successful, otherwise 0
+    if (SUCCEEDED(hr))
+    {
+        return img_desc.BytesPerLine * img_desc.Height;
+    }
+    else
+    {
+        return 0;
+    }
 }
 
 void CKDX9RasterizerContext::SetTransparentMode(CKBOOL Trans)
