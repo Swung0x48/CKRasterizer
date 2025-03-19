@@ -1459,54 +1459,86 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD *indice
     ZoneScopedN(__FUNCTION__);
 #endif
 
-    if (!m_SceneBegined)
-        BeginScene();
-
-    CKBOOL clip = FALSE;
-    CKDWORD vertexSize;
-    CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
-    if ((data->Flags & CKRST_DP_DOCLIP))
-    {
-        SetRenderState(VXRENDERSTATE_CLIPPING, TRUE);
-        clip = TRUE;
-    }
-    else
-    {
-        SetRenderState(VXRENDERSTATE_CLIPPING, FALSE);
-    }
-
-    CKDWORD index = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
-    CKDX9VertexBufferDesc *vertexBufferDesc = static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[index]);
-    if (vertexBufferDesc == NULL)
+    if (!data || data->VertexCount <= 0)
         return FALSE;
 
+    if (!m_SceneBegined && !BeginScene())
+        return FALSE;
+
+    // Calculate vertex format and size
+    CKDWORD vertexSize;
+    CKDWORD vertexFormat = CKRSTGetVertexFormat((CKRST_DPFLAGS)data->Flags, vertexSize);
+
+    // Set clipping state based on flags
+    CKBOOL clip = FALSE;
+    if (data->Flags & CKRST_DP_DOCLIP) {
+        if (!SetRenderState(VXRENDERSTATE_CLIPPING, TRUE))
+            return FALSE;
+        clip = TRUE;
+    } else {
+        if (!SetRenderState(VXRENDERSTATE_CLIPPING, FALSE))
+            return FALSE;
+    }
+
+    // Get a suitable dynamic vertex buffer
+    CKDWORD index = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
+    CKDX9VertexBufferDesc *vertexBufferDesc = (index < m_VertexBuffers.Size()) ? static_cast<CKDX9VertexBufferDesc*>(m_VertexBuffers[index]) : NULL;
+    if (!vertexBufferDesc || !vertexBufferDesc->DxBuffer)
+        return FALSE;
+
+    // Lock the vertex buffer with proper strategy
     void *ppbData = NULL;
-    HRESULT hr = D3DERR_INVALIDCALL;
+    HRESULT hr = E_FAIL;
     CKDWORD startIndex = 0;
+
+    // Try to append to existing buffer if there's room
     if (vertexBufferDesc->m_CurrentVCount + data->VertexCount <= vertexBufferDesc->m_MaxVertexCount)
     {
 #ifdef TRACY_ENABLE
         ZoneScopedN("Lock");
 #endif
-        hr = vertexBufferDesc->DxBuffer->Lock(vertexSize * vertexBufferDesc->m_CurrentVCount,
-                                              vertexSize * data->VertexCount, &ppbData, D3DLOCK_NOOVERWRITE);
-        startIndex = vertexBufferDesc->m_CurrentVCount;
-        vertexBufferDesc->m_CurrentVCount += data->VertexCount;
+        hr = vertexBufferDesc->DxBuffer->Lock(
+            vertexSize * vertexBufferDesc->m_CurrentVCount,
+            vertexSize * data->VertexCount,
+            &ppbData,
+            D3DLOCK_NOOVERWRITE
+        );
+        if (SUCCEEDED(hr))
+        {
+            startIndex = vertexBufferDesc->m_CurrentVCount;
+            vertexBufferDesc->m_CurrentVCount += data->VertexCount;
+        }
     }
-    else
-    {
+
+    // If the append failed or there's not enough space, discard and start fresh
+    if (FAILED(hr) || !ppbData) {
 #ifdef TRACY_ENABLE
         ZoneScopedN("Lock");
 #endif
-        hr = vertexBufferDesc->DxBuffer->Lock(0, vertexSize * data->VertexCount, &ppbData, D3DLOCK_DISCARD);
-        vertexBufferDesc->m_CurrentVCount = data->VertexCount;
+        hr = vertexBufferDesc->DxBuffer->Lock(
+            0,
+            vertexSize * data->VertexCount,
+            &ppbData,
+            D3DLOCK_DISCARD
+        );
+        if (SUCCEEDED(hr))
+        {
+            startIndex = 0;
+            vertexBufferDesc->m_CurrentVCount = data->VertexCount;
+        }
     }
-    if (FAILED(hr))
+
+    // If all locking attempts failed, return error
+    if (FAILED(hr) || !ppbData)
         return FALSE;
 
-    CKRSTLoadVertexBuffer(reinterpret_cast<CKBYTE *>(ppbData), vertexFormat, vertexSize, data);
+    // Copy vertex data to the buffer
+    CKRSTLoadVertexBuffer(reinterpret_cast<CKBYTE*>(ppbData), vertexFormat, vertexSize, data);
+
+    // Unlock the buffer
     hr = vertexBufferDesc->DxBuffer->Unlock();
-    assert(SUCCEEDED(hr));
+    if (FAILED(hr))
+        return FALSE;
 
     return InternalDrawPrimitiveVB(pType, vertexBufferDesc, startIndex, data->VertexCount, indices, indexcount, clip);
 }
@@ -1529,18 +1561,34 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDWORD Ve
     ZoneScopedN(__FUNCTION__);
 #endif
 
+    if (VertexCount == 0)
+        return FALSE;
+
     if (VertexBuffer >= m_VertexBuffers.Size())
         return FALSE;
 
     CKVertexBufferDesc *vertexBufferDesc = m_VertexBuffers[VertexBuffer];
-    if (vertexBufferDesc == NULL)
+    if (!vertexBufferDesc || !(vertexBufferDesc->m_Flags & CKRST_VB_VALID))
         return FALSE;
 
-    if (!m_SceneBegined)
-        BeginScene();
+    if (indices && indexcount <= 0)
+        return FALSE;
 
-    return InternalDrawPrimitiveVB(pType, static_cast<CKDX9VertexBufferDesc *>(vertexBufferDesc), StartIndex,
-                                   VertexCount, indices, indexcount, TRUE);
+    // Calculate total vertices needed and ensure buffer has enough
+    if (StartIndex + VertexCount > vertexBufferDesc->m_MaxVertexCount)
+        return FALSE;
+
+    // Begin the scene if needed
+    if (!m_SceneBegined && !BeginScene())
+        return FALSE;
+
+    // Cast buffer to DX9-specific implementation
+    CKDX9VertexBufferDesc *dxVertexBufferDesc = static_cast<CKDX9VertexBufferDesc *>(vertexBufferDesc);
+    if (!dxVertexBufferDesc->DxBuffer)
+        return FALSE;
+
+    // Draw the primitive
+    return InternalDrawPrimitiveVB(pType, dxVertexBufferDesc, StartIndex, VertexCount, indices, indexcount, TRUE);
 }
 
 CKBOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD VB, CKDWORD IB, CKDWORD MinVIndex,
@@ -1561,44 +1609,76 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD 
     ZoneScopedN(__FUNCTION__);
 #endif
 
-    if (VB >= m_VertexBuffers.Size())
+    if (VertexCount == 0 || Indexcount <= 0)
         return FALSE;
 
-    if (IB >= m_IndexBuffers.Size())
+    // Check if indices are valid
+    if (VB >= m_VertexBuffers.Size() || IB >= m_IndexBuffers.Size())
         return FALSE;
 
+    // Get and validate both buffers
     CKDX9VertexBufferDesc *vertexBufferDesc = static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[VB]);
-    if (vertexBufferDesc == NULL)
+    if (!vertexBufferDesc || !(vertexBufferDesc->m_Flags & CKRST_VB_VALID) || !vertexBufferDesc->DxBuffer)
         return FALSE;
 
     CKDX9IndexBufferDesc *indexBufferDesc = static_cast<CKDX9IndexBufferDesc *>(m_IndexBuffers[IB]);
-    if (indexBufferDesc == NULL)
+    if (!indexBufferDesc || !(indexBufferDesc->m_Flags & CKRST_VB_VALID) || !indexBufferDesc->DxBuffer)
+        return FALSE;
+
+    // Validate buffer sizes
+    if (MinVIndex + VertexCount > vertexBufferDesc->m_MaxVertexCount)
+        return FALSE;
+
+    if (StartIndex + Indexcount > indexBufferDesc->m_MaxIndexCount)
+        return FALSE;
+
+    // Begin scene if needed
+    if (!m_SceneBegined && !BeginScene())
         return FALSE;
 
     SetupStreams(vertexBufferDesc->DxBuffer, vertexBufferDesc->m_VertexFormat, vertexBufferDesc->m_VertexSize);
 
+    // Calculate primitive count based on primitive type
+    int primitiveCount = Indexcount;
     switch (pType)
     {
         case VX_LINELIST:
-            Indexcount = Indexcount / 2;
+            primitiveCount = primitiveCount / 2;
             break;
         case VX_LINESTRIP:
-            Indexcount = Indexcount - 1;
+            primitiveCount = primitiveCount - 1;
             break;
         case VX_TRIANGLELIST:
-            Indexcount = Indexcount / 3;
+            primitiveCount = primitiveCount / 3;
             break;
         case VX_TRIANGLESTRIP:
         case VX_TRIANGLEFAN:
-            Indexcount = Indexcount - 2;
+            primitiveCount = primitiveCount - 2;
             break;
         default:
             break;
     }
 
-    m_Device->SetIndices(indexBufferDesc->DxBuffer);
+    // Make sure we have valid primitive count
+    if (primitiveCount <= 0)
+        return FALSE;
 
-    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, MinVIndex, 0, VertexCount, StartIndex, Indexcount));
+    // Set index buffer
+    HRESULT hr = m_Device->SetIndices(indexBufferDesc->DxBuffer);
+    if (FAILED(hr))
+        return FALSE;
+
+    // Draw the primitive
+    hr = m_Device->DrawIndexedPrimitive(
+        (D3DPRIMITIVETYPE)pType,
+        MinVIndex,    // Base vertex index offset
+        0,            // Minimum vertex index
+        VertexCount,  // Number of vertices
+        StartIndex,   // Start index in index buffer
+        primitiveCount // Number of primitives
+    );
+
+    return SUCCEEDED(hr);
 }
 
 CKBOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
