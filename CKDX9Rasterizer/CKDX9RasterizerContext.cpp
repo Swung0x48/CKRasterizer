@@ -3070,107 +3070,211 @@ void CKDX9RasterizerContext::UpdateDirectXData()
     }
 }
 
-CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc *VB,
-                                                       CKDWORD StartIndex, CKDWORD VertexCount, WORD *indices,
-                                                       int indexcount, CKBOOL Clip)
+CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc *VB, CKDWORD StartIndex, CKDWORD VertexCount, WORD *indices, int indexcount, CKBOOL Clip)
 {
 #ifdef TRACY_ENABLE
     ZoneScopedN(__FUNCTION__);
 #endif
 
+    if (!VB || !VB->DxBuffer || !m_Device)
+        return FALSE;
+
+    if (VertexCount == 0 || (indices && indexcount == 0))
+        return TRUE; // Nothing to draw, but not an error
+
     HRESULT hr;
     int ibstart = 0;
 
+    // Handle indexed drawing
     if (indices)
     {
-        CKDX9IndexBufferDesc *desc = m_IndexBuffer[Clip];
-        if (!desc || indexcount > desc->m_MaxIndexCount || !desc->DxBuffer)
+        // Ensure we have a valid index buffer of sufficient size
+        CKDX9IndexBufferDesc *desc = m_IndexBuffer[Clip ? 1 : 0];
+        BOOL needNewBuffer = FALSE;
+
+        // Check if we need to create or recreate the index buffer
+        if (!desc)
         {
-            if (desc)
-            {
-                delete desc;
-                desc = NULL;
-            }
+            needNewBuffer = TRUE;
+        }
+        else if (indexcount > desc->m_MaxIndexCount)
+        {
+            delete desc;
+            desc = NULL;
+            needNewBuffer = TRUE;
+        }
+        else if (!desc->DxBuffer)
+        {
+            delete desc;
+            desc = NULL;
+            needNewBuffer = TRUE;
+        }
 
+        // Create a new index buffer if needed
+        if (needNewBuffer)
+        {
             desc = new CKDX9IndexBufferDesc;
+            if (!desc)
+                return FALSE;
 
+            // Calculate appropriate buffer size (not too small, not too large)
             int maxIndexCount = indexcount + 100;
             if (maxIndexCount <= 10000)
                 maxIndexCount = 10000;
 
+            // Set up usage flags
             DWORD usage = D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY;
             if (m_SoftwareVertexProcessing)
                 usage |= D3DUSAGE_SOFTWAREPROCESSING;
 
-            hr = m_Device->CreateIndexBuffer(2 * maxIndexCount, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT, &desc->DxBuffer, NULL);
-            assert(SUCCEEDED(hr));
+            // Create the DirectX index buffer
+            hr = m_Device->CreateIndexBuffer(
+                2 * maxIndexCount,    // SIZE IN BYTES (2 bytes per WORD index)
+                usage,                // Usage flags
+                D3DFMT_INDEX16,       // Format (16-bit indices)
+                D3DPOOL_DEFAULT,      // Memory pool
+                &desc->DxBuffer,      // Resulting buffer
+                NULL                  // Shared handle (not used)
+            );
+
+            if (FAILED(hr) || !desc->DxBuffer)
+            {
+                delete desc;
+                return FALSE;
+            }
 
             desc->m_MaxIndexCount = maxIndexCount;
-            m_IndexBuffer[Clip] = desc;
+            desc->m_CurrentICount = 0;
+            m_IndexBuffer[Clip ? 1 : 0] = desc;
         }
 
+        // Lock the index buffer for writing
         void *pbData = NULL;
+        CKBOOL lockSuccess = FALSE;
+
+        // Try to append data if there's room
         if (indexcount + desc->m_CurrentICount <= desc->m_MaxIndexCount)
         {
 #ifdef TRACY_ENABLE
             ZoneScopedN("Lock");
 #endif
-            hr = desc->DxBuffer->Lock(2 * desc->m_CurrentICount, 2 * indexcount, &pbData, D3DLOCK_NOOVERWRITE);
-            assert(SUCCEEDED(hr));
-            ibstart = desc->m_CurrentICount;
-            desc->m_CurrentICount += indexcount;
+            hr = desc->DxBuffer->Lock(
+                2 * desc->m_CurrentICount,   // Offset in bytes
+                2 * indexcount,              // Size to lock in bytes
+                &pbData,                     // Pointer to receive data
+                D3DLOCK_NOOVERWRITE          // Don't overwrite existing data
+            );
+
+            if (SUCCEEDED(hr) && pbData)
+            {
+                ibstart = desc->m_CurrentICount;
+                desc->m_CurrentICount += indexcount;
+                lockSuccess = TRUE;
+            }
         }
-        else
+
+        // If appending failed, try discarding and starting fresh
+        if (!lockSuccess)
         {
 #ifdef TRACY_ENABLE
             ZoneScopedN("Lock");
 #endif
-            hr = desc->DxBuffer->Lock(0, 2 * indexcount, &pbData, D3DLOCK_DISCARD);
-            assert(SUCCEEDED(hr));
-            desc->m_CurrentICount = indexcount;
+            hr = desc->DxBuffer->Lock(
+                0,                  // Start from beginning
+                2 * indexcount,     // Size to lock in bytes
+                &pbData,            // Pointer to receive data
+                D3DLOCK_DISCARD     // Discard previous contents
+            );
+
+            if (SUCCEEDED(hr) && pbData)
+            {
+                ibstart = 0;
+                desc->m_CurrentICount = indexcount;
+                lockSuccess = TRUE;
+            }
         }
-        if (pbData)
+
+        // Copy index data and unlock
+        if (lockSuccess && pbData)
         {
             memcpy(pbData, indices, 2 * indexcount);
+            hr = desc->DxBuffer->Unlock();
+            if (FAILED(hr))
+                return FALSE;
         }
-
-        hr = desc->DxBuffer->Unlock();
-        assert(SUCCEEDED(hr));
+        else
+        {
+            // If we couldn't lock the buffer, we can't draw
+            return FALSE;
+        }
     }
 
+    // Set up vertex streams (positions, normals, colors, etc.)
     SetupStreams(VB->DxBuffer, VB->m_VertexFormat, VB->m_VertexSize);
 
-    int primitiveCount = (indexcount == 0) ? VertexCount : indexcount;
+    // Calculate primitive count based on primitive type
+    int primitiveCount;
 
+    if (indices)
+    {
+        primitiveCount = indexcount;
+    }
+    else
+    {
+        primitiveCount = VertexCount;
+    }
+
+    // Adjust primitive count based on primitive type
     switch (pType)
     {
         case VX_LINELIST:
             primitiveCount /= 2;
             break;
         case VX_LINESTRIP:
-            primitiveCount -= 1;
+            primitiveCount = max(0, primitiveCount - 1);
             break;
         case VX_TRIANGLELIST:
             primitiveCount /= 3;
             break;
         case VX_TRIANGLESTRIP:
         case VX_TRIANGLEFAN:
-            primitiveCount -= 2;
+            primitiveCount = max(0, primitiveCount - 2);
             break;
+        // Point lists don't need adjustment
+        case VX_POINTLIST:
         default:
             break;
     }
 
+    // Ensure we have at least one primitive to draw
+    if (primitiveCount <= 0)
+        return TRUE; // Nothing to draw, but not an error
+
+    // Draw non-indexed primitives
     if (!indices || pType == VX_POINTLIST)
     {
-        hr = m_Device->DrawPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, primitiveCount);
+        hr = m_Device->DrawPrimitive(
+            (D3DPRIMITIVETYPE)pType,  // Primitive type
+            StartIndex,               // Starting vertex
+            primitiveCount            // Number of primitives
+        );
         return SUCCEEDED(hr);
     }
 
-    hr = m_Device->SetIndices(m_IndexBuffer[Clip]->DxBuffer);
-    assert(SUCCEEDED(hr));
+    // Draw indexed primitives
+    hr = m_Device->SetIndices(m_IndexBuffer[Clip ? 1 : 0]->DxBuffer);
+    if (FAILED(hr))
+        return FALSE;
 
-    return SUCCEEDED(m_Device->DrawIndexedPrimitive((D3DPRIMITIVETYPE)pType, StartIndex, 0, VertexCount, ibstart, primitiveCount));
+    hr = m_Device->DrawIndexedPrimitive(
+        (D3DPRIMITIVETYPE)pType,  // Primitive type
+        StartIndex,               // Base vertex index
+        0,                        // Minimum vertex index
+        VertexCount,              // Number of vertices
+        ibstart,                  // Start index
+        primitiveCount            // Number of primitives
+    );
+    return SUCCEEDED(hr);
 }
 
 void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize)
