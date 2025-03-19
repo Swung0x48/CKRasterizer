@@ -450,10 +450,11 @@ CKBOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
     if (m_SceneBegined)
         EndScene();
 
-    HRESULT hr;
-    D3DRASTER_STATUS status;
-    if (m_CurrentTextureIndex == 0 && vsync && !m_Fullscreen)
+    HRESULT hr = S_OK;
+
+    if (vsync && !m_Fullscreen && m_CurrentTextureIndex == 0)
     {
+        D3DRASTER_STATUS status;
         status.InVBlank = FALSE;
         hr = m_Device->GetRasterStatus(0, &status);
         while (SUCCEEDED(hr) && !status.InVBlank)
