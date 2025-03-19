@@ -4299,10 +4299,26 @@ void CKDX9RasterizerContext::ReleaseIndexBuffers()
 
 void CKDX9RasterizerContext::ClearStreamCache()
 {
+    // Clear vertex stream cache
     m_CurrentVertexBufferCache = NULL;
     m_CurrentVertexSizeCache = 0;
     m_CurrentVertexFormatCache = 0;
     m_CurrentVertexShaderCache = 0;
+
+    // Reset device stream sources if device is available
+    if (m_Device)
+    {
+        // Clear all possible stream sources (typically up to 8 for DX9)
+        for (UINT i = 0; i < 8; ++i)
+        {
+            HRESULT hr = m_Device->SetStreamSource(i, NULL, 0, 0);
+            // Ignore errors - this is cleanup code
+        }
+
+        // Reset FVF and shader states
+        m_Device->SetFVF(0);
+        m_Device->SetVertexShader(NULL);
+    }
 }
 
 void CKDX9RasterizerContext::ReleaseScreenBackup() { SAFERELEASE(m_ScreenBackup); }
