@@ -3780,29 +3780,52 @@ CKBOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *
     if ((DesiredFormat->m_Flags & CKRST_VB_DYNAMIC) != 0)
         usage |= D3DUSAGE_DYNAMIC;
 
-    IDirect3DIndexBuffer9 *buffer;
-    if (FAILED(m_Device->CreateIndexBuffer(2 * DesiredFormat->m_MaxIndexCount, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT, &buffer, NULL)))
-        return FALSE;
+    // Add software processing flag if necessary (for consistency with vertex buffers)
+    if (m_SoftwareVertexProcessing)
+        usage |= D3DUSAGE_SOFTWAREPROCESSING;
 
-    if (DesiredFormat == m_IndexBuffers[IB])
+    // Check if we're updating an existing buffer
+    CKDX9IndexBufferDesc *existingDesc = static_cast<CKDX9IndexBufferDesc *>(m_IndexBuffers[IB]);
+    if (existingDesc == DesiredFormat)
     {
-        CKDX9IndexBufferDesc *desc = static_cast<CKDX9IndexBufferDesc *>(DesiredFormat);
-        desc->DxBuffer = buffer;
-        desc->m_Flags |= CKRST_VB_VALID;
+        // We're updating the same buffer descriptor
+        LPDIRECT3DINDEXBUFFER9 oldBuffer = existingDesc->DxBuffer;
+
+        LPDIRECT3DINDEXBUFFER9 newBuffer = NULL;
+        if (FAILED(m_Device->CreateIndexBuffer(2 * DesiredFormat->m_MaxIndexCount, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT, &newBuffer, NULL)))
+        {
+            return FALSE;
+        }
+
+        // Update descriptor
+        existingDesc->DxBuffer = newBuffer;
+        existingDesc->m_Flags |= CKRST_VB_VALID;
+
+        SAFERELEASE(oldBuffer);
         return TRUE;
     }
 
+    LPDIRECT3DINDEXBUFFER9 buffer = NULL;
+    if (FAILED(m_Device->CreateIndexBuffer(2 * DesiredFormat->m_MaxIndexCount, usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT, &buffer, NULL)))
+    {
+        return FALSE;
+    }
+
+    // Clean up existing buffer if present
     if (m_IndexBuffers[IB])
         delete m_IndexBuffers[IB];
 
     CKDX9IndexBufferDesc *desc = new CKDX9IndexBufferDesc;
     if (!desc)
+    {
+        SAFERELEASE(buffer);
         return FALSE;
+    }
+
     desc->m_CurrentICount = DesiredFormat->m_CurrentICount;
     desc->m_MaxIndexCount = DesiredFormat->m_MaxIndexCount;
-    desc->m_Flags = DesiredFormat->m_Flags;
+    desc->m_Flags = DesiredFormat->m_Flags | CKRST_VB_VALID;
     desc->DxBuffer = buffer;
-    desc->m_Flags |= CKRST_VB_VALID;
     m_IndexBuffers[IB] = desc;
     return TRUE;
 }
