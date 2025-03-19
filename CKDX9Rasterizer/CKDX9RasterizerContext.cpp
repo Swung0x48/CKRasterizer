@@ -1462,62 +1462,91 @@ CKBOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect *Src, VxRec
     if (!desc || !desc->DxTexture)
         return FALSE;
 
+    // Create destination rectangle
     RECT destRect;
     if (Dest)
-        SetRect(&destRect, Dest->left, Dest->top, Dest->right, Dest->bottom);
+        SetRect(&destRect, (int)Dest->left, (int)Dest->top, (int)Dest->right, (int)Dest->bottom);
     else
         SetRect(&destRect, 0, 0, desc->Format.Width, desc->Format.Height);
 
+    // Create source rectangle
     RECT srcRect;
     if (Src)
-        SetRect(&srcRect, Src->left, Src->top, Src->right, Src->bottom);
+        SetRect(&srcRect, (int)Src->left, (int)Src->top, (int)Src->right, (int)Src->bottom);
     else
         SetRect(&srcRect, 0, 0, desc->Format.Width, desc->Format.Height);
 
-    HRESULT hr;
-
+    HRESULT hr = S_OK;
     IDirect3DSurface9 *backBuffer = NULL;
-    hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
-    assert(SUCCEEDED(hr));
-
     IDirect3DSurface9 *textureSurface = NULL;
-    hr = desc->DxTexture->GetSurfaceLevel(0, &textureSurface);
-    assert(SUCCEEDED(hr));
+    CKBOOL success = FALSE;
 
+    // Get back buffer
+    hr = m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
+    if (FAILED(hr) || !backBuffer)
+    {
+        return FALSE;
+    }
+
+    // Get texture surface
+    hr = desc->DxTexture->GetSurfaceLevel(0, &textureSurface);
+    if (FAILED(hr) || !textureSurface)
+    {
+        SAFERELEASE(backBuffer);
+        return FALSE;
+    }
+
+    // Define destination point
     POINT pt = {destRect.left, destRect.top};
 
-    if (backBuffer && textureSurface)
+    // Copy from back buffer to texture surface
+    // Note: UpdateSurface param order: source, source rect, destination, destination point
+    hr = m_Device->UpdateSurface(backBuffer, &srcRect, textureSurface, &pt);
+    if (SUCCEEDED(hr))
     {
-        hr = m_Device->UpdateSurface(textureSurface, &srcRect, backBuffer, &pt);
-        assert(SUCCEEDED(hr));
-        SAFERELEASE(textureSurface);
+        success = TRUE;
     }
-    else
+    // If copying failed and this is a managed texture, try recreating as a render target
+    else if (desc->Flags & CKRST_TEXTURE_MANAGED)
     {
+        // Release current texture
         SAFERELEASE(textureSurface);
-    }
-
-    if (FAILED(hr) && (desc->Flags & CKRST_TEXTURE_MANAGED) != 0)
-    {
         SAFERELEASE(desc->DxTexture);
 
-        if (SUCCEEDED(m_Device->CreateTexture(desc->Format.Width, desc->Format.Height, 1, D3DUSAGE_RENDERTARGET,
-                                              m_PresentParams.BackBufferFormat, D3DPOOL_DEFAULT, &desc->DxTexture, NULL)))
+        // Create new texture as render target
+        hr = m_Device->CreateTexture(
+            desc->Format.Width,
+            desc->Format.Height,
+            1,
+            D3DUSAGE_RENDERTARGET,
+            m_PresentParams.BackBufferFormat,
+            D3DPOOL_DEFAULT,
+            &desc->DxTexture,
+            NULL
+        );
+        if (SUCCEEDED(hr) && desc->DxTexture)
         {
+            // Update texture format info
             D3DFormatToTextureDesc(m_PresentParams.BackBufferFormat, desc);
             desc->Flags &= ~CKRST_TEXTURE_MANAGED;
             desc->Flags |= (CKRST_TEXTURE_RENDERTARGET | CKRST_TEXTURE_VALID);
-            desc->DxTexture->GetSurfaceLevel(0, &textureSurface);
-            hr = m_Device->UpdateSurface(backBuffer, &srcRect, textureSurface, &pt);
-            assert(SUCCEEDED(hr));
 
-            SAFERELEASE(textureSurface);
-            SAFERELEASE(backBuffer);
-            return SUCCEEDED(hr);
+            // Get the new surface
+            hr = desc->DxTexture->GetSurfaceLevel(0, &textureSurface);
+            if (SUCCEEDED(hr) && textureSurface)
+            {
+                // Try copy again
+                hr = m_Device->UpdateSurface(backBuffer, &srcRect, textureSurface, &pt);
+                success = SUCCEEDED(hr);
+            }
         }
     }
 
-    return FALSE;
+    // Clean up resources
+    SAFERELEASE(textureSurface);
+    SAFERELEASE(backBuffer);
+
+    return success;
 }
 
 CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, int Height, CKRST_CUBEFACE Face)
