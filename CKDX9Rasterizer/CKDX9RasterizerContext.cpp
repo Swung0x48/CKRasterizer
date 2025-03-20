@@ -4071,7 +4071,7 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
     HRESULT hr = S_OK;
     CKBOOL useFixedPipeline = TRUE;
 
-    // Check if we should use programmable vertex shader
+    // Check if we're using programmable vertex pipeline
     if (m_CurrentVertexShaderCache != 0 && m_CurrentVertexShaderCache < m_VertexShaders.Size())
     {
         CKDX9VertexShaderDesc *desc = static_cast<CKDX9VertexShaderDesc *>(m_VertexShaders[m_CurrentVertexShaderCache]);
@@ -4079,30 +4079,34 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
         // Verify shader exists and is valid
         if (desc && desc->DxShader)
         {
-            // Look for existing vertex declaration
+            // Get or create appropriate vertex declaration for this shader and format
             IDirect3DVertexDeclaration9 *pDecl = NULL;
-            XNHashTable<LPDIRECT3DVERTEXDECLARATION9, DWORD>::Iterator it = m_VertexDeclarations.Find(VFormat);
 
-            // Use cached declaration if found
+            // Look for existing declaration in cache
+            XNHashTable<LPDIRECT3DVERTEXDECLARATION9, DWORD>::Iterator it = m_VertexDeclarations.Find(VFormat);
             if (it != m_VertexDeclarations.End())
             {
+                // Use cached declaration if found
                 pDecl = *it;
             }
-            // Otherwise create a new one
-            else if (CreateVertexDeclaration(VFormat, &pDecl) && pDecl)
+            else
             {
-                // Store for future use if successful
-                m_VertexDeclarations.Insert(VFormat, pDecl);
+                // Create new declaration if not found
+                if (CreateVertexDeclaration(VFormat, &pDecl) && pDecl)
+                {
+                    // Store for future use
+                    m_VertexDeclarations.Insert(VFormat, pDecl);
+                }
             }
 
-            // If we have a valid declaration, set up the programmable pipeline
+            // Set up programmable pipeline if we have a valid declaration
             if (pDecl)
             {
-                // Set vertex declaration (vertex format for shader)
+                // First, set vertex declaration (vertex format for shader)
                 hr = m_Device->SetVertexDeclaration(pDecl);
                 if (SUCCEEDED(hr))
                 {
-                    // Set shader
+                    // Then set vertex shader
                     hr = m_Device->SetVertexShader(desc->DxShader);
                     if (SUCCEEDED(hr))
                     {
@@ -4117,33 +4121,22 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
     // Fall back to fixed function pipeline if needed
     if (useFixedPipeline)
     {
-        // Only reset shader if we're not already in fixed-function mode
+        // Reset to fixed function pipeline if previously using programmable pipeline
         if (m_CurrentVertexShaderCache != 0)
         {
-            // Reset shader state
             m_CurrentVertexShaderCache = 0;
-
-            // Disable programmable vertex shader
             hr = m_Device->SetVertexShader(NULL);
             if (FAILED(hr))
-            {
-                // If we can't disable the shader, we're in trouble
                 return;
-            }
         }
 
-        // Update format cache if needed
+        // Update FVF if needed
         if (VFormat != m_CurrentVertexFormatCache)
         {
             m_CurrentVertexFormatCache = VFormat;
-
-            // Set Fixed Function Vertex Format (FVF)
-            hr = m_Device->SetFVF(m_CurrentVertexFormatCache);
+            hr = m_Device->SetFVF(VFormat);
             if (FAILED(hr))
-            {
-                // Log error or handle failure
                 return;
-            }
         }
     }
 
@@ -4154,13 +4147,13 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
         hr = m_Device->SetStreamSource(0, Buffer, 0, VSize);
         if (SUCCEEDED(hr))
         {
-            // Update cache values on success
+            // Update cache values
             m_CurrentVertexBufferCache = Buffer;
             m_CurrentVertexSizeCache = VSize;
         }
         else
         {
-            // Clear cache on failure to force reset next time
+            // Clear cache on failure
             m_CurrentVertexBufferCache = NULL;
             m_CurrentVertexSizeCache = 0;
         }
