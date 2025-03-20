@@ -2181,7 +2181,14 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
     // Capture current render target and depth buffer
     HRESULT hr = m_Device->GetRenderTarget(0, &m_DefaultBackBuffer);
     if (FAILED(hr) || !m_DefaultBackBuffer)
+    {
+        if (m_Textures[TextureObject] == desc && m_Textures[TextureObject] != NULL)
+        {
+            delete desc;
+            m_Textures[TextureObject] = NULL;
+        }
         return FALSE;
+    }
 
     hr = m_Device->GetDepthStencilSurface(&m_DefaultDepthBuffer);
     if (FAILED(hr))
@@ -2212,10 +2219,13 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
                 {
                     D3DSURFACE_DESC surfaceDesc;
                     hr = surface->GetDesc(&surfaceDesc);
-                    
                     if (SUCCEEDED(hr) && (surfaceDesc.Usage & D3DUSAGE_RENDERTARGET))
                     {
                         surfaceSuccess = TRUE;
+                    }
+                    else
+                    {
+                        SAFERELEASE(surface);
                     }
                 }
             }
@@ -2228,10 +2238,13 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
             {
                 D3DSURFACE_DESC surfaceDesc;
                 hr = surface->GetDesc(&surfaceDesc);
-                
                 if (SUCCEEDED(hr) && (surfaceDesc.Usage & D3DUSAGE_RENDERTARGET))
                 {
                     surfaceSuccess = TRUE;
+                }
+                else
+                {
+                    SAFERELEASE(surface);
                 }
             }
         }
@@ -2364,6 +2377,20 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         // Failed to set render target, clean up
         desc->Flags &= ~CKRST_TEXTURE_VALID;
         SAFERELEASE(surface);
+
+        if (!surfaceSuccess)
+        {
+            if (cubemap)
+            {
+                SAFERELEASE(desc->DxCubeTexture);
+            }
+            else
+            {
+                SAFERELEASE(desc->DxTexture);
+                SAFERELEASE(desc->DxRenderTexture);
+            }
+        }
+
         SAFERELEASE(m_DefaultBackBuffer);
         SAFERELEASE(m_DefaultDepthBuffer);
         return FALSE;
