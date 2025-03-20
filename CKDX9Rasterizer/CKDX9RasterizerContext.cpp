@@ -2691,11 +2691,11 @@ void *CKDX9RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, 
 #endif
 
     if (VB >= m_VertexBuffers.Size())
-        return FALSE;
+        return NULL;
 
     CKDX9VertexBufferDesc *vb = static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[VB]);
     if (!vb || !vb->DxBuffer)
-        return FALSE;
+        return NULL;
 
     void *pVertices = NULL;
     if (FAILED(vb->DxBuffer->Lock(StartVertex * vb->m_VertexSize, VertexCount * vb->m_VertexSize, &pVertices, Lock << 12)))
