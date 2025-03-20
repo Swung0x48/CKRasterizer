@@ -404,15 +404,16 @@ public:
     virtual CKRasterizerContext *CreateContext();
 
     CKBOOL InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType);
-	CKBOOL IsTextureFormatOk(D3DFORMAT TextureFormat, D3DFORMAT AdapterFormat, DWORD Usage = 0);
 
     D3DFORMAT FindNearestTextureFormat(CKTextureDesc *desc, D3DFORMAT AdapterFormat, DWORD Usage = 0);
     D3DFORMAT FindNearestRenderTargetFormat(int Bpp, CKBOOL Windowed);
     D3DFORMAT FindNearestDepthFormat(D3DFORMAT pf, int ZBpp, int StencilBpp);
 
 private:
+    CKBOOL IsTextureFormatSupported(D3DFORMAT TextureFormat, D3DFORMAT AdapterFormat, DWORD Usage = 0);
     CKBOOL CheckDeviceFormat(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
     CKBOOL CheckDepthStencilMatch(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
+    CKBOOL CheckDepthFormatWithRenderTarget(D3DFORMAT AdapterFormat, D3DFORMAT RenderTargetFormat, D3DFORMAT DepthStencilFormat);
 
 public:
     CKBOOL m_Inited;
