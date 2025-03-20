@@ -160,8 +160,8 @@ CKDX9RasterizerContext::~CKDX9RasterizerContext()
         }
 
         // Clear shader bindings
-        m_Device->SetVertexShader(NULL);
-        m_Device->SetPixelShader(NULL);
+        SetVertexShader(NULL);
+        SetPixelShader(NULL);
 
         // Clear render target binding
         if (m_DefaultBackBuffer)
@@ -2158,7 +2158,6 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
         {
             desc->DxRenderTexture = desc->DxTexture;
             hr = desc->DxTexture->GetSurfaceLevel(0, &surface);
-            
             if (SUCCEEDED(hr) && surface)
             {
                 D3DSURFACE_DESC surfaceDesc;
@@ -4973,8 +4972,7 @@ void CKDX9RasterizerContext::ClearStreamCache()
         // Clear all possible stream sources (typically up to 8 for DX9)
         for (UINT i = 0; i < 8; ++i)
         {
-            HRESULT hr = m_Device->SetStreamSource(i, NULL, 0, 0);
-            // Ignore errors - this is cleanup code
+            m_Device->SetStreamSource(i, NULL, 0, 0);
         }
 
         // Reset FVF and shader states
