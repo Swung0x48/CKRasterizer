@@ -160,7 +160,8 @@ CKDX9RasterizerContext::~CKDX9RasterizerContext()
     if (m_Device)
     {
         // End scene if it was active
-        EndScene();
+        if (m_SceneBegined)
+            EndScene();
 
         // Clear all texture stages
         for (int i = 0; i < 8; i++)
@@ -185,6 +186,7 @@ CKDX9RasterizerContext::~CKDX9RasterizerContext()
         if (m_DefaultBackBuffer)
         {
             m_Device->SetRenderTarget(0, m_DefaultBackBuffer);
+            m_Device->SetDepthStencilSurface(m_DefaultDepthBuffer);
         }
     }
 
