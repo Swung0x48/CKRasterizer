@@ -1757,7 +1757,7 @@ CKBOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE T
 #if LOGGING
                 CKSpriteDesc *desc = m_Sprites[ObjIndex];
                 fprintf(stderr, "idx: %d\n", ObjIndex);
-                for (auto it = desc->Textures.Begin(); it != desc->Textures.End(); ++it)
+                for (CKSPRTextInfo *it = desc->Textures.Begin(); it != desc->Textures.End(); ++it)
                 {
                     fprintf(stderr, "(%d,%d) WxH: %dx%d, SWxSH: %dx%d\n", it->x, it->y, it->w, it->h, it->sw, it->sh);
                 }
