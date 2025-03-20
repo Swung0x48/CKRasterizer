@@ -227,6 +227,9 @@ int DepthBitPerPixelFromFormat(D3DFORMAT Format, CKDWORD *StencilSize)
 CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int Width, int Height, int Bpp,
                                       CKBOOL Fullscreen, int RefreshRate, int Zbpp, int StencilBpp)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
 #if (STEP) || (LOGGING)
     AllocConsole();
     freopen("CON", "w", stdout);
@@ -446,6 +449,9 @@ CKBOOL CKDX9RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, int
 
 CKBOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height, CKDWORD Flags)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (m_InCreateDestroy || !m_Device)
         return FALSE;
 
@@ -532,6 +538,9 @@ CKBOOL CKDX9RasterizerContext::Resize(int PosX, int PosY, int Width, int Height,
 
 CKBOOL CKDX9RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWORD Stencil, int RectCount, CKRECT *rects)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (m_InCreateDestroy || !m_Device)
         return FALSE;
 
@@ -591,6 +600,9 @@ static int texture_used[100] = {0};
 #endif
 CKBOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (m_InCreateDestroy || !m_Device)
         return FALSE;
 
@@ -601,6 +613,9 @@ CKBOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
 
     if (vsync && !m_Fullscreen && m_CurrentTextureIndex == 0)
     {
+        #ifdef TRACY_ENABLE
+            ZoneScopedN("VSync");
+        #endif
         D3DRASTER_STATUS status;
         status.InVBlank = FALSE;
         hr = m_Device->GetRasterStatus(0, &status);
@@ -698,6 +713,9 @@ CKBOOL CKDX9RasterizerContext::BeginScene()
 
 CKBOOL CKDX9RasterizerContext::EndScene()
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (!m_SceneBegined)
         return TRUE;
 
@@ -718,6 +736,9 @@ CKBOOL CKDX9RasterizerContext::EndScene()
 
 CKBOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (data && Light < 128)
         m_CurrentLightData[Light] = *data;
 
@@ -767,6 +788,9 @@ CKBOOL CKDX9RasterizerContext::SetLight(CKDWORD Light, CKLightData *data)
 
 CKBOOL CKDX9RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (!m_Device || Light >= RST_MAX_LIGHT)
         return FALSE;
 
@@ -786,6 +810,9 @@ CKBOOL CKDX9RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
 
 CKBOOL CKDX9RasterizerContext::SetMaterial(CKMaterialData *mat)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (!m_Device)
         return FALSE;
 
@@ -822,6 +849,9 @@ CKBOOL CKDX9RasterizerContext::SetMaterial(CKMaterialData *mat)
 
 CKBOOL CKDX9RasterizerContext::SetViewport(CKViewportData *data)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (!m_Device || !data)
         return FALSE;
 
@@ -1007,6 +1037,9 @@ CKBOOL CKDX9RasterizerContext::GetRenderState(VXRENDERSTATETYPE State, CKDWORD *
 
 CKBOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
 #if LOGGING && LOG_SETTEXTURE
     fprintf(stderr, "settexture %d %d\n", Texture, Stage);
 #endif
@@ -1101,6 +1134,9 @@ CKBOOL CKDX9RasterizerContext::SetTexture(CKDWORD Texture, int Stage)
 
 CKBOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAGESTATETYPE Tss, CKDWORD Value)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (!m_Device || Stage < 0 || Stage >= m_Driver->m_3DCaps.MaxNumberTextureStage)
         return FALSE;
 
@@ -1334,6 +1370,9 @@ CKBOOL CKDX9RasterizerContext::SetTextureStageState(int Stage, CKRST_TEXTURESTAG
 
 CKBOOL CKDX9RasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     // Handle the case of setting null shader (disabling programmable pipeline)
     if (VShaderIndex == 0)
     {
@@ -1364,6 +1403,9 @@ CKBOOL CKDX9RasterizerContext::SetVertexShader(CKDWORD VShaderIndex)
 
 CKBOOL CKDX9RasterizerContext::SetPixelShader(CKDWORD PShaderIndex)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     // Handle the case of setting null shader (disabling programmable pipeline)
     if (PShaderIndex == 0)
     {
@@ -1494,9 +1536,6 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD *indice
     // Try to append to existing buffer if there's room
     if (vertexBufferDesc->m_CurrentVCount + data->VertexCount <= vertexBufferDesc->m_MaxVertexCount)
     {
-#ifdef TRACY_ENABLE
-        ZoneScopedN("Lock");
-#endif
         hr = vertexBufferDesc->DxBuffer->Lock(
             vertexSize * vertexBufferDesc->m_CurrentVCount,
             vertexSize * data->VertexCount,
@@ -1512,9 +1551,6 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD *indice
 
     // If the append failed or there's not enough space, discard and start fresh
     if (FAILED(hr) || !ppbData) {
-#ifdef TRACY_ENABLE
-        ZoneScopedN("Lock");
-#endif
         hr = vertexBufferDesc->DxBuffer->Lock(
             0,
             vertexSize * data->VertexCount,
@@ -1683,6 +1719,9 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD 
 
 CKBOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE Type, void *DesiredFormat)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     CKBOOL result = FALSE;
 
     if (ObjIndex >= m_Textures.Size())
@@ -1728,6 +1767,10 @@ CKBOOL CKDX9RasterizerContext::CreateObject(CKDWORD ObjIndex, CKRST_OBJECTTYPE T
 
 CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, int miplevel)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
+
 #if LOGGING && LOG_LOADTEXTURE
     texture_used[Texture] = 1;
     fprintf(stderr, "load texture %d %dx%d %d\n", Texture, SurfDesc.Width, SurfDesc.Height, miplevel);
@@ -1947,6 +1990,9 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
 
 CKBOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect *Src, VxRect *Dest, CKRST_CUBEFACE Face)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
 #if LOGGING && LOG_COPYTEXTURE
     fprintf(stderr, "copy to texture %d (%f,%f,%f,%f) (%f,%f,%f,%f)\n", Texture,
             Src->left, Src->top, Src->right, Src->bottom,
@@ -2048,6 +2094,9 @@ CKBOOL CKDX9RasterizerContext::CopyToTexture(CKDWORD Texture, VxRect *Src, VxRec
 
 CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width, int Height, CKRST_CUBEFACE Face)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     // End any current scene
     EndScene();
 
@@ -2306,6 +2355,9 @@ CKBOOL CKDX9RasterizerContext::SetTargetTexture(CKDWORD TextureObject, int Width
 
 CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *dst)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (Sprite >= m_Sprites.Size() || !src || !dst)
         return FALSE;
 
@@ -2635,6 +2687,10 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
 
 void *CKDX9RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, CKDWORD VertexCount, CKRST_LOCKFLAGS Lock)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
+
     if (VB >= m_VertexBuffers.Size())
         return FALSE;
 
@@ -2651,6 +2707,9 @@ void *CKDX9RasterizerContext::LockVertexBuffer(CKDWORD VB, CKDWORD StartVertex, 
 
 CKBOOL CKDX9RasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (VB >= m_VertexBuffers.Size())
         return FALSE;
 
@@ -2663,6 +2722,9 @@ CKBOOL CKDX9RasterizerContext::UnlockVertexBuffer(CKDWORD VB)
 
 int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     D3DSURFACE_DESC desc = {};
     IDirect3DSurface9 *surface = NULL;
     int depthBytesPerPixel = 0;
@@ -2916,6 +2978,9 @@ int CKDX9RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffe
 
 int CKDX9RasterizerContext::CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, const VxImageDescEx &img_desc)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     // Input validation
     if (!img_desc.Image)
         return 0;
@@ -3094,6 +3159,9 @@ void CKDX9RasterizerContext::AddDirtyRect(CKRECT *Rect)
 
 void CKDX9RasterizerContext::RestoreScreenBackup()
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     // Do nothing if not in transparent mode
     if (!m_TransparentMode)
         return;
@@ -3176,6 +3244,9 @@ CKBOOL CKDX9RasterizerContext::GetUserClipPlane(CKDWORD ClipPlaneIndex, VxPlane 
 
 CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImageDescEx &SurfDesc, CKRST_CUBEFACE Face, int miplevel)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (Texture >= m_Textures.Size())
         return FALSE;
 
@@ -3372,6 +3443,9 @@ CKBOOL CKDX9RasterizerContext::LoadCubeMapTexture(CKDWORD Texture, const VxImage
 
 void *CKDX9RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CKDWORD IndexCount, CKRST_LOCKFLAGS Lock)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (IB >= m_IndexBuffers.Size())
         return NULL;
 
@@ -3415,6 +3489,9 @@ void *CKDX9RasterizerContext::LockIndexBuffer(CKDWORD IB, CKDWORD StartIndex, CK
 
 CKBOOL CKDX9RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (IB >= m_IndexBuffers.Size())
         return FALSE;
 
@@ -3427,6 +3504,9 @@ CKBOOL CKDX9RasterizerContext::UnlockIndexBuffer(CKDWORD IB)
 
 CKBOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char *Filename, TexFromFile *param)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (!Filename || !param)
         return FALSE;
         
@@ -3819,9 +3899,6 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
         // Try to append data if there's room
         if (indexcount + desc->m_CurrentICount <= desc->m_MaxIndexCount)
         {
-#ifdef TRACY_ENABLE
-            ZoneScopedN("Lock");
-#endif
             hr = desc->DxBuffer->Lock(
                 2 * desc->m_CurrentICount,   // Offset in bytes
                 2 * indexcount,              // Size to lock in bytes
@@ -3840,9 +3917,6 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
         // If appending failed, try discarding and starting fresh
         if (!lockSuccess)
         {
-#ifdef TRACY_ENABLE
-            ZoneScopedN("Lock");
-#endif
             hr = desc->DxBuffer->Lock(
                 0,                  // Start from beginning
                 2 * indexcount,     // Size to lock in bytes
@@ -4051,6 +4125,9 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
 
 CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (!DesiredFormat || !m_Device)
         return FALSE;
 
@@ -4222,6 +4299,9 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
 
 CKBOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
 #if LOGGING && LOG_CREATEVERTEXSHADER
     fprintf(stderr, "create vertex shader %d\n", VShader);
 #endif
@@ -4305,6 +4385,9 @@ CKBOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShade
 
 CKBOOL CKDX9RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderDesc *DesiredFormat)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
 #if LOGGING && LOG_CREATEPIXELSHADER
     fprintf(stderr, "create pixel shader %d\n", PShader);
 #endif
@@ -4388,6 +4471,9 @@ CKBOOL CKDX9RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderD
 
 CKBOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc *DesiredFormat)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (VB >= m_VertexBuffers.Size() || !DesiredFormat)
         return FALSE;
 
@@ -4430,6 +4516,9 @@ CKBOOL CKDX9RasterizerContext::CreateVertexBuffer(CKDWORD VB, CKVertexBufferDesc
 
 CKBOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *DesiredFormat)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (IB >= m_IndexBuffers.Size() || !DesiredFormat)
         return FALSE;
 
@@ -4489,6 +4578,9 @@ CKBOOL CKDX9RasterizerContext::CreateIndexBuffer(CKDWORD IB, CKIndexBufferDesc *
 
 CKBOOL CKDX9RasterizerContext::CreateVertexDeclaration(CKDWORD VFormat, LPDIRECT3DVERTEXDECLARATION9 *ppDecl)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (!ppDecl || !m_Device)
         return FALSE;
 
@@ -4673,6 +4765,9 @@ CKBOOL CKDX9RasterizerContext::CreateVertexDeclaration(CKDWORD VFormat, LPDIRECT
 
 void CKDX9RasterizerContext::FlushCaches()
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     // Reset render state cache
     FlushRenderStateCache();
     m_InverseWinding = FALSE;
@@ -4758,6 +4853,9 @@ void CKDX9RasterizerContext::FlushCaches()
 
 void CKDX9RasterizerContext::FlushNonManagedObjects()
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     // Skip if device is null or we're already in create/destroy process
     if (!m_Device || m_InCreateDestroy)
         return;
@@ -5039,6 +5137,9 @@ CKDWORD CKDX9RasterizerContext::DX9PresentInterval(DWORD PresentInterval)
 
 CKBOOL CKDX9RasterizerContext::LoadSurface(const D3DSURFACE_DESC &ddsd, const D3DLOCKED_RECT &LockRect, const VxImageDescEx &SurfDesc)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     if (!LockRect.pBits)
         return FALSE;
 
@@ -5123,6 +5224,9 @@ CKBOOL CKDX9RasterizerContext::LoadSurface(const D3DSURFACE_DESC &ddsd, const D3
 
 LPDIRECT3DSURFACE9 CKDX9RasterizerContext::GetTempZBuffer(int Width, int Height)
 {
+#ifdef TRACY_ENABLE
+    ZoneScopedN(__FUNCTION__);
+#endif
     // Validate inputs and device
     if (Width <= 0 || Height <= 0 || !m_Device)
         return NULL;
