@@ -65,7 +65,16 @@ CKBOOL CKDX9VertexShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKVertexShader
     return SUCCEEDED(hr);
 }
 
-CKDX9VertexShaderDesc::~CKDX9VertexShaderDesc() { SAFERELEASE(DxShader); }
+CKDX9VertexShaderDesc::~CKDX9VertexShaderDesc()
+{
+    SAFERELEASE(DxShader);
+
+    if (m_Function)
+    {
+        delete[] m_Function;
+        m_Function = NULL;
+    }
+}
 
 CKBOOL CKDX9PixelShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKPixelShaderDesc *Format)
 {
@@ -86,7 +95,16 @@ CKBOOL CKDX9PixelShaderDesc::Create(CKDX9RasterizerContext *Ctx, CKPixelShaderDe
     return SUCCEEDED(hr);
 }
 
-CKDX9PixelShaderDesc::~CKDX9PixelShaderDesc() { SAFERELEASE(DxShader); }
+CKDX9PixelShaderDesc::~CKDX9PixelShaderDesc()
+{
+    SAFERELEASE(DxShader);
+
+    if (m_Function)
+    {
+        delete[] m_Function;
+        m_Function = NULL;
+    }
+}
 
 CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver *driver) :
     CKRasterizerContext(),
@@ -4329,21 +4347,19 @@ CKBOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShade
 
     // Set initial data
     newDesc->Owner = this;
+    newDesc->m_Function = NULL;
 
     // Create a copy of the shader function data to avoid ownership issues
     if (DesiredFormat->m_FunctionSize > 0 && DesiredFormat->m_Function)
     {
-        try
-        {
-            newDesc->m_Function = new CKDWORD[DesiredFormat->m_FunctionSize / sizeof(CKDWORD)];
-            memcpy(newDesc->m_Function, DesiredFormat->m_Function, DesiredFormat->m_FunctionSize);
-            newDesc->m_FunctionSize = DesiredFormat->m_FunctionSize;
-        }
-        catch (...)
+        newDesc->m_Function = new CKDWORD[DesiredFormat->m_FunctionSize / sizeof(CKDWORD)];
+        if (!newDesc->m_Function)
         {
             delete newDesc;
             return FALSE;
         }
+        memcpy(newDesc->m_Function, DesiredFormat->m_Function, DesiredFormat->m_FunctionSize);
+        newDesc->m_FunctionSize = DesiredFormat->m_FunctionSize;
     }
     else
     {
@@ -4364,7 +4380,6 @@ CKBOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShade
         else
         {
             // Clean up on other errors
-            delete[] newDesc->m_Function;
             delete newDesc;
             return FALSE;
         }
@@ -4419,17 +4434,14 @@ CKBOOL CKDX9RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderD
     // Create a copy of the shader function data to avoid ownership issues
     if (DesiredFormat->m_FunctionSize > 0 && DesiredFormat->m_Function)
     {
-        try
-        {
-            newDesc->m_Function = new CKDWORD[DesiredFormat->m_FunctionSize / sizeof(CKDWORD)];
-            memcpy(newDesc->m_Function, DesiredFormat->m_Function, DesiredFormat->m_FunctionSize);
-            newDesc->m_FunctionSize = DesiredFormat->m_FunctionSize;
-        }
-        catch (...)
+        newDesc->m_Function = new CKDWORD[DesiredFormat->m_FunctionSize / sizeof(CKDWORD)];
+        if (!newDesc->m_Function)
         {
             delete newDesc;
             return FALSE;
         }
+        memcpy(newDesc->m_Function, DesiredFormat->m_Function, DesiredFormat->m_FunctionSize);
+        newDesc->m_FunctionSize = DesiredFormat->m_FunctionSize;
     }
     else
     {
@@ -4450,7 +4462,6 @@ CKBOOL CKDX9RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderD
         else
         {
             // Clean up on other errors
-            delete[] newDesc->m_Function;
             delete newDesc;
             return FALSE;
         }
