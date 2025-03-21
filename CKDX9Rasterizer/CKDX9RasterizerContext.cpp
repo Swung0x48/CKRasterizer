@@ -4196,11 +4196,13 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
     if (!driver)
         return FALSE;
 
+    CKDWORD flags = DesiredFormat->Flags;
+
     // Determine usage flags
     DWORD usage = 0;
-    if (DesiredFormat->Flags & CKRST_TEXTURE_HINTPROCEDURAL)
+    if (flags & CKRST_TEXTURE_HINTPROCEDURAL)
         usage |= D3DUSAGE_DYNAMIC;
-    if (DesiredFormat->Flags & CKRST_TEXTURE_RENDERTARGET)
+    if (flags & CKRST_TEXTURE_RENDERTARGET)
         usage |= D3DUSAGE_RENDERTARGET;
 
     // Find appropriate format for the texture
@@ -4211,7 +4213,6 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
     // Calculate dimensions based on hardware capabilities
     int width = DesiredFormat->Format.Width;
     int height = DesiredFormat->Format.Height;
-    CKDWORD flags = DesiredFormat->Flags;
     CKDWORD textureCaps = driver->m_3DCaps.TextureCaps;
 
     // Power of 2 adjustment if required
@@ -4248,7 +4249,7 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
 
     // Choose appropriate memory pool
     D3DPOOL pool;
-    if (usage & D3DUSAGE_RENDERTARGET)
+    if (flags & CKRST_TEXTURE_RENDERTARGET)
     {
         pool = D3DPOOL_DEFAULT; // Render targets must be in default pool
     }
