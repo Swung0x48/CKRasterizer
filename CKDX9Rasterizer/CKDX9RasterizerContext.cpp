@@ -4990,33 +4990,22 @@ void CKDX9RasterizerContext::FlushNonManagedObjects()
 #endif
     }
 
+    // Reset shader cache values
+    m_CurrentVertexShaderCache = 0;
+    m_CurrentPixelShaderCache = 0;
+
     // Reset render target if needed
     if (m_DefaultBackBuffer)
     {
-        // Store current render target for later release
-        LPDIRECT3DSURFACE9 oldBackBuffer = m_DefaultBackBuffer;
-        LPDIRECT3DSURFACE9 oldDepthBuffer = m_DefaultDepthBuffer;
+        m_Device->SetRenderTarget(0, m_DefaultBackBuffer);
+        SAFERELEASE(m_DefaultBackBuffer);
+    }
 
-        // Set default render target and depth buffer
-        hr = m_Device->SetRenderTarget(0, oldBackBuffer);
-        if (SUCCEEDED(hr) && oldDepthBuffer)
-        {
-            hr = m_Device->SetDepthStencilSurface(oldDepthBuffer);
-            if (FAILED(hr))
-            {
-#if LOGGING
-                fprintf(stderr, "Failed to set depth buffer\n");
-#endif
-            }
-        }
-
-        // Clear references
-        m_DefaultBackBuffer = NULL;
-        m_DefaultDepthBuffer = NULL;
-
-        // Now release the stored references
-        SAFERELEASE(oldBackBuffer);
-        SAFERELEASE(oldDepthBuffer);
+    // Reset depth buffer if needed
+    if (m_DefaultDepthBuffer)
+    {
+        m_Device->SetDepthStencilSurface(m_DefaultDepthBuffer);
+        SAFERELEASE(m_DefaultDepthBuffer);
     }
 
     // Reset current texture index
@@ -5026,7 +5015,7 @@ void CKDX9RasterizerContext::FlushNonManagedObjects()
     for (XArray<CKTextureDesc *>::Iterator it = m_Textures.Begin(); it != m_Textures.End(); ++it)
     {
         CKTextureDesc *desc = *it;
-        if (desc && (desc->Flags & CKRST_TEXTURE_MANAGED) == 0)
+        if (desc && !(desc->Flags & CKRST_TEXTURE_MANAGED))
         {
             // For DirectX 9, ensure all texture surfaces are properly released
             CKDX9TextureDesc *dx9Desc = static_cast<CKDX9TextureDesc *>(desc);
