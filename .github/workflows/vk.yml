@@ -2,33 +2,35 @@ name: CKVkRasterizer
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
     paths:
-      - 'CKVkRasterizer/**'
-      - '.github/**'
-      - 'buildsystems/**'
-      - 'vendor/**'
+      - "CKVkRasterizer/**"
+      - ".github/**"
+      - "buildsystems/**"
+      - "vendor/**"
   pull_request:
-    branches: [ master ]
+    branches: [master]
     paths:
-      - 'CKVkRasterizer/**'
-      - '.github/**'
-      - 'buildsystems/**'
-      - 'vendor/**'
+      - "CKVkRasterizer/**"
+      - ".github/**"
+      - "buildsystems/**"
+      - "vendor/**"
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
   CMAKE_ARGS: -DVIRTOOLS_SDK_FETCH_FROM_GIT=ON -DTRACY_ENABLE=OFF -A Win32
-  VULKAN_SDK: C:\VulkanSDK\
+  VULKAN_SDK_VERSION: 1.3.296.0
 
 jobs:
   build-vk:
     runs-on: windows-latest
     env:
-      PROJECT_ROOT: ${{github.workspace}}
-      VENDOR_ROOT: ${{github.workspace}}/vendor
+      PROJECT_ROOT: ${{ github.workspace }}
+      VENDOR_ROOT: ${{ github.workspace }}/vendor
       PROJECT_NAME: CKVkRasterizer
+      BUILD_DIR: ${{ github.workspace }}/CKVkRasterizer/build
+      SOURCE_DIR: ${{ github.workspace }}/CKVkRasterizer
     steps:
       - uses: actions/checkout@v3
 
@@ -36,7 +38,7 @@ jobs:
 
       - name: Fetch git submodules
         run: git submodule update --init --recursive --remote
-        
+
       # Setup MSVC command prompt environment vars
       - uses: ilammy/msvc-dev-cmd@v1
 
@@ -44,31 +46,33 @@ jobs:
         id: cache-vulkan-sdk
         uses: actions/cache@v4
         with:
-          path: "C:\\VulkanSDK\\1.3.261.0"
-          key: vulkan-sdk-1.3.261.0
+          path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
+          key: vulkan-sdk-${{ env.VULKAN_SDK_VERSION }}
 
-      - name: Setup Vulkan
+      - name: Install Vulkan SDK
+        if: steps.cache-vulkan-sdk.outputs.cache-hit != 'true'
+        shell: pwsh
         run: |
-            $ver = (Invoke-WebRequest -Uri "https://vulkan.lunarg.com/sdk/latest.json" | ConvertFrom-Json).windows
-            echo Version $ver
-            $ProgressPreference = 'SilentlyContinue'
-            Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/$ver/windows/VulkanSDK-$ver-Installer.exe" -OutFile VulkanSDK.exe
-            echo Downloaded
-            .\VulkanSDK.exe --root C:\VulkanSDK  --accept-licenses --default-answer --confirm-command install com.lunarg.vulkan.32bit com.lunarg.vulkan.sdl2 com.lunarg.vulkan.glm com.lunarg.vulkan.volk com.lunarg.vulkan.vma com.lunarg.vulkan.debug com.lunarg.vulkan.debug32
+          $version = "${{ env.VULKAN_SDK_VERSION }}"
+          $url = "https://sdk.lunarg.com/sdk/download/$version/windows/VulkanSDK-$version-Installer.exe"
+          Invoke-WebRequest -Uri $url -OutFile VulkanSDK.exe -UseBasicParsing
+          Start-Process -Wait -FilePath .\VulkanSDK.exe -ArgumentList "--accept-licenses --default-answer --confirm-command install com.lunarg.vulkan.32bit com.lunarg.vulkan.sdl2 com.lunarg.vulkan.glm com.lunarg.vulkan.volk com.lunarg.vulkan.vma com.lunarg.vulkan.debug com.lunarg.vulkan.debug32"
+          echo "VULKAN_SDK=C:\VulkanSDK\$version\" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Configure CMake
-        run: cmake -B ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build -S ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ${{env.CMAKE_ARGS}}
+        run: |
+          cmake -B "${{ env.BUILD_DIR }}" -S "${{ env.SOURCE_DIR }}" -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} ${{ env.CMAKE_ARGS }}
 
-      - name: Build
-        working-directory: ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build
-        run: cmake --build ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build --config ${{env.BUILD_TYPE}}
+      - name: Build Project
+        working-directory: ${{ env.BUILD_DIR }}
+        run: cmake --build . --config ${{ env.BUILD_TYPE }}
 
-      - name: Test
-        working-directory: ${{env.PROJECT_ROOT}}
-        run: ctest -C ${{env.BUILD_TYPE}}
+      - name: Run Tests
+        working-directory: ${{ env.BUILD_DIR }}
+        run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure --timeout 120
 
-      - name: Release Artifact
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{env.PROJECT_NAME}}
-          path: ${{env.PROJECT_ROOT}}/${{env.PROJECT_NAME}}/build/${{env.BUILD_TYPE}}
+          name: ${{ env.PROJECT_NAME }}
+          path: ${{ env.BUILD_DIR }}/${{ env.BUILD_TYPE }}
