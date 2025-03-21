@@ -4343,10 +4343,9 @@ CKBOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShade
 #if LOGGING && LOG_CREATEVERTEXSHADER
     fprintf(stderr, "create vertex shader %d\n", VShader);
 #endif
-    if (VShader >= m_VertexShaders.Size() || !DesiredFormat)
+    if (VShader >= m_VertexShaders.Size() || DesiredFormat == 0)
         return FALSE;
 
-    // Validate required resources
     if (!m_Device)
         return FALSE;
 
@@ -4369,11 +4368,13 @@ CKBOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShade
     // Set initial data
     newDesc->Owner = this;
     newDesc->m_Function = NULL;
+    newDesc->m_FunctionSize = 0;
 
     // Create a copy of the shader function data to avoid ownership issues
     if (DesiredFormat->m_FunctionSize > 0 && DesiredFormat->m_Function)
     {
-        newDesc->m_Function = new CKDWORD[DesiredFormat->m_FunctionSize / sizeof(CKDWORD)];
+        CKDWORD dwordCount = (DesiredFormat->m_FunctionSize + sizeof(CKDWORD) - 1) / sizeof(CKDWORD);
+        newDesc->m_Function = new CKDWORD[dwordCount];
         if (!newDesc->m_Function)
         {
             delete newDesc;
@@ -4451,11 +4452,14 @@ CKBOOL CKDX9RasterizerContext::CreatePixelShader(CKDWORD PShader, CKPixelShaderD
 
     // Set initial data
     newDesc->Owner = this;
+    newDesc->m_Function = NULL;
+    newDesc->m_FunctionSize = 0;
 
     // Create a copy of the shader function data to avoid ownership issues
     if (DesiredFormat->m_FunctionSize > 0 && DesiredFormat->m_Function)
     {
-        newDesc->m_Function = new CKDWORD[DesiredFormat->m_FunctionSize / sizeof(CKDWORD)];
+        CKDWORD dwordCount = (DesiredFormat->m_FunctionSize + sizeof(CKDWORD) - 1) / sizeof(CKDWORD);
+        newDesc->m_Function = new CKDWORD[dwordCount];
         if (!newDesc->m_Function)
         {
             delete newDesc;
