@@ -580,16 +580,6 @@ CKBOOL CKDX9RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWO
     if (flags == 0)
         return TRUE;
 
-    // Store scene state to restore it later if needed
-    CKBOOL wasInScene = m_SceneBegined;
-
-    // We must be in a scene to clear
-    if (!wasInScene)
-    {
-        if (!BeginScene())
-            return FALSE;
-    }
-
     // Validate rect count and pointers
     if (RectCount < 0)
         RectCount = 0;
@@ -599,12 +589,6 @@ CKBOOL CKDX9RasterizerContext::Clear(CKDWORD Flags, CKDWORD Ccol, float Z, CKDWO
 
     // Perform the clear operation
     HRESULT hr = m_Device->Clear(RectCount, (D3DRECT *)rects, flags, Ccol, Z, Stencil);
-
-    // End scene if we started it
-    if (!wasInScene)
-    {
-        EndScene();
-    }
 
     // If this was a full clear, reset the dirty rects
     if (RectCount == 0 && (Flags & CKRST_CTXCLEAR_COLOR))
