@@ -47,13 +47,16 @@ PLUGIN_EXPORT void CKRasterizerGetInfo(CKRasterizerInfo *info)
 
 CKDX9Rasterizer::CKDX9Rasterizer() : m_D3D9(NULL), m_Init(FALSE), m_BlendStages() {}
 
-CKDX9Rasterizer::~CKDX9Rasterizer() {}
+CKDX9Rasterizer::~CKDX9Rasterizer()
+{
+    Close();
+}
 
 XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
 {
     InitBlendStages();
-    this->m_MainWindow = AppWnd;
-    this->m_Init = TRUE;
+    m_MainWindow = AppWnd;
+    m_Init = TRUE;
 
     // Create the D3D object, which is needed to create the D3DDevice.
 #ifdef USE_D3D9EX
@@ -80,16 +83,16 @@ XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
 	{
 		HMODULE module = LoadLibrary(TEXT("d3dx9_43.dll"));
 		if (module)
-		{
+        {
             D3DXDeclaratorFromFVF = reinterpret_cast<PFN_D3DXDeclaratorFromFVF>(GetProcAddress(module, "D3DXDeclaratorFromFVF"));
             D3DXFVFFromDeclarator = reinterpret_cast<PFN_D3DXFVFFromDeclarator>(GetProcAddress(module, "D3DXFVFFromDeclarator"));
-			D3DXAssembleShader = reinterpret_cast<PFN_D3DXAssembleShader>(GetProcAddress(module, "D3DXAssembleShader"));
-			D3DXDisassembleShader = reinterpret_cast<PFN_D3DXDisassembleShader>(GetProcAddress(module, "D3DXDisassembleShader"));
-			D3DXLoadSurfaceFromSurface = reinterpret_cast<PFN_D3DXLoadSurfaceFromSurface>(GetProcAddress(module, "D3DXLoadSurfaceFromSurface"));
+            D3DXAssembleShader = reinterpret_cast<PFN_D3DXAssembleShader>(GetProcAddress(module, "D3DXAssembleShader"));
+            D3DXDisassembleShader = reinterpret_cast<PFN_D3DXDisassembleShader>(GetProcAddress(module, "D3DXDisassembleShader"));
+            D3DXLoadSurfaceFromSurface = reinterpret_cast<PFN_D3DXLoadSurfaceFromSurface>(GetProcAddress(module, "D3DXLoadSurfaceFromSurface"));
             D3DXLoadSurfaceFromMemory = reinterpret_cast<PFN_D3DXLoadSurfaceFromMemory>(GetProcAddress(module, "D3DXLoadSurfaceFromMemory"));
             D3DXCreateTextureFromFileExA = reinterpret_cast<PFN_D3DXCreateTextureFromFileExA>(GetProcAddress(module, "D3DXCreateTextureFromFileExA"));
-		}
-	}
+        }
+    }
 
     UINT count = m_D3D9->GetAdapterCount();
     for (UINT i = 0; i < count; ++i)
@@ -97,7 +100,8 @@ XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
         CKDX9RasterizerDriver *driver = new CKDX9RasterizerDriver(this);
         if (!driver->InitializeCaps(i, D3DDEVTYPE_HAL))
             delete driver;
-        m_Drivers.PushBack(driver);
+        else
+            m_Drivers.PushBack(driver);
     }
 
     return TRUE;
@@ -107,14 +111,29 @@ void CKDX9Rasterizer::Close()
 {
     if (!m_Init)
         return;
+
+    // Clean up blend stages
+    for (int i = 0; i < 256; i++)
+    {
+        if (m_BlendStages[i])
+        {
+            delete m_BlendStages[i];
+            m_BlendStages[i] = NULL;
+        }
+    }
+
     if (m_D3D9)
+    {
         m_D3D9->Release();
+        m_D3D9 = NULL;
+    }
+
     while (m_Drivers.Size() != 0)
     {
         CKRasterizerDriver *driver = m_Drivers.PopBack();
         delete driver;
     }
-    m_D3D9 = NULL;
+
     m_Init = FALSE;
 }
 
