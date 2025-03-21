@@ -447,6 +447,9 @@ public:
 
     // Stage Blends
     void InitBlendStages();
+    void CreateBlendStage(VXBLEND_MODE srcBlend, VXBLEND_MODE destBlend,
+                          D3DTEXTUREOP colorOp, DWORD colorArg1, DWORD colorArg2,
+                          D3DTEXTUREOP alphaOp, DWORD alphaArg1, DWORD alphaArg2);
     CKStageBlend *m_BlendStages[256];
 };
 
