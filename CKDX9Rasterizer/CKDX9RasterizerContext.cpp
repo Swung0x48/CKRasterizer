@@ -1665,7 +1665,7 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitiveVBIB(VXPRIMITIVETYPE pType, CKDWORD 
     if (!m_SceneBegined && !BeginScene())
         return FALSE;
 
-    SetupStreams(vertexBufferDesc->DxBuffer, vertexBufferDesc->m_VertexFormat, vertexBufferDesc->m_VertexSize);
+    SetupStreams(vertexBufferDesc->DxBuffer, vertexBufferDesc->m_VertexFormat, 0, vertexBufferDesc->m_VertexSize);
 
     // Calculate primitive count based on primitive type
     int primitiveCount = Indexcount;
@@ -2662,7 +2662,7 @@ CKBOOL CKDX9RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *d
     vb->DxBuffer->Unlock();
 
     // Step 6: Setup vertex streams
-    SetupStreams(vb->DxBuffer, CKRST_VF_TLVERTEX, sizeof(CKVertex));
+    SetupStreams(vb->DxBuffer, CKRST_VF_TLVERTEX, 0, sizeof(CKVertex));
 
     // Step a7: Render batches (groups of fragments with same texture)
     CKDWORD currentTextureId = 0xFFFFFFFF;
@@ -3978,7 +3978,7 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
     }
 
     // Set up vertex streams (positions, normals, colors, etc.)
-    SetupStreams(VB->DxBuffer, VB->m_VertexFormat, VB->m_VertexSize);
+    SetupStreams(VB->DxBuffer, VB->m_VertexFormat, 0, VB->m_VertexSize);
 
     // Calculate primitive count based on primitive type
     int primitiveCount = indices ? indexcount : VertexCount;
@@ -4036,7 +4036,7 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
     return SUCCEEDED(hr);
 }
 
-void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize)
+void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VOffset, CKDWORD VSize)
 {
 #ifdef TRACY_ENABLE
     ZoneScopedN(__FUNCTION__);
@@ -4121,7 +4121,7 @@ void CKDX9RasterizerContext::SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWOR
     if (Buffer != m_CurrentVertexBufferCache || m_CurrentVertexSizeCache != VSize)
     {
         // Set the vertex buffer as the data source for stream 0
-        hr = m_Device->SetStreamSource(0, Buffer, 0, VSize);
+        hr = m_Device->SetStreamSource(0, Buffer, VOffset, VSize);
         if (SUCCEEDED(hr))
         {
             // Update cache values

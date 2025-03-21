@@ -289,7 +289,7 @@ protected:
     void UpdateDirectXData();
     CKBOOL InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc *VB, CKDWORD StartIndex,
                                    CKDWORD VertexCount, CKWORD *indices, int indexcount, CKBOOL Clip);
-    void SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize);
+    void SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VOffset, CKDWORD VSize);
 
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
