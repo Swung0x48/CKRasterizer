@@ -4033,7 +4033,7 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
         return TRUE; // Nothing to draw, but not an error
 
     // Draw non-indexed primitives
-    if (!indices || pType == VX_POINTLIST)
+    if (!indices)
     {
         hr = m_Device->DrawPrimitive(
             (D3DPRIMITIVETYPE)pType,  // Primitive type
