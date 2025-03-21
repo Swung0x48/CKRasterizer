@@ -638,24 +638,17 @@ CKBOOL CKDX9RasterizerContext::BackToFront(CKBOOL vsync)
     {
         if (hr == D3DERR_DEVICELOST)
         {
+            // Check if device can be reset
             hr = m_Device->TestCooperativeLevel();
             if (hr == D3DERR_DEVICENOTRESET)
             {
-                if (!Resize(m_PosX, m_PosY, m_Width, m_Height))
-                {
-                    // Handle resize failure
-                    return FALSE;
-                }
+                // Device can be reset now
+                hr = ResetDevice();
+                if (SUCCEEDED(hr))
+                    return TRUE; // Successfully reset
             }
-            else
-            {
-                // Device still lost, can't be reset yet
-                return FALSE;
-            }
-        }
-        else
-        {
-            // Other presentation error
+
+            // Device is lost and can't be reset yet
             return FALSE;
         }
     }
@@ -3772,19 +3765,18 @@ void CKDX9RasterizerContext::DestroyDevice()
 
 HRESULT CKDX9RasterizerContext::ResetDevice()
 {
-    HRESULT hr = m_Device->Reset(&m_PresentParams);
+    // Prepare for reset by releasing resources
+    FlushNonManagedObjects();
 
-    // Handle device lost case
-    if (hr == D3DERR_DEVICELOST)
-    {
-        // Check if device is ready to be reset
-        hr = m_Device->TestCooperativeLevel();
-        if (hr == D3DERR_DEVICENOTRESET)
-        {
-            // Device is ready to be reset
-            return m_Device->Reset(&m_PresentParams);
-        }
-    }
+    HRESULT hr = m_Device->Reset(&m_PresentParams);
+    if (FAILED(hr))
+        return hr;
+
+    // Update device properties
+    UpdateDeviceProperties();
+
+    // Restore device states
+    InitializeDeviceStates();
 
     return hr;
 }
