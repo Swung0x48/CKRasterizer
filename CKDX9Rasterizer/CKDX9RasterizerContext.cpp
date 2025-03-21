@@ -1509,18 +1509,21 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD *indice
 
     // Set clipping state based on flags
     CKBOOL clip = FALSE;
-    if (data->Flags & CKRST_DP_DOCLIP) {
+    if (data->Flags & CKRST_DP_DOCLIP)
+    {
         if (!SetRenderState(VXRENDERSTATE_CLIPPING, TRUE))
             return FALSE;
         clip = TRUE;
-    } else {
+    }
+    else
+    {
         if (!SetRenderState(VXRENDERSTATE_CLIPPING, FALSE))
             return FALSE;
     }
 
     // Get a suitable dynamic vertex buffer
     CKDWORD index = GetDynamicVertexBuffer(vertexFormat, data->VertexCount, vertexSize, clip);
-    CKDX9VertexBufferDesc *vertexBufferDesc = (index < m_VertexBuffers.Size()) ? static_cast<CKDX9VertexBufferDesc*>(m_VertexBuffers[index]) : NULL;
+    CKDX9VertexBufferDesc *vertexBufferDesc = (index < m_VertexBuffers.Size()) ? static_cast<CKDX9VertexBufferDesc *>(m_VertexBuffers[index]) : NULL;
     if (!vertexBufferDesc || !vertexBufferDesc->DxBuffer)
         return FALSE;
 
@@ -1528,32 +1531,26 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD *indice
     void *ppbData = NULL;
     HRESULT hr = E_FAIL;
     CKDWORD startIndex = 0;
+    DWORD lockFlags = 0;
+    CKBOOL appending = FALSE;
 
     // Try to append to existing buffer if there's room
     if (vertexBufferDesc->m_CurrentVCount + data->VertexCount <= vertexBufferDesc->m_MaxVertexCount)
     {
-        hr = vertexBufferDesc->DxBuffer->Lock(
-            vertexSize * vertexBufferDesc->m_CurrentVCount,
-            vertexSize * data->VertexCount,
-            &ppbData,
-            D3DLOCK_NOOVERWRITE
-        );
-        if (SUCCEEDED(hr))
+        hr = vertexBufferDesc->DxBuffer->Lock(vertexSize * vertexBufferDesc->m_CurrentVCount, vertexSize * data->VertexCount, &ppbData, D3DLOCK_NOOVERWRITE);
+        if (SUCCEEDED(hr) && ppbData)
         {
             startIndex = vertexBufferDesc->m_CurrentVCount;
             vertexBufferDesc->m_CurrentVCount += data->VertexCount;
+            appending = TRUE;
         }
     }
 
     // If the append failed or there's not enough space, discard and start fresh
-    if (FAILED(hr) || !ppbData) {
-        hr = vertexBufferDesc->DxBuffer->Lock(
-            0,
-            vertexSize * data->VertexCount,
-            &ppbData,
-            D3DLOCK_DISCARD
-        );
-        if (SUCCEEDED(hr))
+    if (!appending)
+    {
+        hr = vertexBufferDesc->DxBuffer->Lock(0, vertexSize * data->VertexCount, &ppbData, D3DLOCK_DISCARD);
+        if (SUCCEEDED(hr) && ppbData)
         {
             startIndex = 0;
             vertexBufferDesc->m_CurrentVCount = data->VertexCount;
@@ -1565,7 +1562,7 @@ CKBOOL CKDX9RasterizerContext::DrawPrimitive(VXPRIMITIVETYPE pType, WORD *indice
         return FALSE;
 
     // Copy vertex data to the buffer
-    CKRSTLoadVertexBuffer(reinterpret_cast<CKBYTE*>(ppbData), vertexFormat, vertexSize, data);
+    CKRSTLoadVertexBuffer(reinterpret_cast<CKBYTE *>(ppbData), vertexFormat, vertexSize, data);
 
     // Unlock the buffer
     hr = vertexBufferDesc->DxBuffer->Unlock();
@@ -3916,7 +3913,6 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
                 &desc->DxBuffer,      // Resulting buffer
                 NULL                  // Shared handle (not used)
             );
-
             if (FAILED(hr) || !desc->DxBuffer)
             {
                 delete desc;
@@ -3941,7 +3937,6 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
                 &pbData,                     // Pointer to receive data
                 D3DLOCK_NOOVERWRITE          // Don't overwrite existing data
             );
-
             if (SUCCEEDED(hr) && pbData)
             {
                 ibstart = desc->m_CurrentICount;
@@ -3959,7 +3954,6 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
                 &pbData,            // Pointer to receive data
                 D3DLOCK_DISCARD     // Discard previous contents
             );
-
             if (SUCCEEDED(hr) && pbData)
             {
                 ibstart = 0;
@@ -3987,16 +3981,7 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
     SetupStreams(VB->DxBuffer, VB->m_VertexFormat, VB->m_VertexSize);
 
     // Calculate primitive count based on primitive type
-    int primitiveCount;
-
-    if (indices)
-    {
-        primitiveCount = indexcount;
-    }
-    else
-    {
-        primitiveCount = VertexCount;
-    }
+    int primitiveCount = indices ? indexcount : VertexCount;
 
     // Adjust primitive count based on primitive type
     switch (pType)
