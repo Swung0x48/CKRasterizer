@@ -47,13 +47,16 @@ PLUGIN_EXPORT void CKRasterizerGetInfo(CKRasterizerInfo *info)
 
 CKDX9Rasterizer::CKDX9Rasterizer() : m_D3D9(NULL), m_Init(FALSE), m_BlendStages() {}
 
-CKDX9Rasterizer::~CKDX9Rasterizer() {}
+CKDX9Rasterizer::~CKDX9Rasterizer()
+{
+    Close();
+}
 
 XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
 {
     InitBlendStages();
-    this->m_MainWindow = AppWnd;
-    this->m_Init = TRUE;
+    m_MainWindow = AppWnd;
+    m_Init = TRUE;
 
     // Create the D3D object, which is needed to create the D3DDevice.
 #ifdef USE_D3D9EX
@@ -78,18 +81,30 @@ XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
         !D3DXLoadSurfaceFromMemory ||
         !D3DXCreateTextureFromFileExA)
 	{
-		HMODULE module = LoadLibrary(TEXT("d3dx9_43.dll"));
-		if (module)
-		{
+        HMODULE module = NULL;
+        const TCHAR *d3dxVersions[] = {
+            TEXT("d3dx9_43.dll"), TEXT("d3dx9_42.dll"), TEXT("d3dx9_41.dll"),
+            TEXT("d3dx9_40.dll"), TEXT("d3dx9_39.dll"), TEXT("d3dx9_38.dll"),
+        };
+
+        for (int i = 0; i < sizeof(d3dxVersions) / sizeof(d3dxVersions[0]); ++i)
+        {
+            module = LoadLibrary(d3dxVersions[i]);
+            if (module)
+                break;
+        }
+
+        if (module)
+        {
             D3DXDeclaratorFromFVF = reinterpret_cast<PFN_D3DXDeclaratorFromFVF>(GetProcAddress(module, "D3DXDeclaratorFromFVF"));
             D3DXFVFFromDeclarator = reinterpret_cast<PFN_D3DXFVFFromDeclarator>(GetProcAddress(module, "D3DXFVFFromDeclarator"));
-			D3DXAssembleShader = reinterpret_cast<PFN_D3DXAssembleShader>(GetProcAddress(module, "D3DXAssembleShader"));
-			D3DXDisassembleShader = reinterpret_cast<PFN_D3DXDisassembleShader>(GetProcAddress(module, "D3DXDisassembleShader"));
-			D3DXLoadSurfaceFromSurface = reinterpret_cast<PFN_D3DXLoadSurfaceFromSurface>(GetProcAddress(module, "D3DXLoadSurfaceFromSurface"));
+            D3DXAssembleShader = reinterpret_cast<PFN_D3DXAssembleShader>(GetProcAddress(module, "D3DXAssembleShader"));
+            D3DXDisassembleShader = reinterpret_cast<PFN_D3DXDisassembleShader>(GetProcAddress(module, "D3DXDisassembleShader"));
+            D3DXLoadSurfaceFromSurface = reinterpret_cast<PFN_D3DXLoadSurfaceFromSurface>(GetProcAddress(module, "D3DXLoadSurfaceFromSurface"));
             D3DXLoadSurfaceFromMemory = reinterpret_cast<PFN_D3DXLoadSurfaceFromMemory>(GetProcAddress(module, "D3DXLoadSurfaceFromMemory"));
             D3DXCreateTextureFromFileExA = reinterpret_cast<PFN_D3DXCreateTextureFromFileExA>(GetProcAddress(module, "D3DXCreateTextureFromFileExA"));
-		}
-	}
+        }
+    }
 
     UINT count = m_D3D9->GetAdapterCount();
     for (UINT i = 0; i < count; ++i)
@@ -97,7 +112,8 @@ XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
         CKDX9RasterizerDriver *driver = new CKDX9RasterizerDriver(this);
         if (!driver->InitializeCaps(i, D3DDEVTYPE_HAL))
             delete driver;
-        m_Drivers.PushBack(driver);
+        else
+            m_Drivers.PushBack(driver);
     }
 
     return TRUE;
@@ -107,14 +123,29 @@ void CKDX9Rasterizer::Close()
 {
     if (!m_Init)
         return;
+
+    // Clean up blend stages
+    for (int i = 0; i < 256; i++)
+    {
+        if (m_BlendStages[i])
+        {
+            delete m_BlendStages[i];
+            m_BlendStages[i] = NULL;
+        }
+    }
+
     if (m_D3D9)
+    {
         m_D3D9->Release();
+        m_D3D9 = NULL;
+    }
+
     while (m_Drivers.Size() != 0)
     {
         CKRasterizerDriver *driver = m_Drivers.PopBack();
         delete driver;
     }
-    m_D3D9 = NULL;
+
     m_Init = FALSE;
 }
 
@@ -122,30 +153,71 @@ void CKDX9Rasterizer::InitBlendStages()
 {
     memset(m_BlendStages, NULL, sizeof(m_BlendStages));
 
+    // Modulate (ZERO, SRCCOLOR and DESTCOLOR, ZERO)
+    CreateBlendStage(VXBLEND_ZERO, VXBLEND_SRCCOLOR, 
+                     D3DTOP_MODULATE, D3DTA_TEXTURE, D3DTA_CURRENT,
+                     D3DTOP_SELECTARG1, D3DTA_CURRENT, D3DTA_CURRENT);
+            
+    CreateBlendStage(VXBLEND_DESTCOLOR, VXBLEND_ZERO, 
+                     D3DTOP_MODULATE, D3DTA_TEXTURE, D3DTA_CURRENT,
+                     D3DTOP_SELECTARG1, D3DTA_CURRENT, D3DTA_CURRENT);
+
+    // Additive (ONE, ONE)
+    CreateBlendStage(VXBLEND_ONE, VXBLEND_ONE, 
+                     D3DTOP_ADD, D3DTA_TEXTURE, D3DTA_CURRENT,
+                     D3DTOP_SELECTARG1, D3DTA_CURRENT, D3DTA_CURRENT);
+
+    // Replace (ONE, ZERO)
+    CreateBlendStage(VXBLEND_ONE, VXBLEND_ZERO, 
+                     D3DTOP_SELECTARG1, D3DTA_TEXTURE, D3DTA_CURRENT,
+                     D3DTOP_SELECTARG1, D3DTA_TEXTURE, D3DTA_CURRENT);
+
+    // Alpha blend (SRCALPHA, INVSRCALPHA)
+    CreateBlendStage(VXBLEND_SRCALPHA, VXBLEND_INVSRCALPHA, 
+                     D3DTOP_BLENDTEXTUREALPHA, D3DTA_TEXTURE, D3DTA_CURRENT,
+                     D3DTOP_SELECTARG1, D3DTA_TEXTURE, D3DTA_CURRENT);
+
+    // Premultiplied alpha (ONE, INVSRCALPHA)
+    CreateBlendStage(VXBLEND_ONE, VXBLEND_INVSRCALPHA, 
+                     D3DTOP_BLENDTEXTUREALPHA, D3DTA_TEXTURE, D3DTA_CURRENT,
+                     D3DTOP_SELECTARG1, D3DTA_TEXTURE, D3DTA_CURRENT);
+
+    // Multiply (ZERO, INVSRCCOLOR)
+    CreateBlendStage(VXBLEND_ZERO, VXBLEND_INVSRCCOLOR, 
+                     D3DTOP_MODULATEINVALPHA_ADDCOLOR, D3DTA_TEXTURE, D3DTA_CURRENT,
+                     D3DTOP_SELECTARG1, D3DTA_CURRENT, D3DTA_CURRENT);
+
+    // Additive alpha (SRCALPHA, ONE)
+    CreateBlendStage(VXBLEND_SRCALPHA, VXBLEND_ONE, 
+                     D3DTOP_BLENDTEXTUREALPHA, D3DTA_TEXTURE, D3DTA_CURRENT,
+                     D3DTOP_SELECTARG1, D3DTA_TEXTURE, D3DTA_CURRENT);
+
+    // Modulate 2X (double brightness)
+    CreateBlendStage(VXBLEND_DESTCOLOR, VXBLEND_SRCCOLOR,
+                     D3DTOP_MODULATE2X, D3DTA_TEXTURE, D3DTA_CURRENT,
+                     D3DTOP_MODULATE2X, D3DTA_TEXTURE, D3DTA_CURRENT);
+
+    // Modulate 4X (quadruple brightness)
+    CreateBlendStage(VXBLEND_DESTCOLOR, VXBLEND_SRCALPHA,
+                     D3DTOP_MODULATE4X, D3DTA_TEXTURE, D3DTA_CURRENT,
+                     D3DTOP_MODULATE4X, D3DTA_TEXTURE, D3DTA_CURRENT);
+
+    // Subtract
+    CreateBlendStage(VXBLEND_INVSRCCOLOR, VXBLEND_SRCCOLOR,
+                     D3DTOP_SUBTRACT, D3DTA_CURRENT, D3DTA_TEXTURE,
+                     D3DTOP_SUBTRACT, D3DTA_CURRENT, D3DTA_TEXTURE);
+}
+
+void CKDX9Rasterizer::CreateBlendStage(VXBLEND_MODE srcBlend, VXBLEND_MODE destBlend,
+                                       D3DTEXTUREOP colorOp, DWORD colorArg1, DWORD colorArg2,
+                                       D3DTEXTUREOP alphaOp, DWORD alphaArg1, DWORD alphaArg2)
+{
     CKStageBlend *b = new CKStageBlend;
-    b->Cop = D3DTOP_MODULATE;
-    b->Carg1 = D3DTA_TEXTURE;
-    b->Carg2 = D3DTA_CURRENT;
-    b->Aop = D3DTOP_SELECTARG1;
-    b->Aarg1 = D3DTA_CURRENT;
-    b->Aarg2 = D3DTA_CURRENT;
-    m_BlendStages[STAGEBLEND(VXBLEND_ZERO, VXBLEND_SRCCOLOR)] = b;
-
-    b = new CKStageBlend;
-    b->Cop = D3DTOP_MODULATE;
-    b->Carg1 = D3DTA_TEXTURE;
-    b->Carg2 = D3DTA_CURRENT;
-    b->Aop = D3DTOP_SELECTARG1;
-    b->Aarg1 = D3DTA_CURRENT;
-    b->Aarg2 = D3DTA_CURRENT;
-    m_BlendStages[STAGEBLEND(VXBLEND_DESTCOLOR, VXBLEND_ZERO)] = b;
-
-    b = new CKStageBlend;
-    b->Cop = D3DTOP_ADD;
-    b->Carg1 = D3DTA_TEXTURE;
-    b->Carg2 = D3DTA_CURRENT;
-    b->Aop = D3DTOP_SELECTARG1;
-    b->Aarg1 = D3DTA_CURRENT;
-    b->Aarg2 = D3DTA_CURRENT;
-    m_BlendStages[STAGEBLEND(VXBLEND_ONE, VXBLEND_ONE)] = b;
+    b->Cop = colorOp;
+    b->Carg1 = colorArg1;
+    b->Carg2 = colorArg2;
+    b->Aop = alphaOp;
+    b->Aarg1 = alphaArg1;
+    b->Aarg2 = alphaArg2;
+    m_BlendStages[STAGEBLEND(srcBlend, destBlend)] = b;
 }

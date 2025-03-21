@@ -25,13 +25,6 @@ struct TexFromFile
     CKBOOL IsDynamic;
 };
 
-struct VisibleSpriteTexture
-{
-    CKSPRTextInfo *Texture;
-    int VertexIndex;
-    CKDWORD TextureId;
-};
-
 //---Implemented in CKDX9PixelFormatUtils.cpp :
 
 D3DFORMAT VxPixelFormatToD3DFormat(VX_PIXELFORMAT pf);
@@ -265,6 +258,8 @@ public:
     //--- For web content the render context can be transparent (no clear of back buffer but instead
     //--- a copy of what is currently on screen)
     virtual void SetTransparentMode(CKBOOL Trans);
+    virtual void AddDirtyRect(CKRECT *Rect);
+    virtual void RestoreScreenBackup();
 
     //--- User Clip Plane Function
     virtual CKBOOL SetUserClipPlane(CKDWORD ClipPlaneIndex, const VxPlane &PlaneEquation);
@@ -284,10 +279,17 @@ public:
 
 protected:
     //-----------------------
+    void RestoreWindowStyle(HWND Window, LONG originalStyle, CKBOOL wasFullscreen);
+    CKBOOL UpdateDeviceProperties();
+    CKBOOL InitializeDeviceStates();
+    void DestroyDevice();
+    HRESULT ResetDevice();
+    void ConfigureMultisampling();
+
     void UpdateDirectXData();
     CKBOOL InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CKDX9VertexBufferDesc *VB, CKDWORD StartIndex,
                                    CKDWORD VertexCount, CKWORD *indices, int indexcount, CKBOOL Clip);
-    void SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VSize);
+    void SetupStreams(LPDIRECT3DVERTEXBUFFER9 Buffer, CKDWORD VFormat, CKDWORD VOffset, CKDWORD VSize);
 
     //--- Objects creation
     CKBOOL CreateTexture(CKDWORD Texture, CKTextureDesc *DesiredFormat);
@@ -319,6 +321,11 @@ protected:
     }
 
     LPDIRECT3DSURFACE9 GetTempZBuffer(int Width, int Height);
+
+    void ReleaseLightStates()
+    {
+        memset(m_LightStates, 0, sizeof(m_LightStates));
+    }
 
 public:
 #ifdef USE_D3D9EX
@@ -356,6 +363,8 @@ public:
     LPDIRECT3DVERTEXBUFFER9 m_CurrentVertexBufferCache;
     CKDWORD m_CurrentVertexSizeCache;
 
+    CKDWORD m_CurrentPixelShaderCache;
+
     XBitArray m_StateCacheHitMask;
     XBitArray m_StateCacheMissMask;
 
@@ -375,8 +384,9 @@ public:
     // texture rendering
     LPDIRECT3DSURFACE9 m_TempZBuffers[NBTEMPZBUFFER];
 
+    CKBOOL m_LightStates[RST_MAX_LIGHT];
+
     XNHashTable<LPDIRECT3DVERTEXDECLARATION9, DWORD> m_VertexDeclarations;
-    XArray<VisibleSpriteTexture> m_VisibleSpriteTextures;
 
     CKDX9Rasterizer *m_Owner;
 };
@@ -394,15 +404,16 @@ public:
     virtual CKRasterizerContext *CreateContext();
 
     CKBOOL InitializeCaps(int AdapterIndex, D3DDEVTYPE DevType);
-	CKBOOL IsTextureFormatOk(D3DFORMAT TextureFormat, D3DFORMAT AdapterFormat, DWORD Usage = 0);
 
     D3DFORMAT FindNearestTextureFormat(CKTextureDesc *desc, D3DFORMAT AdapterFormat, DWORD Usage = 0);
     D3DFORMAT FindNearestRenderTargetFormat(int Bpp, CKBOOL Windowed);
     D3DFORMAT FindNearestDepthFormat(D3DFORMAT pf, int ZBpp, int StencilBpp);
 
 private:
+    CKBOOL IsTextureFormatSupported(D3DFORMAT TextureFormat, D3DFORMAT AdapterFormat, DWORD Usage = 0);
     CKBOOL CheckDeviceFormat(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
     CKBOOL CheckDepthStencilMatch(D3DFORMAT AdapterFormat, D3DFORMAT CheckFormat);
+    CKBOOL CheckDepthFormatWithRenderTarget(D3DFORMAT AdapterFormat, D3DFORMAT RenderTargetFormat, D3DFORMAT DepthStencilFormat);
 
 public:
     CKBOOL m_Inited;
@@ -436,6 +447,9 @@ public:
 
     // Stage Blends
     void InitBlendStages();
+    void CreateBlendStage(VXBLEND_MODE srcBlend, VXBLEND_MODE destBlend,
+                          D3DTEXTUREOP colorOp, DWORD colorArg1, DWORD colorArg2,
+                          D3DTEXTUREOP alphaOp, DWORD alphaArg1, DWORD alphaArg2);
     CKStageBlend *m_BlendStages[256];
 };
 
