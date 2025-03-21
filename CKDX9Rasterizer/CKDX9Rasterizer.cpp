@@ -81,8 +81,20 @@ XBOOL CKDX9Rasterizer::Start(WIN_HANDLE AppWnd)
         !D3DXLoadSurfaceFromMemory ||
         !D3DXCreateTextureFromFileExA)
 	{
-		HMODULE module = LoadLibrary(TEXT("d3dx9_43.dll"));
-		if (module)
+        HMODULE module = NULL;
+        const TCHAR *d3dxVersions[] = {
+            TEXT("d3dx9_43.dll"), TEXT("d3dx9_42.dll"), TEXT("d3dx9_41.dll"),
+            TEXT("d3dx9_40.dll"), TEXT("d3dx9_39.dll"), TEXT("d3dx9_38.dll"),
+        };
+
+        for (int i = 0; i < sizeof(d3dxVersions) / sizeof(d3dxVersions[0]); ++i)
+        {
+            module = LoadLibrary(d3dxVersions[i]);
+            if (module)
+                break;
+        }
+
+        if (module)
         {
             D3DXDeclaratorFromFVF = reinterpret_cast<PFN_D3DXDeclaratorFromFVF>(GetProcAddress(module, "D3DXDeclaratorFromFVF"));
             D3DXFVFFromDeclarator = reinterpret_cast<PFN_D3DXFVFFromDeclarator>(GetProcAddress(module, "D3DXFVFFromDeclarator"));
