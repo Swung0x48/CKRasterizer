@@ -3689,7 +3689,7 @@ CKBOOL CKDX9RasterizerContext::UpdateDeviceProperties()
     if (!m_Device)
         return FALSE;
 
-    // Get backbuffer information
+    // Get back buffer information
     IDirect3DSurface9 *pBackBuffer = NULL;
     if (SUCCEEDED(m_Device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer)))
     {
@@ -3871,7 +3871,7 @@ CKBOOL CKDX9RasterizerContext::InternalDrawPrimitiveVB(VXPRIMITIVETYPE pType, CK
     {
         // Ensure we have a valid index buffer of sufficient size
         CKDX9IndexBufferDesc *desc = m_IndexBuffer[Clip ? 1 : 0];
-        BOOL needNewBuffer = FALSE;
+        CKBOOL needNewBuffer = FALSE;
 
         // Check if we need to create or recreate the index buffer
         if (!desc)
