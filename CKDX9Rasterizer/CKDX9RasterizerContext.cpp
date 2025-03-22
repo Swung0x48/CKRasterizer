@@ -1908,6 +1908,9 @@ CKBOOL CKDX9RasterizerContext::LoadTexture(CKDWORD Texture, const VxImageDescEx 
         return FALSE;
     }
 
+    if (desc->Format.BytesPerLine == 0)
+        desc->Format.BytesPerLine = lockRect.Pitch;
+
     // Copy data to texture surface
     if (!LoadSurface(surfaceDesc, lockRect, src))
     {
