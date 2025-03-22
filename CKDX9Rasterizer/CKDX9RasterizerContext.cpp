@@ -3594,7 +3594,6 @@ CKBOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char
         NULL,                   // Palette (don't need)
         &pTexture               // Result
     );
-
     if (FAILED(hr) || !pTexture)
         return FALSE;
 
@@ -3667,9 +3666,21 @@ CKBOOL CKDX9RasterizerContext::CreateTextureFromFile(CKDWORD Texture, const char
     desc->Flags = flags;
     desc->Format.Width = surfaceDesc.Width;
     desc->Format.Height = surfaceDesc.Height;
-    desc->MipMapCount = pTexture->GetLevelCount() - 1;
 
-    // Store the texture
+    D3DLOCKED_RECT lockedRect;
+    if (SUCCEEDED(pTexture->LockRect(0, &lockedRect, NULL, D3DLOCK_READONLY)))
+    {
+        desc->Format.BytesPerLine = lockedRect.Pitch;
+        pTexture->UnlockRect(0);
+    }
+    else
+    {
+        // Fallback to an estimate if locking fails
+        int bytesPerPixel = desc->Format.BitsPerPixel / 8;
+        desc->Format.BytesPerLine = ((surfaceDesc.Width * bytesPerPixel) + 3) & ~3;
+    }
+
+    desc->MipMapCount = pTexture->GetLevelCount() - 1;
     m_Textures[Texture] = desc;
 
     return TRUE;
@@ -4244,12 +4255,11 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
     BOOL success = FALSE;
 
     // Create regular texture or cube texture based on flags
-    if ((flags & CKRST_TEXTURE_CUBEMAP) == 0)
+    if (!(flags & CKRST_TEXTURE_CUBEMAP))
     {
         // Create regular 2D texture
         IDirect3DTexture9 *pTexture = NULL;
         hr = m_Device->CreateTexture(width, height, levels, usage, format, pool, &pTexture, NULL);
-
         if (SUCCEEDED(hr) && pTexture)
         {
             // Get texture properties
@@ -4263,6 +4273,21 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
                 desc->Flags = flags;
                 desc->Format.Width = surfaceDesc.Width;
                 desc->Format.Height = surfaceDesc.Height;
+
+                D3DLOCKED_RECT lockedRect;
+                if (SUCCEEDED(desc->DxTexture->LockRect(0, &lockedRect, NULL, D3DLOCK_READONLY)))
+                {
+                    // Set BytesPerLine to the actual pitch from the driver
+                    desc->Format.BytesPerLine = lockedRect.Pitch;
+                    desc->DxTexture->UnlockRect(0);
+                }
+                else
+                {
+                    // Fallback to an aligned calculation if locking fails
+                    int bytesPerPixel = desc->Format.BitsPerPixel / 8;
+                    desc->Format.BytesPerLine = ((width * bytesPerPixel) + 3) & ~3; // 4-byte alignment
+                }
+
                 desc->MipMapCount = pTexture->GetLevelCount() - 1;
                 m_Textures[Texture] = desc;
                 success = TRUE;
@@ -4284,7 +4309,6 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
             // Get texture properties
             D3DSURFACE_DESC surfaceDesc = {};
             hr = pCubeTexture->GetLevelDesc(0, &surfaceDesc);
-
             if (SUCCEEDED(hr))
             {
                 // Set texture descriptor properties
@@ -4293,6 +4317,21 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
                 desc->Flags = flags | CKRST_TEXTURE_CUBEMAP; // Ensure flag is set
                 desc->Format.Width = surfaceDesc.Width;
                 desc->Format.Height = surfaceDesc.Height;
+
+                D3DLOCKED_RECT lockedRect;
+                if (SUCCEEDED(desc->DxTexture->LockRect(0, &lockedRect, NULL, D3DLOCK_READONLY)))
+                {
+                    // Set BytesPerLine to the actual pitch from the driver
+                    desc->Format.BytesPerLine = lockedRect.Pitch;
+                    desc->DxTexture->UnlockRect(0);
+                }
+                else
+                {
+                    // Fallback to an aligned calculation if locking fails
+                    int bytesPerPixel = desc->Format.BitsPerPixel / 8;
+                    desc->Format.BytesPerLine = ((width * bytesPerPixel) + 3) & ~3; // 4-byte alignment
+                }
+
                 desc->MipMapCount = pCubeTexture->GetLevelCount() - 1;
                 m_Textures[Texture] = desc;
                 success = TRUE;
