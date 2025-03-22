@@ -4162,18 +4162,27 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
         return FALSE;
 
     CKDWORD flags = DesiredFormat->Flags;
+    CKBOOL isRenderTarget = (flags & CKRST_TEXTURE_RENDERTARGET) != 0;
+    CKBOOL isCubeMap = (flags & CKRST_TEXTURE_CUBEMAP) != 0;
 
     // Determine usage flags
     DWORD usage = 0;
     if (flags & CKRST_TEXTURE_HINTPROCEDURAL)
         usage |= D3DUSAGE_DYNAMIC;
-    if (flags & CKRST_TEXTURE_RENDERTARGET)
+    if (isRenderTarget)
         usage |= D3DUSAGE_RENDERTARGET;
 
     // Find appropriate format for the texture
     D3DFORMAT format = driver->FindNearestTextureFormat(DesiredFormat, m_PresentParams.BackBufferFormat, usage);
     if (format == D3DFMT_UNKNOWN)
-        format = D3DFMT_A8R8G8B8;
+    {
+        if (flags & CKRST_TEXTURE_RENDERTARGET)
+            format = m_PresentParams.BackBufferFormat;
+        else if (flags & CKRST_TEXTURE_ALPHA)
+            format = D3DFMT_A8R8G8B8;
+        else
+            format = D3DFMT_X8R8G8B8;
+    }
 
     // Calculate dimensions based on hardware capabilities
     int width = DesiredFormat->Format.Width;
@@ -4183,21 +4192,13 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
     // Power of 2 adjustment if required
     if ((textureCaps & CKRST_TEXTURECAPS_POW2) != 0)
     {
-        // Find next power of 2 for width
-        int n = 1;
-        while (n < width)
-            n <<= 1;
-        width = n;
-
-        // Find next power of 2 for height
-        n = 1;
-        while (n < height)
-            n <<= 1;
-        height = n;
+        // Find next power of 2 for dimensions
+        width = 1 << GetMsb(width, 15);
+        height = 1 << GetMsb(height, 15);
     }
 
     // Square texture adjustment if required
-    if (((flags & CKRST_TEXTURE_CUBEMAP) != 0 || (textureCaps & CKRST_TEXTURECAPS_SQUAREONLY) != 0) && width != height)
+    if ((isCubeMap || (textureCaps & CKRST_TEXTURECAPS_SQUAREONLY) != 0) && width != height)
     {
         // Make dimensions square by taking the larger value
         width = height = max(width, height);
@@ -4212,20 +4213,16 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
     // Determine mipmap levels and memory pool
     UINT levels = DesiredFormat->MipMapCount != 0 ? DesiredFormat->MipMapCount + 1 : 1;
 
+    // Render targets must be in default pool
+    if (isRenderTarget)
+        flags &= ~CKRST_TEXTURE_MANAGED;
+
     // Choose appropriate memory pool
     D3DPOOL pool;
-    if (flags & CKRST_TEXTURE_RENDERTARGET)
-    {
-        pool = D3DPOOL_DEFAULT; // Render targets must be in default pool
-    }
-    else if (flags & CKRST_TEXTURE_MANAGED)
-    {
+    if (flags & CKRST_TEXTURE_MANAGED)
         pool = D3DPOOL_MANAGED; // Managed textures
-    }
     else
-    {
         pool = D3DPOOL_DEFAULT; // Default for other textures
-    }
 
     // Release existing texture if present to prevent memory leaks
     CKDX9TextureDesc *desc = static_cast<CKDX9TextureDesc *>(m_Textures[Texture]);
@@ -4241,14 +4238,23 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
     if (!desc)
         return FALSE;
 
+    LPDIRECT3DSURFACE9 originalRenderTarget = NULL;
+    LPDIRECT3DSURFACE9 originalDepthStencil = NULL;
+
+    if (isRenderTarget)
+    {
+        m_Device->GetRenderTarget(0, &originalRenderTarget);
+        m_Device->GetDepthStencilSurface(&originalDepthStencil);
+    }
+
     HRESULT hr = S_OK;
-    BOOL success = FALSE;
+    CKBOOL success = FALSE;
 
     // Create regular texture or cube texture based on flags
-    if (!(flags & CKRST_TEXTURE_CUBEMAP))
+    if (!isCubeMap)
     {
         // Create regular 2D texture
-        IDirect3DTexture9 *pTexture = NULL;
+        LPDIRECT3DTEXTURE9 pTexture = NULL;
         hr = m_Device->CreateTexture(width, height, levels, usage, format, pool, &pTexture, NULL);
         if (SUCCEEDED(hr) && pTexture)
         {
@@ -4292,7 +4298,7 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
     else
     {
         // Create cube texture
-        IDirect3DCubeTexture9 *pCubeTexture = NULL;
+        LPDIRECT3DCUBETEXTURE9 pCubeTexture = NULL;
         hr = m_Device->CreateCubeTexture(width, levels, usage, format, pool, &pCubeTexture, NULL);
         if (SUCCEEDED(hr) && pCubeTexture)
         {
@@ -4334,14 +4340,70 @@ CKBOOL CKDX9RasterizerContext::CreateTexture(CKDWORD Texture, CKTextureDesc *Des
         }
     }
 
-    // Clean up on failure
-    if (!success)
+    // Restore original render target if we're creating a render target
+    if (isRenderTarget && success)
     {
-        delete desc;
-        return FALSE;
+        // For render targets, set up the appropriate texture pointers
+        if (desc->DxTexture && !isCubeMap)
+        {
+            // Use the same texture for rendering to avoid resource conflicts
+            desc->DxRenderTexture = desc->DxTexture;
+        }
+        
+        // Restore the original render target
+        if (originalRenderTarget)
+        {
+            m_Device->SetRenderTarget(0, originalRenderTarget);
+            SAFERELEASE(originalRenderTarget);
+        }
+        
+        if (originalDepthStencil)
+        {
+            m_Device->SetDepthStencilSurface(originalDepthStencil);
+            SAFERELEASE(originalDepthStencil);
+        }
+    }
+    else
+    {
+        // Clean up render target resources even if we're not creating a render target
+        SAFERELEASE(originalRenderTarget);
+        SAFERELEASE(originalDepthStencil);
     }
 
-    return TRUE;
+    // Ensure device is in a clean state
+    if (success)
+    {
+        // Reset any texture bindings potentially affected by this creation
+        for (int i = 0; i < m_Driver->m_3DCaps.MaxNumberTextureStage; ++i)
+        {
+            // Only unbind stages that might have the new texture (to avoid unnecessary state changes)
+            LPDIRECT3DBASETEXTURE9 boundTexture = NULL;
+            if (SUCCEEDED(m_Device->GetTexture(i, &boundTexture)))
+            {
+                if (boundTexture)
+                {
+                    SAFERELEASE(boundTexture);
+                    m_Device->SetTexture(i, NULL);
+                }
+            }
+        }
+        
+        // If this is the first texture created, or after device reset, also verify scene state
+        if (Texture == 1 || m_InCreateDestroy)
+        {
+            // End scene if it was active to ensure consistent state
+            if (m_SceneBegined)
+            {
+                m_Device->EndScene();
+                m_SceneBegined = FALSE;
+            }
+        }
+    }
+
+    // Clean up on failure
+    if (!success)
+        delete desc;
+    return success;
 }
 
 CKBOOL CKDX9RasterizerContext::CreateVertexShader(CKDWORD VShader, CKVertexShaderDesc *DesiredFormat)
