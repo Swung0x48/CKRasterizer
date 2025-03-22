@@ -186,7 +186,8 @@ CKDX9RasterizerContext::~CKDX9RasterizerContext()
         if (m_DefaultBackBuffer)
         {
             m_Device->SetRenderTarget(0, m_DefaultBackBuffer);
-            m_Device->SetDepthStencilSurface(m_DefaultDepthBuffer);
+            if (m_DefaultDepthBuffer)
+                m_Device->SetDepthStencilSurface(m_DefaultDepthBuffer);
         }
     }
 
@@ -5009,23 +5010,16 @@ void CKDX9RasterizerContext::FlushNonManagedObjects()
 #endif
     }
 
-    // Reset shader cache values
-    m_CurrentVertexShaderCache = 0;
-    m_CurrentPixelShaderCache = 0;
-
-    // Reset render target if needed
+    // Reset render target and depth buffer
     if (m_DefaultBackBuffer)
     {
         m_Device->SetRenderTarget(0, m_DefaultBackBuffer);
-        SAFERELEASE(m_DefaultBackBuffer);
+        if (m_DefaultDepthBuffer)
+            m_Device->SetDepthStencilSurface(m_DefaultDepthBuffer);
     }
 
-    // Reset depth buffer if needed
-    if (m_DefaultDepthBuffer)
-    {
-        m_Device->SetDepthStencilSurface(m_DefaultDepthBuffer);
-        SAFERELEASE(m_DefaultDepthBuffer);
-    }
+    SAFERELEASE(m_DefaultBackBuffer);
+    SAFERELEASE(m_DefaultDepthBuffer);
 
     // Reset current texture index
     m_CurrentTextureIndex = 0;
