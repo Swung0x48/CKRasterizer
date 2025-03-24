@@ -57,7 +57,11 @@ jobs:
           $url = "https://sdk.lunarg.com/sdk/download/$version/windows/VulkanSDK-$version-Installer.exe"
           Invoke-WebRequest -Uri $url -OutFile VulkanSDK.exe -UseBasicParsing
           Start-Process -Wait -FilePath .\VulkanSDK.exe -ArgumentList "--accept-licenses --default-answer --confirm-command install com.lunarg.vulkan.32bit com.lunarg.vulkan.sdl2 com.lunarg.vulkan.glm com.lunarg.vulkan.volk com.lunarg.vulkan.vma com.lunarg.vulkan.debug com.lunarg.vulkan.debug32"
-          echo "VULKAN_SDK=C:\VulkanSDK\$version\" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Set Vulkan Environment
+        run: |
+          echo "VULKAN_SDK=C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}\" >> $env:GITHUB_ENV
+          echo "PATH=C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}\Bin;$env:PATH" >> $env:GITHUB_ENV
 
       - name: Configure CMake
         run: |
