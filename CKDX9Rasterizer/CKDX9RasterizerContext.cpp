@@ -139,7 +139,6 @@ CKDX9RasterizerContext::CKDX9RasterizerContext(CKDX9RasterizerDriver *driver) :
     memset(m_IndexBuffer, 0, sizeof(m_IndexBuffer));
     memset(m_TranslatedRenderStates, 0, sizeof(m_TranslatedRenderStates));
     memset(m_TempZBuffers, 0, sizeof(m_TempZBuffers));
-    memset(m_LightStates, 0, sizeof(m_LightStates));
 
     // Initialize state block arrays
     memset(m_TextureMinFilterStateBlocks, 0, sizeof(m_TextureMinFilterStateBlocks));
@@ -197,7 +196,6 @@ CKDX9RasterizerContext::~CKDX9RasterizerContext()
 
     // Release temporary and cached resources
     ReleaseTempZBuffers();
-    ReleaseLightStates();
     ReleaseScreenBackup();
     ReleaseVertexDeclarations();
 
@@ -792,18 +790,7 @@ CKBOOL CKDX9RasterizerContext::EnableLight(CKDWORD Light, CKBOOL Enable)
     if (!m_Device || Light >= RST_MAX_LIGHT)
         return FALSE;
 
-    if (m_LightStates[Light] != Enable)
-    {
-        HRESULT hr = m_Device->LightEnable(Light, Enable);
-        if (SUCCEEDED(hr))
-        {
-            m_LightStates[Light] = Enable;
-            return TRUE;
-        }
-        return FALSE;
-    }
-
-    return TRUE;
+    return SUCCEEDED(m_Device->LightEnable(Light, Enable));
 }
 
 CKBOOL CKDX9RasterizerContext::SetMaterial(CKMaterialData *mat)
@@ -5128,9 +5115,6 @@ void CKDX9RasterizerContext::FlushNonManagedObjects()
 
     // Release temporary Z-buffers
     ReleaseTempZBuffers();
-
-    // Release light states
-    ReleaseLightStates();
 
     // Release vertex and index buffers, shaders
     FlushObjects(CKRST_OBJ_VERTEXBUFFER | CKRST_OBJ_INDEXBUFFER | CKRST_OBJ_VERTEXSHADER | CKRST_OBJ_PIXELSHADER);
