@@ -322,11 +322,6 @@ protected:
 
     LPDIRECT3DSURFACE9 GetTempZBuffer(int Width, int Height);
 
-    void ReleaseLightStates()
-    {
-        memset(m_LightStates, 0, sizeof(m_LightStates));
-    }
-
 public:
 #ifdef USE_D3D9EX
     LPDIRECT3DDEVICE9EX m_Device;
@@ -383,8 +378,6 @@ public:
     // TempZbuffers array and are attached when doing
     // texture rendering
     LPDIRECT3DSURFACE9 m_TempZBuffers[NBTEMPZBUFFER];
-
-    CKBOOL m_LightStates[RST_MAX_LIGHT];
 
     XNHashTable<LPDIRECT3DVERTEXDECLARATION9, DWORD> m_VertexDeclarations;
 

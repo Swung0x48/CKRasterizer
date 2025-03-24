@@ -7,9 +7,9 @@ project(${PROJECT_NAME})
 
 list(INSERT CMAKE_MODULE_PATH 0 "${CMAKE_CURRENT_LIST_DIR}/../buildsystems/cmake")
 
-option(USE_D3D9EX "Use DirectX 9Ex" ON)
-option(ENABLE_TRIPLE_BUFFER "Enable triple buffering" ON)
-option(TRACY_ENABLE "Enable Tracy" ON)
+option(USE_D3D9EX "Use DirectX 9Ex" OFF)
+option(ENABLE_TRIPLE_BUFFER "Enable triple buffering" OFF)
+option(TRACY_ENABLE "Enable Tracy" OFF)
 
 if (TRACY_ENABLE AND NOT TARGET Tracy::TracyClient)
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../vendor/tracy tracy.out)
