@@ -13,6 +13,8 @@
 #include "VShaderNormalTex2.h"
 #include "VShaderTex.h"
 #include "PShader.h"
+#include "VShaderDepth.h"
+#include "PShaderDepth.h"
 
 #include <algorithm>
 
@@ -302,7 +304,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     descDepth.Height = Height;
     descDepth.MipLevels = 1;
     descDepth.ArraySize = 1;
-    descDepth.Format = DXGI_FORMAT_D32_FLOAT; // TODO: heh, also too lazy to check
+    descDepth.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; // TODO: heh, also too lazy to check
     descDepth.SampleDesc.Count = 1;
     descDepth.SampleDesc.Quality = 0;
     descDepth.Usage = D3D11_USAGE_DEFAULT;
@@ -341,7 +343,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     m_DeviceContext->OMSetDepthStencilState(m_DepthStencilState.Get(), 1);
 
     D3D11_DEPTH_STENCIL_VIEW_DESC descDSV{};
-    descDSV.Format = DXGI_FORMAT_D32_FLOAT;
+    descDSV.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
     descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
     descDSV.Texture2D.MipSlice = 0;
     D3DCall(m_Device->CreateDepthStencilView(m_DepthTexture.Get(), &descDSV, m_DepthStencilView.GetAddressOf()));
@@ -561,6 +563,75 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     //     toggle_fullscreen();
     //     m_Driver->m_Owner->m_FullscreenContext = this;
     // }
+
+    // ---------------------------------------------
+    // Create resource for copying and readback
+    m_fullscreenVS.m_Function = (CKDWORD *)g_VShaderDepth;
+    m_fullscreenVS.m_FunctionSize = sizeof(g_VShaderDepth);
+    m_fullscreenVS.Create(this);
+
+    m_depthPS.m_Function = (CKDWORD *)g_PShaderDepth;
+    m_depthPS.m_FunctionSize = sizeof(g_PShaderDepth);
+    m_depthPS.Create(this);
+
+    m_ScratchViewport.TopLeftX = 0;
+    m_ScratchViewport.TopLeftY = 0;
+    m_ScratchViewport.Width = 640;
+    m_ScratchViewport.Height = 480;
+    m_ScratchViewport.MinDepth = 0.0f;
+    m_ScratchViewport.MaxDepth = 1.0f;
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS; // only read 24bit depth
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+    hr = m_Device->CreateShaderResourceView(m_DepthTexture.Get(), &srvDesc, m_DepthSRV.GetAddressOf());
+
+    assert(SUCCEEDED(hr));
+
+    D3D11_TEXTURE2D_DESC depthDesc;
+    m_DepthTexture->GetDesc(&depthDesc);
+
+    // Create a staging texture for the depth buffer
+    depthDesc.Width = 640;
+    depthDesc.Height = 480;
+    depthDesc.MipLevels = 1;
+    depthDesc.ArraySize = 1;
+    depthDesc.Format = DXGI_FORMAT_R8_UINT;
+    depthDesc.SampleDesc.Count = 1;
+    depthDesc.SampleDesc.Quality = 0;
+    depthDesc.Usage = D3D11_USAGE_DEFAULT;
+    depthDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
+    depthDesc.CPUAccessFlags = 0;
+    depthDesc.MiscFlags = 0;
+    hr = m_Device->CreateTexture2D(&depthDesc, NULL, m_DepthScratchTexture.ReleaseAndGetAddressOf());
+
+    assert(SUCCEEDED(hr));
+
+    hr = m_Device->CreateRenderTargetView(m_DepthScratchTexture.Get(), nullptr, m_ScratchRTV.ReleaseAndGetAddressOf());
+    
+    assert(SUCCEEDED(hr));
+
+
+    depthDesc.Usage = D3D11_USAGE_STAGING;
+    depthDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    hr = m_Device->CreateTexture2D(&depthDesc, NULL, m_DepthStagingTexture.ReleaseAndGetAddressOf());
+
+    assert(SUCCEEDED(hr));
+
+    D3D11_SAMPLER_DESC samplerDesc = {};
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    samplerDesc.MinLOD = 0;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+    hr = m_Device->CreateSamplerState(&samplerDesc, m_LinearSampler.ReleaseAndGetAddressOf());
+    assert(SUCCEEDED(hr));
+    // ----------------------------------------------
+
+
     m_InCreateDestroy = FALSE;
     m_Inited = TRUE;
 
@@ -1916,64 +1987,52 @@ int CKDX11RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buff
     if (rect && (rect->left != 0 || rect->right != m_Width - 1 || rect->top != 0 || rect->bottom != m_Height - 1))
         return 0;
 
-    img_desc.Width = m_Width;
-    img_desc.Height = m_Height;
+    img_desc.Width = 640;
+    img_desc.Height = 480;
 
-    img_desc.BitsPerPixel = 32;
+    img_desc.BitsPerPixel = 8;
 
     switch (buffer)
     {
         case VXBUFFER_ZBUFFER: // We only supports full texture copy for Z
         {
-            int size = img_desc.Width * img_desc.Height * 4;
+            int size = img_desc.Width * img_desc.Height * 1;
             if (!img_desc.Image)
                 return size;
 
-            if (!m_DepthStagingTexture)
-            {
-                //m_copyRect = copyRect;
+            m_DeviceContext->IASetInputLayout(nullptr);
+            m_DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            m_DeviceContext->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+            m_fullscreenVS.Bind(this);
+            m_depthPS.Bind(this);
 
-                // Get the depth buffer texture desc
-                D3D11_TEXTURE2D_DESC originalDepthDesc;
-                m_DepthTexture->GetDesc(&originalDepthDesc);
+            m_DeviceContext->OMSetRenderTargets(1, m_ScratchRTV.GetAddressOf(), nullptr);
+            m_DeviceContext->RSSetViewports(1, &m_ScratchViewport);
 
-                // Create a staging texture for the depth buffer
-                m_DepthStagingTextureDesc.Width = img_desc.Width;
-                m_DepthStagingTextureDesc.Height = img_desc.Height;
-                m_DepthStagingTextureDesc.MipLevels = 1;
-                m_DepthStagingTextureDesc.ArraySize = 1;
-                // For staging textures, we may need to use a different format that's CPU readable
-                // If the original format is not CPU readable, use a compatible typeless format
-                if (originalDepthDesc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT)
-                {
-                    m_DepthStagingTextureDesc.Format = DXGI_FORMAT_R24G8_TYPELESS; // Typeless format for staging
-                }
-                else
-                {
-                    m_DepthStagingTextureDesc.Format = originalDepthDesc.Format;
-                }
-                m_DepthStagingTextureDesc.SampleDesc.Count = 1;
-                m_DepthStagingTextureDesc.SampleDesc.Quality = 0;
-                m_DepthStagingTextureDesc.Usage = D3D11_USAGE_STAGING;
-                m_DepthStagingTextureDesc.BindFlags = 0;
-                m_DepthStagingTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-                m_DepthStagingTextureDesc.MiscFlags = 0;
-                
-                hr = m_Device->CreateTexture2D(&m_DepthStagingTextureDesc, NULL, m_DepthStagingTexture.ReleaseAndGetAddressOf());
-                if (FAILED(hr))
-                {
-                    return 0;
-                }
-            }
+            ID3D11SamplerState *prevSampler = nullptr;
+            m_DeviceContext->PSGetSamplers(0, 1, &prevSampler);
+            m_DeviceContext->PSSetSamplers(0, 1, m_LinearSampler.GetAddressOf());
+            
+            ID3D11ShaderResourceView *prevSRV = nullptr;
+            m_DeviceContext->PSGetShaderResources(0, 1, &prevSRV);
+            m_DeviceContext->PSSetShaderResources(0, 1, m_DepthSRV.GetAddressOf());
 
-            m_DeviceContext->CopyResource(m_DepthStagingTexture.Get(), m_DepthTexture.Get());
+            m_DeviceContext->Draw(3, 0);
+
+            // Restore previous states
+            m_DeviceContext->PSSetShaderResources(0, 1, &prevSRV);
+            m_DeviceContext->PSSetSamplers(0, 1, &prevSampler);
+            m_DeviceContext->RSSetViewports(1, &m_Viewport);
+            m_DeviceContext->OMSetRenderTargets(1, m_RenderTargetView.GetAddressOf(), m_DepthStencilView.Get());
+
+            m_DeviceContext->CopyResource(m_DepthStagingTexture.Get(), m_DepthScratchTexture.Get());
 
             D3D11_MAPPED_SUBRESOURCE mappedResource;
             hr = m_DeviceContext->Map(m_DepthStagingTexture.Get(), 0, D3D11_MAP_READ, 0, &mappedResource);
             if (FAILED(hr)) {
                 return 0;
             }
-            memcpy(img_desc.Image, mappedResource.pData, img_desc.Width * img_desc.Height * 4);
+            memcpy(img_desc.Image, mappedResource.pData, img_desc.Width * img_desc.Height * 1);
             m_DeviceContext->Unmap(m_DepthStagingTexture.Get(), 0);
 
             return size;

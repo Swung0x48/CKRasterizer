@@ -424,9 +424,21 @@ public:
     ComPtr<ID3D11DepthStencilView> m_DepthStencilView;
 
     ComPtr<ID3D11Texture2D> m_DepthTexture;
+
+    // -- Stuff for copying depth --------------------------------
+    CKDX11VertexShaderDesc m_fullscreenVS;
+    CKDX11PixelShaderDesc m_depthPS;
+
+    ComPtr<ID3D11Texture2D> m_DepthScratchTexture; // for downsampling / compressing
+    ComPtr<ID3D11RenderTargetView> m_ScratchRTV;
+    D3D11_VIEWPORT m_ScratchViewport;
+    ComPtr<ID3D11ShaderResourceView> m_DepthSRV; // for sampling original depth
+
     ComPtr<ID3D11Texture2D> m_DepthStagingTexture; // for readback
-    D3D11_TEXTURE2D_DESC m_DepthStagingTextureDesc;
+    ComPtr<ID3D11SamplerState> m_LinearSampler;
+    //D3D11_TEXTURE2D_DESC m_DepthStagingTextureDesc;
     //CKRECT m_copyRect;
+    // -----------------------------------------------------------
 
     D3D11_SAMPLER_DESC m_SamplerDesc[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
     ComPtr<ID3D11SamplerState> m_SamplerState[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
