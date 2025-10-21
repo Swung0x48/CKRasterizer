@@ -304,11 +304,11 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     descDepth.Height = Height;
     descDepth.MipLevels = 1;
     descDepth.ArraySize = 1;
-    descDepth.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; // TODO: heh, also too lazy to check
+    descDepth.Format = DXGI_FORMAT_R24G8_TYPELESS; // TODO: heh, also too lazy to check
     descDepth.SampleDesc.Count = 1;
     descDepth.SampleDesc.Quality = 0;
     descDepth.Usage = D3D11_USAGE_DEFAULT;
-    descDepth.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+    descDepth.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
     descDepth.CPUAccessFlags = 0;
     descDepth.MiscFlags = 0;
     D3DCall(m_Device->CreateTexture2D(&descDepth, NULL, m_DepthTexture.GetAddressOf()));
@@ -576,13 +576,13 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
 
     m_ScratchViewport.TopLeftX = 0;
     m_ScratchViewport.TopLeftY = 0;
-    m_ScratchViewport.Width = 640;
-    m_ScratchViewport.Height = 480;
+    m_ScratchViewport.Width = m_zCopyWidth;
+    m_ScratchViewport.Height = m_zCopyHeight;
     m_ScratchViewport.MinDepth = 0.0f;
     m_ScratchViewport.MaxDepth = 1.0f;
 
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS; // only read 24bit depth
+    srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
     hr = m_Device->CreateShaderResourceView(m_DepthTexture.Get(), &srvDesc, m_DepthSRV.GetAddressOf());
@@ -593,11 +593,11 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     m_DepthTexture->GetDesc(&depthDesc);
 
     // Create a staging texture for the depth buffer
-    depthDesc.Width = 640;
-    depthDesc.Height = 480;
+    depthDesc.Width = m_zCopyWidth;
+    depthDesc.Height = m_zCopyHeight;
     depthDesc.MipLevels = 1;
     depthDesc.ArraySize = 1;
-    depthDesc.Format = DXGI_FORMAT_R8_UINT;
+    depthDesc.Format = DXGI_FORMAT_R16_FLOAT;
     depthDesc.SampleDesc.Count = 1;
     depthDesc.SampleDesc.Quality = 0;
     depthDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -612,9 +612,9 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     
     assert(SUCCEEDED(hr));
 
-
     depthDesc.Usage = D3D11_USAGE_STAGING;
     depthDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    depthDesc.BindFlags = 0;
     hr = m_Device->CreateTexture2D(&depthDesc, NULL, m_DepthStagingTexture.ReleaseAndGetAddressOf());
 
     assert(SUCCEEDED(hr));
@@ -1987,22 +1987,26 @@ int CKDX11RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buff
     if (rect && (rect->left != 0 || rect->right != m_Width - 1 || rect->top != 0 || rect->bottom != m_Height - 1))
         return 0;
 
-    img_desc.Width = 640;
-    img_desc.Height = 480;
+    img_desc.Width = m_zCopyWidth;
+    img_desc.Height = m_zCopyHeight;
 
-    img_desc.BitsPerPixel = 8;
+    img_desc.BitsPerPixel = 16;
 
     switch (buffer)
     {
         case VXBUFFER_ZBUFFER: // We only supports full texture copy for Z
         {
-            int size = img_desc.Width * img_desc.Height * 1;
+            int size = img_desc.Width * img_desc.Height * img_desc.BitsPerPixel / 8;
             if (!img_desc.Image)
                 return size;
 
             m_DeviceContext->IASetInputLayout(nullptr);
             m_DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             m_DeviceContext->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+            ID3D11VertexShader *prevVS = nullptr;
+            m_DeviceContext->VSGetShader(&prevVS, nullptr, 0);
+            ID3D11PixelShader *prevPS = nullptr;
+            m_DeviceContext->PSGetShader(&prevPS, nullptr, 0);
             m_fullscreenVS.Bind(this);
             m_depthPS.Bind(this);
 
@@ -2017,9 +2021,13 @@ int CKDX11RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buff
             m_DeviceContext->PSGetShaderResources(0, 1, &prevSRV);
             m_DeviceContext->PSSetShaderResources(0, 1, m_DepthSRV.GetAddressOf());
 
+            const FLOAT clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+            m_DeviceContext->ClearRenderTargetView(m_ScratchRTV.Get(), clearColor);
             m_DeviceContext->Draw(3, 0);
 
             // Restore previous states
+            m_DeviceContext->VSSetShader(prevVS, nullptr, 0);
+            m_DeviceContext->PSSetShader(prevPS, nullptr, 0);
             m_DeviceContext->PSSetShaderResources(0, 1, &prevSRV);
             m_DeviceContext->PSSetSamplers(0, 1, &prevSampler);
             m_DeviceContext->RSSetViewports(1, &m_Viewport);
@@ -2032,7 +2040,15 @@ int CKDX11RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buff
             if (FAILED(hr)) {
                 return 0;
             }
-            memcpy(img_desc.Image, mappedResource.pData, img_desc.Width * img_desc.Height * 1);
+
+            for (int i = 0; i < img_desc.Height; ++i)
+            {
+                memcpy(static_cast<uint8_t *>(img_desc.Image) + i * mappedResource.RowPitch,
+					   static_cast<uint8_t *>(mappedResource.pData) + i * mappedResource.RowPitch,
+                       mappedResource.RowPitch);
+            }
+
+            //memcpy(img_desc.Image, mappedResource.pData, img_desc.Width * img_desc.Height * img_desc.BitsPerPixel / 8);
             m_DeviceContext->Unmap(m_DepthStagingTexture.Get(), 0);
 
             return size;

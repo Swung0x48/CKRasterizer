@@ -436,6 +436,9 @@ public:
 
     ComPtr<ID3D11Texture2D> m_DepthStagingTexture; // for readback
     ComPtr<ID3D11SamplerState> m_LinearSampler;
+
+    const static int m_zCopyWidth = 320;
+    const static int m_zCopyHeight = 240;
     //D3D11_TEXTURE2D_DESC m_DepthStagingTextureDesc;
     //CKRECT m_copyRect;
     // -----------------------------------------------------------
