@@ -423,6 +423,11 @@ public:
     ComPtr<ID3D11RenderTargetView> m_RenderTargetView;
     ComPtr<ID3D11DepthStencilView> m_DepthStencilView;
 
+    ComPtr<ID3D11Texture2D> m_DepthTexture;
+    ComPtr<ID3D11Texture2D> m_DepthStagingTexture; // for readback
+    D3D11_TEXTURE2D_DESC m_DepthStagingTextureDesc;
+    //CKRECT m_copyRect;
+
     D3D11_SAMPLER_DESC m_SamplerDesc[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
     ComPtr<ID3D11SamplerState> m_SamplerState[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
     CKBOOL m_SamplerStateUpToDate[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT] = {TRUE};

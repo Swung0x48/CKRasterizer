@@ -297,7 +297,6 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     D3DCall(m_Device->CreateRenderTargetView(pBuffer, nullptr, m_RenderTargetView.ReleaseAndGetAddressOf()));
     D3DCall(pBuffer->Release());
     
-    pBuffer = nullptr;
     D3D11_TEXTURE2D_DESC descDepth;
     descDepth.Width = Width;
     descDepth.Height = Height;
@@ -310,7 +309,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     descDepth.BindFlags = D3D11_BIND_DEPTH_STENCIL;
     descDepth.CPUAccessFlags = 0;
     descDepth.MiscFlags = 0;
-    D3DCall(m_Device->CreateTexture2D(&descDepth, NULL, &pBuffer));
+    D3DCall(m_Device->CreateTexture2D(&descDepth, NULL, m_DepthTexture.GetAddressOf()));
 
     // D3D11_DEPTH_STENCIL_DESC dsDesc;
 
@@ -345,8 +344,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     descDSV.Format = DXGI_FORMAT_D32_FLOAT;
     descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
     descDSV.Texture2D.MipSlice = 0;
-    D3DCall(m_Device->CreateDepthStencilView(pBuffer, &descDSV, m_DepthStencilView.GetAddressOf()));
-    D3DCall(pBuffer->Release());
+    D3DCall(m_Device->CreateDepthStencilView(m_DepthTexture.Get(), &descDSV, m_DepthStencilView.GetAddressOf()));
     m_DeviceContext->OMSetRenderTargets(1, m_RenderTargetView.GetAddressOf(), m_DepthStencilView.Get());
 
     // D3D11_SAMPLER_DESC SamplerDesc = {};
@@ -1913,6 +1911,73 @@ CKBOOL CKDX11RasterizerContext::DrawSprite(CKDWORD Sprite, VxRect *src, VxRect *
 }
 int CKDX11RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, VxImageDescEx &img_desc)
 {
+    HRESULT hr = S_OK;
+
+    img_desc.Width = m_Width;
+    img_desc.Height = m_Height;
+
+    img_desc.BitsPerPixel = 32;
+
+    switch (buffer)
+    {
+        case VXBUFFER_ZBUFFER: // We only supports full texture copy for Z
+        {
+            int size = img_desc.Width * img_desc.Height * 4;
+            if (!img_desc.Image)
+                return size;
+
+            if (!m_DepthStagingTexture)
+            {
+                //m_copyRect = copyRect;
+
+                // Get the depth buffer texture desc
+                D3D11_TEXTURE2D_DESC originalDepthDesc;
+                m_DepthTexture->GetDesc(&originalDepthDesc);
+
+                // Create a staging texture for the depth buffer
+                m_DepthStagingTextureDesc.Width = img_desc.Width;
+                m_DepthStagingTextureDesc.Height = img_desc.Height;
+                m_DepthStagingTextureDesc.MipLevels = 1;
+                m_DepthStagingTextureDesc.ArraySize = 1;
+                // For staging textures, we may need to use a different format that's CPU readable
+                // If the original format is not CPU readable, use a compatible typeless format
+                if (originalDepthDesc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT)
+                {
+                    m_DepthStagingTextureDesc.Format = DXGI_FORMAT_R24G8_TYPELESS; // Typeless format for staging
+                }
+                else
+                {
+                    m_DepthStagingTextureDesc.Format = originalDepthDesc.Format;
+                }
+                m_DepthStagingTextureDesc.SampleDesc.Count = 1;
+                m_DepthStagingTextureDesc.SampleDesc.Quality = 0;
+                m_DepthStagingTextureDesc.Usage = D3D11_USAGE_STAGING;
+                m_DepthStagingTextureDesc.BindFlags = 0;
+                m_DepthStagingTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+                m_DepthStagingTextureDesc.MiscFlags = 0;
+                
+                hr = m_Device->CreateTexture2D(&m_DepthStagingTextureDesc, NULL, m_DepthStagingTexture.ReleaseAndGetAddressOf());
+                if (FAILED(hr))
+                {
+                    return 0;
+                }
+            }
+
+            m_DeviceContext->CopyResource(m_DepthStagingTexture.Get(), m_DepthTexture.Get());
+
+            D3D11_MAPPED_SUBRESOURCE mappedResource;
+            hr = m_DeviceContext->Map(m_DepthStagingTexture.Get(), 0, D3D11_MAP_READ, 0, &mappedResource);
+            if (FAILED(hr)) {
+                return 0;
+            }
+            memcpy(img_desc.Image, mappedResource.pData, img_desc.Width * img_desc.Height * 4);
+            m_DeviceContext->Unmap(m_DepthStagingTexture.Get(), 0);
+
+            return size;
+        }
+    }
+
+    // For other buffer types, use the parent implementation
     return CKRasterizerContext::CopyToMemoryBuffer(rect, buffer, img_desc);
 }
 int CKDX11RasterizerContext::CopyFromMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buffer, const VxImageDescEx &img_desc)
