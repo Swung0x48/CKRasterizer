@@ -1913,6 +1913,9 @@ int CKDX11RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buff
 {
     HRESULT hr = S_OK;
 
+    if (rect && (rect->left != 0 || rect->right != m_Width - 1 || rect->top != 0 || rect->bottom != m_Height - 1))
+        return 0;
+
     img_desc.Width = m_Width;
     img_desc.Height = m_Height;
 
