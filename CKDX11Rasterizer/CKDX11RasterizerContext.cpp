@@ -597,7 +597,7 @@ CKBOOL CKDX11RasterizerContext::Create(WIN_HANDLE Window, int PosX, int PosY, in
     depthDesc.Height = m_zCopyHeight;
     depthDesc.MipLevels = 1;
     depthDesc.ArraySize = 1;
-    depthDesc.Format = DXGI_FORMAT_R16_FLOAT;
+    depthDesc.Format = DXGI_FORMAT_R8_UNORM;
     depthDesc.SampleDesc.Count = 1;
     depthDesc.SampleDesc.Quality = 0;
     depthDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -1990,7 +1990,7 @@ int CKDX11RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buff
     img_desc.Width = m_zCopyWidth;
     img_desc.Height = m_zCopyHeight;
 
-    img_desc.BitsPerPixel = 16;
+    img_desc.BitsPerPixel = 8;
 
     switch (buffer)
     {
@@ -2043,9 +2043,9 @@ int CKDX11RasterizerContext::CopyToMemoryBuffer(CKRECT *rect, VXBUFFER_TYPE buff
 
             for (int i = 0; i < img_desc.Height; ++i)
             {
-                memcpy(static_cast<uint8_t *>(img_desc.Image) + i * mappedResource.RowPitch,
-					   static_cast<uint8_t *>(mappedResource.pData) + i * mappedResource.RowPitch,
-                       mappedResource.RowPitch);
+                memcpy(static_cast<uint8_t *>(img_desc.Image) + i * img_desc.Width * sizeof(uint8_t),
+                       static_cast<uint8_t *>(mappedResource.pData) + i * mappedResource.RowPitch,
+                    img_desc.Width * sizeof(uint8_t));
             }
 
             //memcpy(img_desc.Image, mappedResource.pData, img_desc.Width * img_desc.Height * img_desc.BitsPerPixel / 8);
